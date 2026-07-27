@@ -1,16 +1,20 @@
 package ai.demo.service;
 
 import ai.demo.client.LlmClient;
-import ai.demo.model.chat.ChatRequest;
+import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.ai.LlmRequest;
 import ai.demo.model.ai.LlmResponse;
+import ai.demo.model.chat.Conversation;
+import ai.demo.model.chat.Role;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
- * Service for handling chat interactions with the LLM.
- * Measures request duration and delegates to the LLM client.
+ * Service for handling chat interactions with the LLM. Measures request duration and delegates to
+ * the LLM client.
  */
 public class ChatService {
 
@@ -30,14 +34,16 @@ public class ChatService {
   /**
    * Asks the LLM a question and returns the response.
    *
-   * @param chatRequest the chat request containing the question
+   * @param conversation
    * @return the chat response with the answer and timing information
    */
-  public ChatResponse ask(ChatRequest chatRequest) {
+  public ChatResponse ask(Conversation conversation) {
 
     final long start = System.currentTimeMillis();
 
-    final LlmRequest request = new LlmRequest(chatRequest.question());
+    ChatMessage lastMessage = findLastUserMessage(conversation);
+
+    LlmRequest request = new LlmRequest(lastMessage.content());
 
     final LlmResponse response = llmClient.generate(request);
 
@@ -48,5 +54,21 @@ public class ChatService {
     log.info("LLM call took {} ms", duration);
 
     return new ChatResponse(response.text(), response.model(), duration);
+  }
+
+  private ChatMessage findLastUserMessage(Conversation conversation) {
+
+    List<ChatMessage> messages = conversation.messages();
+
+    for (int i = messages.size() - 1; i >= 0; i--) {
+
+      ChatMessage message = messages.get(i);
+
+      if (message.role() == Role.USER) {
+        return message;
+      }
+    }
+
+    throw new IllegalStateException("No user message found");
   }
 }

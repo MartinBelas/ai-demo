@@ -42,7 +42,6 @@ public class App {
     final ConsoleChat consoleChat = new ConsoleChat(chatService, config);
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      consoleChat.close();
       httpClient.shutdownNow();
       System.out.println("Shutdown complete.");
     }));
