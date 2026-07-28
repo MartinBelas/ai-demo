@@ -1,12 +1,12 @@
 package ai.demo;
 
 import ai.demo.client.LlmClient;
+import ai.demo.client.LlmResponse;
 import ai.demo.config.AppConfig;
-import ai.demo.model.ai.LlmRequest;
-import ai.demo.model.ai.LlmResponse;
-import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.ChatMessage;
+import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
+import ai.demo.model.chat.Role;
 import ai.demo.service.ChatService;
 import org.junit.jupiter.api.Test;
 
@@ -19,9 +19,15 @@ public class AppTest {
 
   @Test
   public void testChatService() {
+
     LlmClient mockClient = mock(LlmClient.class);
-    when(mockClient.generate(any(LlmRequest.class)))
-        .thenReturn(new LlmResponse("Test response", "test-model"));
+    when(mockClient.chat(any(Conversation.class)))
+            .thenReturn(
+                    new LlmResponse(
+                            "Test response",
+                            "test-model"
+                    )
+            );
 
     ChatService chatService = new ChatService(mockClient);
     Conversation conversation = new Conversation();
@@ -36,6 +42,7 @@ public class AppTest {
 
   @Test
   public void testAppConfigRecord() {
+
     AppConfig config = new AppConfig("http://localhost:11434", "qwen3:4b", 0.5, 2000, 4096);
 
     assertEquals("http://localhost:11434", config.baseUrl());
@@ -46,23 +53,16 @@ public class AppTest {
   }
 
   @Test
-  public void testLlmRequestRecord() {
-    LlmRequest request = new LlmRequest("Test prompt");
-    assertEquals("Test prompt", request.prompt());
-  }
-
-  @Test
   public void testLlmResponseRecord() {
-    LlmResponse response = new LlmResponse("Test text", "test-model");
+
+    LlmResponse response =
+            new LlmResponse(
+                    "Test text",
+                    "test-model"
+            );
+
     assertEquals("Test text", response.text());
     assertEquals("test-model", response.model());
-  }
-
-  @Test
-  public void testLlmRequestValidation() {
-    assertThrows(IllegalArgumentException.class, () -> new LlmRequest(null));
-    assertThrows(IllegalArgumentException.class, () -> new LlmRequest(""));
-    assertThrows(IllegalArgumentException.class, () -> new LlmRequest("   "));
   }
 
   @Test
@@ -74,10 +74,10 @@ public class AppTest {
 
   @Test
   public void testChatResponseValidation() {
-    assertThrows(IllegalArgumentException.class, () -> new ChatResponse(null, "model", 100));
-    assertThrows(IllegalArgumentException.class, () -> new ChatResponse("answer", null, 100));
-    assertThrows(IllegalArgumentException.class, () -> new ChatResponse("answer", "", 100));
-    assertThrows(IllegalArgumentException.class, () -> new ChatResponse("answer", "model", -1));
+    assertThrows(IllegalArgumentException.class, () -> new ai.demo.model.chat.ChatResponse(null, "model", 100));
+    assertThrows(IllegalArgumentException.class, () -> new ai.demo.model.chat.ChatResponse("answer", null, 100));
+    assertThrows(IllegalArgumentException.class, () -> new ai.demo.model.chat.ChatResponse("answer", "", 100));
+    assertThrows(IllegalArgumentException.class, () -> new ai.demo.model.chat.ChatResponse("answer", "model", -1));
   }
 
   @Test
@@ -90,5 +90,24 @@ public class AppTest {
         IllegalArgumentException.class, () -> new AppConfig("url", "model", 3.0, 100, 100));
     assertThrows(IllegalArgumentException.class, () -> new AppConfig("url", "model", 0.5, 0, 100));
     assertThrows(IllegalArgumentException.class, () -> new AppConfig("url", "model", 0.5, 100, 0));
+  }
+
+  @Test
+  void testConversation() {
+
+    Conversation conversation = new Conversation();
+
+    conversation.add(ChatMessage.user("Hello"));
+    conversation.add(ChatMessage.assistant("Hi"));
+
+    assertEquals(2, conversation.messages().size());
+
+    assertEquals(
+            Role.USER,
+            conversation.messages().getFirst().role());
+
+    assertEquals(
+            Role.ASSISTANT,
+            conversation.messages().getLast().role());
   }
 }

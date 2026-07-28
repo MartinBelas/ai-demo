@@ -1,4 +1,4 @@
-package ai.demo.model.ai.ollama;
+package ai.demo.client.ollama;
 
 public record OllamaOptions(
         int numPredict,

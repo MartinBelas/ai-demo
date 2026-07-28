@@ -1,7 +1,7 @@
 package ai.demo;
 
 import ai.demo.client.LlmClient;
-import ai.demo.client.OllamaClient;
+import ai.demo.client.ollama.OllamaClient;
 import ai.demo.config.AppConfig;
 import ai.demo.console.ConsoleChat;
 import ai.demo.service.ChatService;
@@ -34,7 +34,7 @@ public class App {
     final ObjectMapper objectMapper = new ObjectMapper();
 
     // Clients
-    final LlmClient llmClient = new OllamaClient(httpClient, objectMapper, config);
+    final LlmClient llmClient = new OllamaClient(config, httpClient, objectMapper);
 
     // Services
     final ChatService chatService = new ChatService(llmClient);

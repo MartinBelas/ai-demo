@@ -1,19 +1,17 @@
 package ai.demo.client;
 
-import ai.demo.model.ai.LlmRequest;
-import ai.demo.model.ai.LlmResponse;
+import ai.demo.model.chat.Conversation;
 
 /**
- * Interface for LLM (Large Language Model) clients.
- * Defines the contract for generating responses from LLM providers.
+ * Client for communicating with a Large Language Model.
  */
 public interface LlmClient {
 
   /**
-   * Generates a response from the LLM for the given request.
+   * Sends a conversation to the LLM and returns its response.
    *
-   * @param request the LLM request containing the prompt
-   * @return the LLM response containing the generated text and model info
+   * @param conversation conversation to process
+   * @return generated response
    */
-  LlmResponse generate(LlmRequest request);
+  LlmResponse chat(Conversation conversation);
 }
