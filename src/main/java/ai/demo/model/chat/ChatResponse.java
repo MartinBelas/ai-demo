@@ -6,14 +6,17 @@ public record ChatResponse(
         long durationMs
 ) {
     public ChatResponse {
-        if (answer == null) {
-            throw new IllegalArgumentException("Answer cannot be null");
+
+        if (answer == null || answer.isBlank()) {
+            throw new IllegalArgumentException("answer must not be blank");
         }
-        if (model == null || model.trim().isEmpty()) {
-            throw new IllegalArgumentException("Model cannot be null or empty");
+
+        if (model == null || model.isBlank()) {
+            throw new IllegalArgumentException("model must not be blank");
         }
+
         if (durationMs < 0) {
-            throw new IllegalArgumentException("Duration cannot be negative");
+            throw new IllegalArgumentException("durationMs must not be negative");
         }
     }
 }
