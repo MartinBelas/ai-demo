@@ -27,13 +27,10 @@ class ChatServiceTest {
     conversation.add(ChatMessage.user("Test question"));
 
     var chatService = new ChatService(llmClient);
-
     ChatResponse response = chatService.ask(conversation);
 
     assertEquals("Test response", response.answer());
-
     assertEquals("test-model", response.model());
-
     assertTrue(response.durationMs() >= 0);
   }
 }

@@ -44,14 +44,12 @@ public class OllamaClient implements LlmClient {
   private OllamaResponse send(OllamaRequest ollamaRequest) {
 
     try {
-
       HttpRequest httpRequest = createHttpRequest(ollamaRequest);
-
       HttpResponse<String> httpResponse =
           httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
       if (httpResponse.statusCode() != 200) {
-        throw new RuntimeException("Ollama returned HTTP " + httpResponse.statusCode());
+        throw new LlmClientException("Ollama returned HTTP " + httpResponse.statusCode());
       }
 
       OllamaResponse ollamaResponse =
