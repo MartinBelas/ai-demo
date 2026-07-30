@@ -1,6 +1,7 @@
 package ai.demo.client.ollama;
 
 import ai.demo.client.LlmClient;
+import ai.demo.client.LlmClientException;
 import ai.demo.client.LlmResponse;
 import ai.demo.client.ollama.dto.OllamaMessage;
 import ai.demo.client.ollama.dto.OllamaRequest;
@@ -58,8 +59,11 @@ public class OllamaClient implements LlmClient {
               objectMapper.readValue(httpResponse.body(), OllamaResponse.class);
 
       return ollamaResponse;
-    } catch (IOException | InterruptedException e) {
-      throw new RuntimeException("Failed to call Ollama", e);
+    } catch (IOException e) {
+      throw new LlmClientException("Failed to communicate with Ollama", e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new LlmClientException("Communication with Ollama was interrupted", e);
     }
   }
 
