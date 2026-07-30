@@ -2,9 +2,7 @@ package ai.demo.client;
 
 import ai.demo.model.chat.Conversation;
 
-/**
- * Client for communicating with a Large Language Model.
- */
+/** Client for communicating with a Large Language Model. */
 public interface LlmClient {
 
   /**

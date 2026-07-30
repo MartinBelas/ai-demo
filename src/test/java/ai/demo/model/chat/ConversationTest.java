@@ -1,44 +1,40 @@
 package ai.demo.model.chat;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
 
 class ConversationTest {
 
-    @Test
-    void shouldCreateEmptyConversation() {
+  @Test
+  void shouldCreateEmptyConversation() {
 
-        var conversation = new Conversation();
+    var conversation = new Conversation();
 
-        assertEquals(0, conversation.messages().size());
-    }
+    assertEquals(0, conversation.messages().size());
+  }
 
-    @Test
-    void shouldAddMessages() {
+  @Test
+  void shouldAddMessages() {
 
-        var conversation = new Conversation();
+    var conversation = new Conversation();
 
-        conversation.add(ChatMessage.user("Hello"));
-        conversation.add(ChatMessage.assistant("Hi"));
+    conversation.add(ChatMessage.user("Hello"));
+    conversation.add(ChatMessage.assistant("Hi"));
 
-        assertEquals(2, conversation.messages().size());
-    }
+    assertEquals(2, conversation.messages().size());
+  }
 
-    @Test
-    void shouldPreserveMessageOrder() {
+  @Test
+  void shouldPreserveMessageOrder() {
 
-        var conversation = new Conversation();
+    var conversation = new Conversation();
 
-        conversation.add(ChatMessage.user("Hello"));
-        conversation.add(ChatMessage.assistant("Hi"));
+    conversation.add(ChatMessage.user("Hello"));
+    conversation.add(ChatMessage.assistant("Hi"));
 
-        assertEquals(
-                Role.USER,
-                conversation.messages().getFirst().role());
+    assertEquals(Role.USER, conversation.messages().getFirst().role());
 
-        assertEquals(
-                Role.ASSISTANT,
-                conversation.messages().getLast().role());
-    }
+    assertEquals(Role.ASSISTANT, conversation.messages().getLast().role());
+  }
 }

@@ -5,7 +5,6 @@ import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.service.ChatService;
-
 import java.util.Scanner;
 
 /**
@@ -35,25 +34,25 @@ public class ConsoleChat {
   /** Starts the console chat interface. Runs until the user enters an exit command. */
   public void start() {
 
-      printHeader();
+    printHeader();
 
-      final Conversation conversation = new Conversation();
+    final Conversation conversation = new Conversation();
 
-      try (Scanner scanner = new Scanner(System.in)) {
+    try (Scanner scanner = new Scanner(System.in)) {
 
-          while (true) {
+      while (true) {
 
-              final String question = readQuestion(scanner);
+        final String question = readQuestion(scanner);
 
-              if (shouldExit(question)) {
-                  break;
-              }
+        if (shouldExit(question)) {
+          break;
+        }
 
-              ask(question, conversation);
-          }
+        ask(question, conversation);
       }
+    }
 
-      printGoodbye();
+    printGoodbye();
   }
 
   private void printHeader() {
@@ -73,10 +72,10 @@ public class ConsoleChat {
     System.out.println();
   }
 
-    private String readQuestion(Scanner scanner) {
-        System.out.print("You > ");
-        return scanner.nextLine();
-    }
+  private String readQuestion(Scanner scanner) {
+    System.out.print("You > ");
+    return scanner.nextLine();
+  }
 
   private void ask(final String question, final Conversation conversation) {
 

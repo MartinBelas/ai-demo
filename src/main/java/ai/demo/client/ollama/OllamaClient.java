@@ -12,7 +12,6 @@ import ai.demo.model.chat.Conversation;
 import ai.demo.model.chat.Role;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -56,7 +55,7 @@ public class OllamaClient implements LlmClient {
       }
 
       OllamaResponse ollamaResponse =
-              objectMapper.readValue(httpResponse.body(), OllamaResponse.class);
+          objectMapper.readValue(httpResponse.body(), OllamaResponse.class);
 
       return ollamaResponse;
     } catch (IOException e) {
@@ -89,9 +88,7 @@ public class OllamaClient implements LlmClient {
   }
 
   private List<OllamaMessage> toMessages(Conversation conversation) {
-    return conversation.messages().stream()
-            .map(this::toOllamaMessage)
-            .toList();
+    return conversation.messages().stream().map(this::toOllamaMessage).toList();
   }
 
   private OllamaMessage toOllamaMessage(ChatMessage chatMessage) {

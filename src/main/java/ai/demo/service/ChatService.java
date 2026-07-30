@@ -21,10 +21,6 @@ public class ChatService {
 
     long duration = System.currentTimeMillis() - start;
 
-    return new ChatResponse(
-            llmResponse.text(),
-            llmResponse.model(),
-            duration
-    );
+    return new ChatResponse(llmResponse.text(), llmResponse.model(), duration);
   }
 }
