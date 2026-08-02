@@ -7,7 +7,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>ai.demo</groupId>
-    <artifactId>ollama-client</artifactId>
+    <artifactId>ai-demo</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
