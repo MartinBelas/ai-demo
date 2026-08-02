@@ -4,11 +4,13 @@ import ai.demo.client.LlmClient;
 import ai.demo.client.LoggingLlmClient;
 import ai.demo.client.ollama.OllamaClient;
 import ai.demo.config.AppConfig;
+import ai.demo.config.AppConfigLoader;
 import ai.demo.console.ConsoleChat;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.http.HttpClient;
+import java.time.Duration;
 
 /**
  * Main application entry point for AI Demo. Initializes configuration, HTTP client, and starts the
@@ -25,20 +27,22 @@ public class App {
   public static void main(String[] args) throws IOException {
 
     // Configuration
-    final AppConfig config = AppConfig.load();
+    AppConfigLoader configLoader = new AppConfigLoader();
+    AppConfig config = configLoader.load();
 
     // Infrastructure
-    final HttpClient httpClient =
-        HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).build();
-    final ObjectMapper objectMapper = new ObjectMapper();
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+
+    ObjectMapper objectMapper = new ObjectMapper();
 
     // Clients
     LlmClient llmClient = new LoggingLlmClient(new OllamaClient(config, httpClient, objectMapper));
 
     // Services
-    final ChatService chatService = new ChatService(llmClient);
+    ChatService chatService = new ChatService(llmClient);
 
-    final ConsoleChat consoleChat = new ConsoleChat(chatService, config);
+    // UI
+    ConsoleChat consoleChat = new ConsoleChat(chatService, config);
 
     Runtime.getRuntime()
         .addShutdownHook(
