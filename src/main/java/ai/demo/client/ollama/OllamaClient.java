@@ -1,7 +1,6 @@
 package ai.demo.client.ollama;
 
 import ai.demo.client.LlmClient;
-import ai.demo.client.LlmClientException;
 import ai.demo.client.LlmResponse;
 import ai.demo.client.ollama.dto.OllamaMessage;
 import ai.demo.client.ollama.dto.OllamaRequest;
@@ -50,7 +49,8 @@ public class OllamaClient implements LlmClient {
           httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
       if (httpResponse.statusCode() != 200) {
-        throw new LlmClientException("Ollama returned HTTP status " + httpResponse.statusCode());
+        throw new LlmCommunicationException(
+            "Ollama returned HTTP status " + httpResponse.statusCode());
       }
 
       OllamaResponse ollamaResponse =
@@ -61,7 +61,7 @@ public class OllamaClient implements LlmClient {
       throw new LlmCommunicationException("Failed to communicate with Ollama", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new LlmClientException("Communication with Ollama was interrupted", e);
+      throw new LlmCommunicationException("Communication with Ollama was interrupted", e);
     }
   }
 
