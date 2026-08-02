@@ -7,6 +7,7 @@ import ai.demo.client.ollama.dto.OllamaMessage;
 import ai.demo.client.ollama.dto.OllamaRequest;
 import ai.demo.client.ollama.dto.OllamaResponse;
 import ai.demo.config.AppConfig;
+import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import ai.demo.model.chat.Role;
@@ -49,7 +50,7 @@ public class OllamaClient implements LlmClient {
           httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
       if (httpResponse.statusCode() != 200) {
-        throw new LlmClientException("Ollama returned HTTP " + httpResponse.statusCode());
+        throw new LlmClientException("Ollama returned HTTP status " + httpResponse.statusCode());
       }
 
       OllamaResponse ollamaResponse =
@@ -57,7 +58,7 @@ public class OllamaClient implements LlmClient {
 
       return ollamaResponse;
     } catch (IOException e) {
-      throw new LlmClientException("Failed to communicate with Ollama", e);
+      throw new LlmCommunicationException("Failed to communicate with Ollama", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new LlmClientException("Communication with Ollama was interrupted", e);

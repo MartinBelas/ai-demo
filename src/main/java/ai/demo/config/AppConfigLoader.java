@@ -1,5 +1,6 @@
 package ai.demo.config;
 
+import ai.demo.exception.ConfigurationException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -39,7 +40,7 @@ public final class AppConfigLoader {
         AppConfigLoader.class.getClassLoader().getResourceAsStream(resourceName)) {
 
       if (inputStream == null) {
-        throw new IllegalStateException(resourceName + " not found");
+        throw new ConfigurationException(resourceName + " not found");
       }
 
       properties.load(inputStream);
@@ -53,7 +54,7 @@ public final class AppConfigLoader {
     String value = properties.getProperty(key);
 
     if (value == null || value.isBlank()) {
-      throw new IllegalStateException("Required property '" + key + "' is missing or empty");
+      throw new ConfigurationException("Required property '" + key + "' is missing or empty");
     }
 
     return value;
@@ -66,7 +67,7 @@ public final class AppConfigLoader {
     try {
       return Integer.parseInt(value);
     } catch (NumberFormatException e) {
-      throw new IllegalStateException("Property '" + key + "' must be a valid integer", e);
+      throw new ConfigurationException("Property '" + key + "' must be a valid integer", e);
     }
   }
 
@@ -77,7 +78,7 @@ public final class AppConfigLoader {
     try {
       return Double.parseDouble(value);
     } catch (NumberFormatException e) {
-      throw new IllegalStateException("Property '" + key + "' must be a valid number", e);
+      throw new ConfigurationException("Property '" + key + "' must be a valid number", e);
     }
   }
 }

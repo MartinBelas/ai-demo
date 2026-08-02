@@ -3,6 +3,7 @@ package ai.demo.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import ai.demo.exception.ConfigurationException;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,7 +29,7 @@ class AppConfigLoaderTest {
   void shouldFailWhenResourceDoesNotExist() {
 
     assertThrows(
-        IllegalStateException.class,
+        ConfigurationException.class,
         () -> loader.loadFromResource("app-config/does-not-exist.properties"));
   }
 
@@ -36,7 +37,7 @@ class AppConfigLoaderTest {
   void shouldFailWhenRequiredPropertyIsMissing() {
 
     assertThrows(
-        IllegalStateException.class,
+        ConfigurationException.class,
         () -> loader.loadFromResource("app-config/missing-model.properties"));
   }
 
@@ -48,6 +49,6 @@ class AppConfigLoaderTest {
   })
   void shouldFailForInvalidNumericProperty(String resource, String propertyName) {
 
-    assertThrows(IllegalStateException.class, () -> loader.loadFromResource(resource));
+    assertThrows(ConfigurationException.class, () -> loader.loadFromResource(resource));
   }
 }
