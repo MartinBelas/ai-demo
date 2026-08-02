@@ -241,7 +241,7 @@ ConfigurationException
 
 Avoid generic exceptions:
 
-```java
+```text
 RuntimeException
 IllegalStateException
 ```
@@ -374,6 +374,31 @@ Rename Maven artifact to ai-demo
 Update project documentation
 ```
 
+# Git Operations
+
+AI agents must not perform Git operations automatically.
+
+The agent must never:
+
+* create commits
+* modify commit history
+* run `git commit`
+* run `git push`
+* run `git pull`
+* run `git rebase`
+* run `git reset`
+* force push changes
+
+The developer is responsible for all Git operations.
+
+When changes are complete, the agent may:
+
+* suggest a commit message
+* summarize changed files
+* show recommended next Git commands
+
+Before any Git operation, always ask for explicit user confirmation.
+
 ---
 
 # Before modifying code
@@ -385,7 +410,9 @@ Always consider:
 3. Exception handling
 4. Backward compatibility
 5. Whether the abstraction still makes sense
-○
+
+---
+
 When adding a new feature:
 
 1. Update the model if needed
