@@ -1,9 +1,11 @@
 package ai.demo.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ai.demo.client.LlmClient;
@@ -32,5 +34,17 @@ class ChatServiceTest {
     assertEquals("Test response", response.answer());
     assertEquals("test-model", response.model());
     assertTrue(response.durationMs() >= 0);
+  }
+
+  @Test
+  void shouldRejectEmptyConversation() {
+
+    var llmClient = mock(LlmClient.class);
+
+    var conversation = new Conversation();
+    var chatService = new ChatService(llmClient);
+
+    assertThrows(IllegalStateException.class, () -> chatService.ask(conversation));
+    verifyNoInteractions(llmClient);
   }
 }

@@ -2,6 +2,7 @@ package ai.demo.client.ollama;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.http.HttpTransport;
 import ai.demo.client.ollama.dto.OllamaMessage;
 import ai.demo.client.ollama.dto.OllamaRequest;
 import ai.demo.client.ollama.dto.OllamaResponse;
@@ -14,7 +15,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
@@ -24,13 +24,12 @@ public class OllamaClient implements LlmClient {
   private static final String CHAT_ENDPOINT = "/api/chat";
 
   private final AppConfig config;
-  private final HttpClient httpClient;
+  private final HttpTransport httpTransport;
   private final ObjectMapper objectMapper;
 
-  public OllamaClient(AppConfig config, HttpClient httpClient, ObjectMapper objectMapper) {
-
+  public OllamaClient(AppConfig config, HttpTransport httpTransport, ObjectMapper objectMapper) {
     this.config = config;
-    this.httpClient = httpClient;
+    this.httpTransport = httpTransport;
     this.objectMapper = objectMapper;
   }
 
@@ -45,22 +44,22 @@ public class OllamaClient implements LlmClient {
 
     try {
       HttpRequest httpRequest = createHttpRequest(ollamaRequest);
-      HttpResponse<String> httpResponse =
-          httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
+      HttpResponse<String> httpResponse = httpTransport.send(httpRequest);
 
       if (httpResponse.statusCode() != 200) {
         throw new LlmCommunicationException(
             "Ollama returned HTTP status " + httpResponse.statusCode());
       }
 
-      OllamaResponse ollamaResponse =
-          objectMapper.readValue(httpResponse.body(), OllamaResponse.class);
+      return objectMapper.readValue(httpResponse.body(), OllamaResponse.class);
 
-      return ollamaResponse;
     } catch (IOException e) {
       throw new LlmCommunicationException("Failed to communicate with Ollama", e);
+
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+
       throw new LlmCommunicationException("Communication with Ollama was interrupted", e);
     }
   }
