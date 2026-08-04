@@ -13,6 +13,8 @@ import ai.demo.client.LlmResponse;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
+import ai.demo.model.prompt.Prompt;
+import ai.demo.prompt.PromptComposer;
 import org.junit.jupiter.api.Test;
 
 class ChatServiceTest {
@@ -20,15 +22,17 @@ class ChatServiceTest {
   @Test
   void shouldReturnChatResponse() {
 
-    var llmClient = mock(LlmClient.class);
+    LlmClient llmClient = mock(LlmClient.class);
+    PromptComposer promptComposer = new PromptComposer();
 
-    when(llmClient.chat(any(Conversation.class)))
+    when(llmClient.chat(any(Prompt.class)))
         .thenReturn(new LlmResponse("Test response", "test-model"));
 
-    var conversation = new Conversation();
+    Conversation conversation = new Conversation();
     conversation.add(ChatMessage.user("Test question"));
 
-    var chatService = new ChatService(llmClient);
+    ChatService chatService = new ChatService(llmClient, promptComposer);
+
     ChatResponse response = chatService.ask(conversation);
 
     assertEquals("Test response", response.answer());
@@ -39,12 +43,15 @@ class ChatServiceTest {
   @Test
   void shouldRejectEmptyConversation() {
 
-    var llmClient = mock(LlmClient.class);
+    LlmClient llmClient = mock(LlmClient.class);
+    PromptComposer promptComposer = new PromptComposer();
 
-    var conversation = new Conversation();
-    var chatService = new ChatService(llmClient);
+    Conversation conversation = new Conversation();
+
+    ChatService chatService = new ChatService(llmClient, promptComposer);
 
     assertThrows(IllegalStateException.class, () -> chatService.ask(conversation));
+
     verifyNoInteractions(llmClient);
   }
 }

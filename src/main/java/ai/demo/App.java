@@ -10,6 +10,7 @@ import ai.demo.config.AppConfigLoader;
 import ai.demo.console.ConsoleChat;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.prompt.PromptComposer;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -53,6 +54,7 @@ public class App {
     HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     ObjectMapper objectMapper = new ObjectMapper();
+    PromptComposer promptComposer = new PromptComposer();
 
     // Clients
     final HttpTransport httpTransport = new JdkHttpTransport(httpClient);
@@ -60,7 +62,7 @@ public class App {
         new LoggingLlmClient(new OllamaClient(config, httpTransport, objectMapper));
 
     // Services
-    ChatService chatService = new ChatService(llmClient);
+    ChatService chatService = new ChatService(llmClient, promptComposer);
 
     // UI
     ConsoleChat consoleChat = new ConsoleChat(chatService, config);

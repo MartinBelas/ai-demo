@@ -8,7 +8,8 @@ import static org.mockito.Mockito.when;
 
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatMessage;
-import ai.demo.model.chat.Conversation;
+import ai.demo.model.prompt.Prompt;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class LoggingLlmClientTest {
@@ -16,15 +17,16 @@ class LoggingLlmClientTest {
   @Test
   void shouldLogAndReturnSuccessfulResponse() {
 
-    var mockClient = mock(LlmClient.class);
-    var response = new LlmResponse("Test response", "test-model");
-    when(mockClient.chat(any(Conversation.class))).thenReturn(response);
+    LlmClient mockClient = mock(LlmClient.class);
+    LlmResponse response = new LlmResponse("Test response", "test-model");
 
-    var loggingClient = new LoggingLlmClient(mockClient);
-    var conversation = new Conversation();
-    conversation.add(ChatMessage.user("Test question"));
+    when(mockClient.chat(any(Prompt.class))).thenReturn(response);
 
-    LlmResponse result = loggingClient.chat(conversation);
+    LoggingLlmClient loggingClient = new LoggingLlmClient(mockClient);
+
+    Prompt prompt = new Prompt(List.of(ChatMessage.user("Test question")));
+
+    LlmResponse result = loggingClient.chat(prompt);
 
     assertEquals("Test response", result.text());
     assertEquals("test-model", result.model());
@@ -33,16 +35,17 @@ class LoggingLlmClientTest {
   @Test
   void shouldLogAndRethrowLlmException() {
 
-    var mockClient = mock(LlmClient.class);
-    var exception = new LlmCommunicationException("Connection failed");
-    when(mockClient.chat(any(Conversation.class))).thenThrow(exception);
+    LlmClient mockClient = mock(LlmClient.class);
+    LlmCommunicationException exception = new LlmCommunicationException("Connection failed");
 
-    var loggingClient = new LoggingLlmClient(mockClient);
-    var conversation = new Conversation();
-    conversation.add(ChatMessage.user("Test question"));
+    when(mockClient.chat(any(Prompt.class))).thenThrow(exception);
+
+    LoggingLlmClient loggingClient = new LoggingLlmClient(mockClient);
+
+    Prompt prompt = new Prompt(List.of(ChatMessage.user("Test question")));
 
     LlmCommunicationException thrown =
-        assertThrows(LlmCommunicationException.class, () -> loggingClient.chat(conversation));
+        assertThrows(LlmCommunicationException.class, () -> loggingClient.chat(prompt));
 
     assertEquals("Connection failed", thrown.getMessage());
   }
@@ -50,16 +53,17 @@ class LoggingLlmClientTest {
   @Test
   void shouldLogAndRethrowRuntimeException() {
 
-    var mockClient = mock(LlmClient.class);
-    var exception = new RuntimeException("Unexpected error");
-    when(mockClient.chat(any(Conversation.class))).thenThrow(exception);
+    LlmClient mockClient = mock(LlmClient.class);
+    RuntimeException exception = new RuntimeException("Unexpected error");
 
-    var loggingClient = new LoggingLlmClient(mockClient);
-    var conversation = new Conversation();
-    conversation.add(ChatMessage.user("Test question"));
+    when(mockClient.chat(any(Prompt.class))).thenThrow(exception);
+
+    LoggingLlmClient loggingClient = new LoggingLlmClient(mockClient);
+
+    Prompt prompt = new Prompt(List.of(ChatMessage.user("Test question")));
 
     RuntimeException thrown =
-        assertThrows(RuntimeException.class, () -> loggingClient.chat(conversation));
+        assertThrows(RuntimeException.class, () -> loggingClient.chat(prompt));
 
     assertEquals("Unexpected error", thrown.getMessage());
   }

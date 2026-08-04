@@ -11,11 +11,11 @@ import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatMessage;
-import ai.demo.model.chat.Conversation;
-import ai.demo.model.chat.Role;
+import ai.demo.model.prompt.Prompt;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.http.HttpResponse;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,8 +28,11 @@ class OllamaClientTest {
 
   @BeforeEach
   void setUp() {
+
     AppConfig config = new AppConfig("http://localhost:11434", "qwen3:4b", 0.7, 100, 4096);
+
     httpTransport = mock(HttpTransport.class);
+
     ollamaClient = new OllamaClient(config, httpTransport, objectMapper);
   }
 
@@ -38,24 +41,22 @@ class OllamaClientTest {
 
     String jsonResponse =
         """
-                {
-                  "model": "qwen3:4b",
-                  "message": {
-                    "role": "assistant",
-                    "content": "Hello"
-                  }
-                }
-                """;
+            {
+              "model": "qwen3:4b",
+              "message": {
+                "role": "assistant",
+                "content": "Hello"
+              }
+            }
+            """;
 
     HttpResponse<String> httpResponse = mock();
+
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body()).thenReturn(jsonResponse);
     when(httpTransport.send(any())).thenReturn(httpResponse);
 
-    Conversation conversation = new Conversation();
-    conversation.add(new ChatMessage(Role.USER, "Hi"));
-
-    LlmResponse response = ollamaClient.chat(conversation);
+    LlmResponse response = ollamaClient.chat(createPrompt());
 
     assertEquals("Hello", response.text());
     assertEquals("qwen3:4b", response.model());
@@ -65,13 +66,12 @@ class OllamaClientTest {
   void shouldThrowExceptionWhenOllamaReturnsHttpError() throws Exception {
 
     HttpResponse<String> httpResponse = mock();
+
     when(httpResponse.statusCode()).thenReturn(500);
     when(httpTransport.send(any())).thenReturn(httpResponse);
 
-    Conversation conversation = new Conversation();
-    conversation.add(new ChatMessage(Role.USER, "Hi"));
-
-    assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(conversation));
+    Prompt prompt = createPrompt();
+    assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
   }
 
   @Test
@@ -79,11 +79,9 @@ class OllamaClientTest {
 
     when(httpTransport.send(any())).thenThrow(new IOException("Connection refused"));
 
-    Conversation conversation = new Conversation();
-    conversation.add(new ChatMessage(Role.USER, "Hi"));
-
+    Prompt prompt = createPrompt();
     LlmCommunicationException exception =
-        assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(conversation));
+        assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
 
     assertEquals("Failed to communicate with Ollama", exception.getMessage());
   }
@@ -92,16 +90,19 @@ class OllamaClientTest {
   void shouldThrowExceptionWhenResponseIsInvalidJson() throws Exception {
 
     HttpResponse<String> httpResponse = mock();
+
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body()).thenReturn("{ invalid json }");
     when(httpTransport.send(any())).thenReturn(httpResponse);
 
-    Conversation conversation = new Conversation();
-    conversation.add(new ChatMessage(Role.USER, "Hi"));
-
+    Prompt prompt = createPrompt();
     LlmCommunicationException exception =
-        assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(conversation));
+        assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
 
     assertEquals("Failed to communicate with Ollama", exception.getMessage());
+  }
+
+  private static Prompt createPrompt() {
+    return new Prompt(List.of(ChatMessage.user("Hi")));
   }
 }

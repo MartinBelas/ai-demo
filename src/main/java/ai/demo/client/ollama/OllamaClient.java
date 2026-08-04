@@ -9,8 +9,8 @@ import ai.demo.client.ollama.dto.OllamaResponse;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatMessage;
-import ai.demo.model.chat.Conversation;
 import ai.demo.model.chat.Role;
+import ai.demo.model.prompt.Prompt;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -34,8 +34,8 @@ public class OllamaClient implements LlmClient {
   }
 
   @Override
-  public LlmResponse chat(Conversation conversation) {
-    OllamaRequest ollamaRequest = toOllamaRequest(conversation);
+  public LlmResponse chat(Prompt prompt) {
+    OllamaRequest ollamaRequest = toOllamaRequest(prompt);
     OllamaResponse ollamaResponse = send(ollamaRequest);
     return toLlmResponse(ollamaResponse);
   }
@@ -77,16 +77,16 @@ public class OllamaClient implements LlmClient {
     return URI.create(config.baseUrl() + CHAT_ENDPOINT);
   }
 
-  private OllamaRequest toOllamaRequest(Conversation conversation) {
-    return new OllamaRequest(config.model(), toMessages(conversation), false);
+  private OllamaRequest toOllamaRequest(Prompt prompt) {
+    return new OllamaRequest(config.model(), toMessages(prompt), false);
   }
 
   private LlmResponse toLlmResponse(OllamaResponse ollamaResponse) {
     return new LlmResponse(ollamaResponse.message().content(), ollamaResponse.model());
   }
 
-  private List<OllamaMessage> toMessages(Conversation conversation) {
-    return conversation.messages().stream().map(this::toOllamaMessage).toList();
+  private List<OllamaMessage> toMessages(Prompt prompt) {
+    return prompt.messages().stream().map(this::toOllamaMessage).toList();
   }
 
   private OllamaMessage toOllamaMessage(ChatMessage chatMessage) {

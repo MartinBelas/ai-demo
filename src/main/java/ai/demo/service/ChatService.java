@@ -4,13 +4,17 @@ import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
+import ai.demo.model.prompt.Prompt;
+import ai.demo.prompt.PromptComposer;
 
 public class ChatService {
 
   private final LlmClient llmClient;
+  private final PromptComposer promptComposer;
 
-  public ChatService(LlmClient llmClient) {
+  public ChatService(LlmClient llmClient, PromptComposer promptComposer) {
     this.llmClient = llmClient;
+    this.promptComposer = promptComposer;
   }
 
   public ChatResponse ask(Conversation conversation) {
@@ -25,7 +29,8 @@ public class ChatService {
 
     long start = System.currentTimeMillis();
 
-    LlmResponse llmResponse = llmClient.chat(conversation);
+    Prompt prompt = promptComposer.compose(conversation);
+    LlmResponse llmResponse = llmClient.chat(prompt);
 
     long duration = System.currentTimeMillis() - start;
 

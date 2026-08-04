@@ -1,7 +1,7 @@
 package ai.demo.client;
 
 import ai.demo.exception.LlmException;
-import ai.demo.model.chat.Conversation;
+import ai.demo.model.prompt.Prompt;
 import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -18,16 +18,16 @@ public class LoggingLlmClient implements LlmClient {
   }
 
   @Override
-  public LlmResponse chat(Conversation conversation) {
+  public LlmResponse chat(Prompt prompt) {
 
     String requestId = UUID.randomUUID().toString().substring(0, 8);
 
-    log.info("[{}] Sending chat request (messages={})", requestId, conversation.messages().size());
+    log.info("[{}] Sending chat request (messages={})", requestId, prompt.messages().size());
 
     long start = System.nanoTime();
 
     try {
-      LlmResponse response = delegate.chat(conversation);
+      LlmResponse response = delegate.chat(prompt);
 
       log.info(
           "[{}] Received response from model '{}' in {} ms",
