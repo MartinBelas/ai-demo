@@ -44,7 +44,7 @@ class AppConfigLoaderTest {
   @ParameterizedTest(name = "{1}")
   @CsvSource({
     "app-config/invalid-temperature.properties, temperature",
-    "app-config/invalid-num-predict.properties, numPredict",
+    "app-config/invalid-max-tokens.properties, numPredict",
     "app-config/invalid-num-ctx.properties, numCtx"
   })
   void shouldFailForInvalidNumericProperty(String resource, String propertyName) {

@@ -28,8 +28,8 @@ public final class AppConfigLoader {
         requiredProperty(properties, "llm.base-url"),
         requiredProperty(properties, "llm.model"),
         requiredDouble(properties, "llm.temperature"),
-        requiredInt(properties, "llm.num-predict"),
-        requiredInt(properties, "llm.num-ctx"));
+        requiredInt(properties, "llm.max-tokens"),
+        requiredInt(properties, "llm.context-window"));
   }
 
   private Properties loadProperties(String resourceName) throws IOException {
