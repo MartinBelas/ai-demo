@@ -1,6 +1,8 @@
 package ai.demo.client;
 
+import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.prompt.Prompt;
+import java.util.function.Consumer;
 
 /** Client for communicating with a Large Language Model. */
 public interface LlmClient {
@@ -12,4 +14,6 @@ public interface LlmClient {
    * @return generated response
    */
   LlmResponse chat(Prompt prompt);
+
+  void stream(Prompt prompt, Consumer<ChatChunk> consumer);
 }

@@ -1,9 +1,11 @@
 package ai.demo.client;
 
 import ai.demo.exception.LlmException;
+import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.prompt.Prompt;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +49,29 @@ public class LoggingLlmClient implements LlmClient {
 
       log.error("[{}] Unexpected error after {} ms", requestId, elapsedMillis(start), e);
 
+      throw e;
+    }
+  }
+
+  @Override
+  public void stream(Prompt prompt, Consumer<ChatChunk> consumer) {
+
+    log.info("Sending streaming prompt to LLM");
+
+    try {
+
+      delegate.stream(prompt, consumer);
+
+      log.info("Streaming response completed");
+
+    } catch (LlmException e) {
+
+      log.error("LLM streaming failed", e);
+      throw e;
+
+    } catch (RuntimeException e) {
+
+      log.error("Unexpected error during LLM streaming", e);
       throw e;
     }
   }

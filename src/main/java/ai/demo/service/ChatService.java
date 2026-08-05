@@ -2,10 +2,12 @@ package ai.demo.service;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
+import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.model.prompt.Prompt;
 import ai.demo.prompt.PromptComposer;
+import java.util.function.Consumer;
 
 public class ChatService {
 
@@ -35,5 +37,12 @@ public class ChatService {
     long duration = System.currentTimeMillis() - start;
 
     return new ChatResponse(llmResponse.text(), llmResponse.model(), duration);
+  }
+
+  public void askStreaming(Conversation conversation, Consumer<ChatChunk> consumer) {
+
+    Prompt prompt = promptComposer.compose(conversation);
+
+    llmClient.stream(prompt, consumer);
   }
 }

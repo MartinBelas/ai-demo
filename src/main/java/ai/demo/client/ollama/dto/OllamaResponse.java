@@ -1,6 +1,6 @@
 package ai.demo.client.ollama.dto;
 
-public record OllamaResponse(String model, OllamaMessage message) {
+public record OllamaResponse(String model, OllamaMessage message, boolean done) {
   public OllamaResponse {
     if (message == null) {
       throw new IllegalArgumentException("Message cannot be null");

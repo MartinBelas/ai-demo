@@ -8,16 +8,21 @@ import ai.demo.client.ollama.dto.OllamaRequest;
 import ai.demo.client.ollama.dto.OllamaResponse;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Role;
 import ai.demo.model.prompt.Prompt;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class OllamaClient implements LlmClient {
 
@@ -38,6 +43,47 @@ public class OllamaClient implements LlmClient {
     OllamaRequest ollamaRequest = toOllamaRequest(prompt);
     OllamaResponse ollamaResponse = send(ollamaRequest);
     return toLlmResponse(ollamaResponse);
+  }
+
+  @Override
+  public void stream(Prompt prompt, Consumer<ChatChunk> consumer) {
+
+    OllamaRequest request = toStreamingOllamaRequest(prompt);
+
+    try {
+
+      HttpResponse<InputStream> response = httpTransport.sendStreaming(createHttpRequest(request));
+
+      if (response.statusCode() != 200) {
+        throw new LlmCommunicationException("Ollama returned HTTP status " + response.statusCode());
+      }
+
+      try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body()))) {
+
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+
+          if (line.isBlank()) {
+            continue;
+          }
+
+          OllamaResponse chunk = objectMapper.readValue(line, OllamaResponse.class);
+
+          consumer.accept(new ChatChunk(chunk.message().content(), chunk.done()));
+        }
+      }
+
+    } catch (InterruptedException e) {
+
+      Thread.currentThread().interrupt();
+
+      throw new LlmCommunicationException("Streaming from Ollama was interrupted", e);
+
+    } catch (IOException e) {
+
+      throw new LlmCommunicationException("Failed to stream from Ollama", e);
+    }
   }
 
   private OllamaResponse send(OllamaRequest ollamaRequest) {
@@ -79,6 +125,10 @@ public class OllamaClient implements LlmClient {
 
   private OllamaRequest toOllamaRequest(Prompt prompt) {
     return new OllamaRequest(config.model(), toMessages(prompt), false);
+  }
+
+  private OllamaRequest toStreamingOllamaRequest(Prompt prompt) {
+    return new OllamaRequest(config.model(), toMessages(prompt), true);
   }
 
   private LlmResponse toLlmResponse(OllamaResponse ollamaResponse) {

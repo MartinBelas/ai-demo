@@ -86,19 +86,29 @@ public class ConsoleChat {
 
     conversation.add(ChatMessage.user(question));
 
+    StringBuilder answer = new StringBuilder();
+
     try {
-      ChatResponse response = chatService.ask(conversation);
 
-      conversation.add(ChatMessage.assistant(response.answer()));
+      System.out.print("AI: ");
 
-      printResponse(response);
+      chatService.askStreaming(
+          conversation,
+          chunk -> {
+            System.out.print(chunk.content());
+            answer.append(chunk.content());
+          });
+
+      System.out.println();
+
+      conversation.add(ChatMessage.assistant(answer.toString()));
+
     } catch (LlmException e) {
-      // Log the full stacktrace for operators and show a friendly message to the user.
+
       log.error("LLM request failed", e);
 
       System.out.println();
       System.out.println("Unable to communicate with the AI model: " + e.getMessage());
-      System.out.println();
     }
   }
 
