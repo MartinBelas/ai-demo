@@ -23,10 +23,11 @@ class ChatServiceTest {
   void shouldReturnChatResponse() {
 
     LlmClient llmClient = mock(LlmClient.class);
-    PromptComposer promptComposer = new PromptComposer();
 
     when(llmClient.chat(any(Prompt.class)))
         .thenReturn(new LlmResponse("Test response", "test-model"));
+
+    PromptComposer promptComposer = new PromptComposer("");
 
     Conversation conversation = new Conversation();
     conversation.add(ChatMessage.user("Test question"));
@@ -44,7 +45,7 @@ class ChatServiceTest {
   void shouldRejectEmptyConversation() {
 
     LlmClient llmClient = mock(LlmClient.class);
-    PromptComposer promptComposer = new PromptComposer();
+    PromptComposer promptComposer = new PromptComposer("");
 
     Conversation conversation = new Conversation();
 

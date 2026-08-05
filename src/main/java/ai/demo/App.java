@@ -14,7 +14,9 @@ import ai.demo.prompt.PromptComposer;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,11 +52,26 @@ public class App {
       return 1;
     }
 
+    String systemPrompt;
+
+    try (InputStream in = App.class.getResourceAsStream("/prompts/system.txt")) {
+
+      if (in == null) {
+        throw new ConfigurationException("System prompt '/prompts/system.txt' not found");
+      }
+
+      systemPrompt = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+    } catch (IOException e) {
+      throw new ConfigurationException("Failed to load system prompt", e);
+    }
+
     // Infrastructure
     HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     ObjectMapper objectMapper = new ObjectMapper();
-    PromptComposer promptComposer = new PromptComposer();
+
+    PromptComposer promptComposer = new PromptComposer(systemPrompt);
 
     // Clients
     final HttpTransport httpTransport = new JdkHttpTransport(httpClient);
