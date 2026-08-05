@@ -11,13 +11,58 @@ The project is developed incrementally, with each step focusing on clean design,
 * Jackson for JSON serialization
 * SLF4J + Logback logging
 * Conversation-based chat API
+* Streaming responses
 * Unit tests with JUnit and Mockito
 
 ## Requirements
 
 * Java 21 or later
 * Maven 3.9 or later
-* Ollama
+* Ollama (currently the only supported LLM provider)
+
+## Running a Local LLM
+
+The application is designed to support different Large Language Model (LLM) providers. The architecture is provider-independent, allowing additional providers to be integrated in the future.
+
+At the moment, **Ollama** is the only implemented LLM provider.
+
+### Install Ollama
+
+Download and install Ollama from:
+
+https://ollama.com/download
+
+### Download a Model
+
+You can use any model supported by Ollama. For example:
+
+```bash
+ollama pull qwen3:4b
+```
+
+Configure the selected model in `application.properties`:
+
+```properties
+llm.base-url=http://localhost:11434
+llm.model=qwen3:4b
+llm.temperature=0.7
+llm.max-tokens=100
+llm.context-window=4096
+```
+
+### Start Ollama
+
+Start the Ollama server before running the application:
+
+```bash
+ollama serve
+```
+
+By default, the application connects to:
+
+```text
+http://localhost:11434
+```
 
 ## Build
 
@@ -47,7 +92,6 @@ mvn spotless:apply
 
 ## Roadmap
 
-* Streaming responses
 * Prompt templates
 * Conversation memory
 * Configuration improvements
