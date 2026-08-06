@@ -92,13 +92,22 @@ mvn spotless:apply
 
 ## Roadmap
 
-* Prompt templates
-* Conversation memory
-* Configuration improvements
-* Retrieval-Augmented Generation (RAG)
-* Spring Boot integration
-* Integration tests
-* GitHub Actions CI
+✔ Streaming responses
+⬜ Prompt templates
+⬜ Prompt rendering
+⬜ Conversation memory
+⬜ Context window management
+⬜ Token estimation
+⬜ Document loaders
+⬜ Embedding support
+⬜ Vector store
+⬜ Retrieval-Augmented Generation (RAG)
+⬜ Tool calling
+⬜ AI agents
+⬜ Spring Boot REST API
+⬜ Observability
+⬜ Evaluation framework
+⬜ GitHub Actions
 
 ## License
 
