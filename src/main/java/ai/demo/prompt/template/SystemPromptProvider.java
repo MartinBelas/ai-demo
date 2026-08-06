@@ -1,0 +1,31 @@
+package ai.demo.prompt.template;
+
+import ai.demo.exception.PromptTemplateException;
+import java.io.IOException;
+import java.util.Map;
+
+public class SystemPromptProvider {
+
+  private final PromptTemplateRenderer renderer;
+  private final PromptTemplate template;
+  private final PromptTemplateType templateType;
+
+  public SystemPromptProvider(
+      PromptTemplateType templateType,
+      PromptTemplateLoader templateLoader,
+      PromptTemplateRenderer renderer) {
+
+    this.renderer = renderer;
+    this.templateType = templateType;
+
+    try {
+      this.template = templateLoader.load(this.templateType);
+    } catch (IOException e) {
+      throw new PromptTemplateException("Failed to load prompt template: " + templateType, e);
+    }
+  }
+
+  public String getSystemPrompt() {
+    return renderer.render(template, Map.of());
+  }
+}

@@ -8,6 +8,9 @@ public class Conversation {
   private final List<ChatMessage> messages = new ArrayList<>();
 
   public void add(ChatMessage message) {
+    if (message.role() == Role.SYSTEM) {
+      throw new IllegalArgumentException("Conversation must not contain system messages");
+    }
     messages.add(message);
   }
 

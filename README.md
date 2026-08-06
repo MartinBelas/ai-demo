@@ -92,22 +92,39 @@ mvn spotless:apply
 
 ## Roadmap
 
-✔ Streaming responses
-⬜ Prompt templates
-⬜ Prompt rendering
-⬜ Conversation memory
-⬜ Context window management
-⬜ Token estimation
-⬜ Document loaders
-⬜ Embedding support
-⬜ Vector store
-⬜ Retrieval-Augmented Generation (RAG)
-⬜ Tool calling
-⬜ AI agents
-⬜ Spring Boot REST API
-⬜ Observability
-⬜ Evaluation framework
-⬜ GitHub Actions
+Phase 1: Core Chat ✅
+- Chat conversations
+- Prompt templates
+- Prompt rendering
+- Streaming responses
+- Ollama integration
+- Logging
+- Unit tests
+
+Phase 2: Context Management
+- Token estimation
+- Context window management
+- Conversation summarization
+- Persistent conversation memory
+
+Phase 3: Knowledge Retrieval
+- Document loaders
+- Text chunking
+- Embeddings
+- Vector store
+- Retrieval-Augmented Generation (RAG)
+
+Phase 4: Tool Integration
+- Structured outputs
+- Tool calling
+- Tool registry
+- Multi-tool workflows
+
+Phase 5: AI Agents
+- Planning
+- Agent execution loop
+- Long-term memory
+- Multi-agent collaboration
 
 ## License
 

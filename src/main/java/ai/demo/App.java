@@ -11,12 +11,14 @@ import ai.demo.console.ConsoleChat;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.prompt.PromptComposer;
+import ai.demo.prompt.template.PromptTemplateLoader;
+import ai.demo.prompt.template.PromptTemplateRenderer;
+import ai.demo.prompt.template.PromptTemplateType;
+import ai.demo.prompt.template.SystemPromptProvider;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.http.HttpClient;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +32,7 @@ public class App {
   private static final Logger log = LoggerFactory.getLogger(App.class);
 
   public static void main(String[] args) {
-    int exitCode = new App().run(args);
+    int exitCode = new App().run();
     if (exitCode != 0) {
       System.exit(exitCode);
     }
@@ -40,7 +42,7 @@ public class App {
    * Run the application. Returns 0 on success or a non-zero exit code on error. Extracted for
    * testability.
    */
-  public int run(String[] args) {
+  public int run() {
     // Configuration
     AppConfigLoader configLoader = new AppConfigLoader();
     AppConfig config;
@@ -52,26 +54,17 @@ public class App {
       return 1;
     }
 
-    String systemPrompt;
-
-    try (InputStream in = App.class.getResourceAsStream("/prompts/system.txt")) {
-
-      if (in == null) {
-        throw new ConfigurationException("System prompt '/prompts/system.txt' not found");
-      }
-
-      systemPrompt = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-
-    } catch (IOException e) {
-      throw new ConfigurationException("Failed to load system prompt", e);
-    }
-
     // Infrastructure
     HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     ObjectMapper objectMapper = new ObjectMapper();
 
-    PromptComposer promptComposer = new PromptComposer(systemPrompt);
+    PromptTemplateLoader templateLoader = new PromptTemplateLoader();
+    PromptTemplateRenderer templateRenderer = new PromptTemplateRenderer();
+    SystemPromptProvider systemPromptProvider =
+        new SystemPromptProvider(PromptTemplateType.CHAT, templateLoader, templateRenderer);
+
+    PromptComposer promptComposer = new PromptComposer(systemPromptProvider);
 
     // Clients
     final HttpTransport httpTransport = new JdkHttpTransport(httpClient);

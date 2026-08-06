@@ -15,6 +15,10 @@ import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.model.prompt.Prompt;
 import ai.demo.prompt.PromptComposer;
+import ai.demo.prompt.template.PromptTemplateLoader;
+import ai.demo.prompt.template.PromptTemplateRenderer;
+import ai.demo.prompt.template.PromptTemplateType;
+import ai.demo.prompt.template.SystemPromptProvider;
 import org.junit.jupiter.api.Test;
 
 class ChatServiceTest {
@@ -27,7 +31,10 @@ class ChatServiceTest {
     when(llmClient.chat(any(Prompt.class)))
         .thenReturn(new LlmResponse("Test response", "test-model"));
 
-    PromptComposer promptComposer = new PromptComposer("");
+    PromptComposer promptComposer =
+        new PromptComposer(
+            new SystemPromptProvider(
+                PromptTemplateType.CHAT, new PromptTemplateLoader(), new PromptTemplateRenderer()));
 
     Conversation conversation = new Conversation();
     conversation.add(ChatMessage.user("Test question"));
@@ -45,7 +52,10 @@ class ChatServiceTest {
   void shouldRejectEmptyConversation() {
 
     LlmClient llmClient = mock(LlmClient.class);
-    PromptComposer promptComposer = new PromptComposer("");
+    PromptComposer promptComposer =
+        new PromptComposer(
+            new SystemPromptProvider(
+                PromptTemplateType.CHAT, new PromptTemplateLoader(), new PromptTemplateRenderer()));
 
     Conversation conversation = new Conversation();
 
