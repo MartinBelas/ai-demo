@@ -23,6 +23,7 @@ class AppConfigLoaderTest {
     assertEquals(0.7, config.temperature());
     assertEquals(2000, config.numPredict());
     assertEquals(4096, config.numCtx());
+    assertEquals(1.2, config.repeatPenalty());
   }
 
   @Test
@@ -45,7 +46,8 @@ class AppConfigLoaderTest {
   @CsvSource({
     "app-config/invalid-temperature.properties, temperature",
     "app-config/invalid-max-tokens.properties, numPredict",
-    "app-config/invalid-num-ctx.properties, numCtx"
+    "app-config/invalid-num-ctx.properties, numCtx",
+    "app-config/invalid-repeat-penalty.properties, repeatPenalty"
   })
   void shouldFailForInvalidNumericProperty(String resource, String propertyName) {
 

@@ -16,7 +16,7 @@ class ConsoleChatTest {
   @Test
   void shouldInstantiateWithValidDependencies() {
     var mockService = mock(ChatService.class);
-    AppConfig config = new AppConfig("http://localhost:11434", "test-model", 0.7, 10, 100);
+    AppConfig config = new AppConfig("http://localhost:11434", "test-model", 0.7, 10, 100, 1.2);
 
     var console = new ConsoleChat(mockService, config);
 

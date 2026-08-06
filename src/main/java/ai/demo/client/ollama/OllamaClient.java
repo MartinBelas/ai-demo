@@ -23,10 +23,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class OllamaClient implements LlmClient {
 
   private static final String CHAT_ENDPOINT = "/api/chat";
+
+  private static final Logger log = LoggerFactory.getLogger(OllamaClient.class);
 
   private final AppConfig config;
   private final HttpTransport httpTransport;
@@ -70,7 +74,31 @@ public class OllamaClient implements LlmClient {
 
           OllamaResponse chunk = objectMapper.readValue(line, OllamaResponse.class);
 
-          consumer.accept(new ChatChunk(chunk.message().content(), chunk.done()));
+          // Streaming responses may contain empty/partial message content. Some
+          // providers (Ollama variants) include a `thinking` field inside the
+          // message when `content` is empty. Prefer `content` and fall back to
+          // `thinking` so we don't discard useful partial text.
+          String content = chunk.message().content();
+
+          if (content == null || content.isBlank()) {
+            String thinking = chunk.message().thinking();
+            if (thinking == null || thinking.isBlank()) {
+              if (log.isDebugEnabled()) {
+                // Log the skipped chunk for debugging provider behaviour (debug level only)
+                log.debug(
+                    "Skipping empty streaming chunk: model='{}', done={}, line={}",
+                    chunk.model(),
+                    chunk.done(),
+                    line);
+              }
+
+              continue;
+            }
+
+            content = thinking;
+          }
+
+          consumer.accept(new ChatChunk(content, chunk.done()));
         }
       }
 
@@ -124,11 +152,11 @@ public class OllamaClient implements LlmClient {
   }
 
   private OllamaRequest toOllamaRequest(Prompt prompt) {
-    return new OllamaRequest(config.model(), toMessages(prompt), false);
+    return new OllamaRequest(config.model(), toMessages(prompt), false, config.repeatPenalty());
   }
 
   private OllamaRequest toStreamingOllamaRequest(Prompt prompt) {
-    return new OllamaRequest(config.model(), toMessages(prompt), true);
+    return new OllamaRequest(config.model(), toMessages(prompt), true, config.repeatPenalty());
   }
 
   private LlmResponse toLlmResponse(OllamaResponse ollamaResponse) {
@@ -140,7 +168,8 @@ public class OllamaClient implements LlmClient {
   }
 
   private OllamaMessage toOllamaMessage(ChatMessage chatMessage) {
-    return new OllamaMessage(mapToOllamaRole(chatMessage.role()), chatMessage.content());
+    // When sending requests we don't set `thinking` (provider-side field).
+    return new OllamaMessage(mapToOllamaRole(chatMessage.role()), chatMessage.content(), null);
   }
 
   private String mapToOllamaRole(Role role) {

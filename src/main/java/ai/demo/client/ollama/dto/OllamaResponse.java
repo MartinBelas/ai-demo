@@ -1,5 +1,8 @@
 package ai.demo.client.ollama.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record OllamaResponse(String model, OllamaMessage message, boolean done) {
   public OllamaResponse {
     if (message == null) {

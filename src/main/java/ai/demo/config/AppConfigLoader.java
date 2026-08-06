@@ -24,12 +24,17 @@ public final class AppConfigLoader {
 
     Properties properties = loadProperties(resourceName);
 
-    return new AppConfig(
-        requiredProperty(properties, "llm.base-url"),
-        requiredProperty(properties, "llm.model"),
-        requiredDouble(properties, "llm.temperature"),
-        requiredInt(properties, "llm.max-tokens"),
-        requiredInt(properties, "llm.context-window"));
+    try {
+      return new AppConfig(
+          requiredProperty(properties, "llm.base-url"),
+          requiredProperty(properties, "llm.model"),
+          requiredDouble(properties, "llm.temperature"),
+          requiredInt(properties, "llm.max-tokens"),
+          requiredInt(properties, "llm.context-window"),
+          requiredDouble(properties, "llm.repeat-penalty"));
+    } catch (IllegalArgumentException e) {
+      throw new ConfigurationException(e.getMessage(), e);
+    }
   }
 
   private Properties loadProperties(String resourceName) throws IOException {
