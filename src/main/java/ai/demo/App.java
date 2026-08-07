@@ -8,7 +8,8 @@ import ai.demo.client.ollama.OllamaClient;
 import ai.demo.config.AppConfig;
 import ai.demo.config.AppConfigLoader;
 import ai.demo.console.ConsoleChat;
-import ai.demo.exception.ConfigurationException;
+import ai.demo.console.command.CommandRegistry;
+import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.prompt.PromptComposer;
 import ai.demo.prompt.template.PromptTemplateLoader;
@@ -43,40 +44,59 @@ public class App {
    * testability.
    */
   public int run() {
-    // Configuration
-    AppConfigLoader configLoader = new AppConfigLoader();
+
     AppConfig config;
 
     try {
-      config = configLoader.load();
-    } catch (ConfigurationException | IOException e) {
+      config = loadConfig();
+    } catch (Exception e) {
       log.error("Configuration error: {}", e.getMessage(), e);
       return 1;
     }
 
-    // Infrastructure
-    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    HttpClient httpClient = createHttpClient();
 
-    ObjectMapper objectMapper = new ObjectMapper();
+    PromptComposer composer = createPromptComposer();
 
-    PromptTemplateLoader templateLoader = new PromptTemplateLoader();
-    PromptTemplateRenderer templateRenderer = new PromptTemplateRenderer();
-    SystemPromptProvider systemPromptProvider =
-        new SystemPromptProvider(PromptTemplateType.CHAT, templateLoader, templateRenderer);
+    LlmClient llmClient = createLlmClient(config, httpClient);
 
-    PromptComposer promptComposer = new PromptComposer(systemPromptProvider);
+    ChatService chatService = new ChatService(llmClient, composer);
 
-    // Clients
-    final HttpTransport httpTransport = new JdkHttpTransport(httpClient);
-    LlmClient llmClient =
-        new LoggingLlmClient(new OllamaClient(config, httpTransport, objectMapper));
+    ConsoleCommandDispatcher dispatcher =
+        new ConsoleCommandDispatcher(new CommandRegistry().commands());
 
-    // Services
-    ChatService chatService = new ChatService(llmClient, promptComposer);
+    ConsoleChat consoleChat = new ConsoleChat(chatService, config, dispatcher);
 
-    // UI
-    ConsoleChat consoleChat = new ConsoleChat(chatService, config);
+    addShutdownHook(httpClient);
 
+    return startConsole(consoleChat);
+  }
+
+  private AppConfig loadConfig() throws IOException {
+    AppConfigLoader loader = new AppConfigLoader();
+    return loader.load();
+  }
+
+  private HttpClient createHttpClient() {
+    return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+  }
+
+  private PromptComposer createPromptComposer() {
+    PromptTemplateLoader loader = new PromptTemplateLoader();
+    PromptTemplateRenderer renderer = new PromptTemplateRenderer();
+    SystemPromptProvider provider =
+        new SystemPromptProvider(PromptTemplateType.CHAT, loader, renderer);
+
+    return new PromptComposer(provider);
+  }
+
+  private LlmClient createLlmClient(AppConfig config, HttpClient httpClient) {
+    HttpTransport transport = new JdkHttpTransport(httpClient);
+    ObjectMapper mapper = new ObjectMapper();
+    return new LoggingLlmClient(new OllamaClient(config, transport, mapper));
+  }
+
+  private void addShutdownHook(HttpClient httpClient) {
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
@@ -84,7 +104,9 @@ public class App {
                   httpClient.shutdownNow();
                   log.info("Shutdown complete.");
                 }));
+  }
 
+  private int startConsole(ConsoleChat consoleChat) {
     try {
       consoleChat.start();
       return 0;

@@ -1,9 +1,11 @@
 package ai.demo.console;
 
 import ai.demo.config.AppConfig;
+import ai.demo.console.command.CommandResult;
+import ai.demo.console.command.CommandStatus;
+import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.exception.LlmException;
 import ai.demo.model.chat.ChatMessage;
-import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.service.ChatService;
 import java.util.Scanner;
@@ -24,6 +26,7 @@ public class ConsoleChat {
 
   private final ChatService chatService;
   private final AppConfig config;
+  private final ConsoleCommandDispatcher commandDispatcher;
 
   /**
    * Creates a new ConsoleChat.
@@ -31,9 +34,11 @@ public class ConsoleChat {
    * @param chatService the chat service to use for AI interactions
    * @param config the application configuration
    */
-  public ConsoleChat(ChatService chatService, AppConfig config) {
+  public ConsoleChat(
+      ChatService chatService, AppConfig config, ConsoleCommandDispatcher commandDispatcher) {
     this.chatService = chatService;
     this.config = config;
+    this.commandDispatcher = commandDispatcher;
   }
 
   /** Starts the console chat interface. Runs until the user enters an exit command. */
@@ -41,23 +46,31 @@ public class ConsoleChat {
 
     printHeader();
 
-    final Conversation conversation = new Conversation();
+    ConsoleContext context = new ConsoleContext(new Conversation());
 
     try (Scanner scanner = new Scanner(System.in)) {
 
-      while (true) {
+      boolean exit = false;
+      while (!exit) {
 
-        final String question = readQuestion(scanner);
+        String input = readQuestion(scanner);
 
-        if (shouldExit(question)) {
-          break;
+        if (input.startsWith("/")) {
+
+          CommandResult result = commandDispatcher.dispatch(input, context);
+
+          if (result.message() != null) {
+            System.out.println(result.message());
+          }
+
+          if (result.status() == CommandStatus.EXIT) {
+            exit = true;
+          }
+        } else {
+          ask(input, context.conversation());
         }
-
-        ask(question, conversation);
       }
     }
-
-    printGoodbye();
   }
 
   private void printHeader() {
@@ -87,6 +100,7 @@ public class ConsoleChat {
     conversation.add(ChatMessage.user(question));
 
     StringBuilder answer = new StringBuilder();
+    long start = System.currentTimeMillis();
 
     try {
 
@@ -101,7 +115,12 @@ public class ConsoleChat {
 
       System.out.println();
 
-      conversation.add(ChatMessage.assistant(answer.toString()));
+      long duration = System.currentTimeMillis() - start;
+
+      String finalAnswer = answer.toString();
+      conversation.add(ChatMessage.assistant(finalAnswer));
+
+      printSummary(finalAnswer, duration);
 
     } catch (LlmException e) {
 
@@ -112,23 +131,14 @@ public class ConsoleChat {
     }
   }
 
-  private boolean shouldExit(String question) {
-    final String normalized = question.trim().toLowerCase();
-    return normalized.equals(EXIT_COMMAND)
-        || normalized.equals(QUIT_COMMAND)
-        || normalized.equals(SHORT_QUIT_COMMAND);
-  }
-
-  private void printResponse(ChatResponse response) {
-
+  private void printSummary(String answer, long durationMs) {
     System.out.println();
-    System.out.println("AI  > " + response.answer());
+    System.out.println("==================================");
+    System.out.println(" AI Response Summary");
+    System.out.println("==================================");
+    System.out.println(" Answer length: " + answer.length() + " characters");
+    System.out.println(" Duration:      " + durationMs + " ms");
+    System.out.println("==================================");
     System.out.println();
-    System.out.println("Time: " + response.durationMs() + " ms");
-    System.out.println();
-  }
-
-  private void printGoodbye() {
-    System.out.println("Bye!");
   }
 }
