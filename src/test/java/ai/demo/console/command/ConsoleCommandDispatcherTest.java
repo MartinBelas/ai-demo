@@ -2,9 +2,12 @@ package ai.demo.console.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import ai.demo.console.ConsoleContext;
+import ai.demo.model.chat.Conversation;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -12,19 +15,17 @@ class ConsoleCommandDispatcherTest {
 
   @Test
   void shouldExecuteMatchingCommand() {
-    // Arrange
+
     ConsoleCommand mockCommand = mock(ConsoleCommand.class);
-    ConsoleContext context = new ConsoleContext(null);
+    ConsoleContext context = new ConsoleContext(new Conversation());
 
     when(mockCommand.execute(context)).thenReturn(CommandResult.success("OK"));
 
     ConsoleCommandDispatcher dispatcher =
         new ConsoleCommandDispatcher(Map.of("/test", mockCommand));
 
-    // Act
     CommandResult result = dispatcher.dispatch("/test", context);
 
-    // Assert
     assertNotNull(result);
     assertEquals(CommandStatus.SUCCESS, result.status());
     assertEquals("OK", result.message());
@@ -32,18 +33,27 @@ class ConsoleCommandDispatcherTest {
   }
 
   @Test
-  void shouldIgnoreUnknownCommand() {
-    // Arrange
-    ConsoleCommandDispatcher dispatcher = new ConsoleCommandDispatcher(Map.of()); // empty registry
+  void shouldReturnFailureForUnknownCommand() {
 
-    ConsoleContext context = new ConsoleContext(null);
+    ConsoleCommandDispatcher dispatcher = new ConsoleCommandDispatcher(Map.of());
 
-    // Act
+    ConsoleContext context = new ConsoleContext(new Conversation());
+
     CommandResult result = dispatcher.dispatch("/unknown", context);
 
-    // Assert
     assertNotNull(result);
     assertEquals(CommandStatus.FAILURE, result.status());
-    // message may vary depending on your implementation
+    assertEquals("Unknown command: /unknown", result.message());
+  }
+
+  @Test
+  void shouldRegisterDefaultCommands() {
+
+    CommandRegistry registry = new CommandRegistry();
+
+    assertEquals(3, registry.commands().size());
+    assertEquals(HelpCommand.class, registry.commands().get("/help").getClass());
+    assertEquals(NewCommand.class, registry.commands().get("/new").getClass());
+    assertEquals(ExitCommand.class, registry.commands().get("/exit").getClass());
   }
 }
