@@ -51,8 +51,9 @@ class ConsoleCommandDispatcherTest {
 
     CommandRegistry registry = new CommandRegistry();
 
-    assertEquals(3, registry.commands().size());
+    assertEquals(4, registry.commands().size());
     assertEquals(HelpCommand.class, registry.commands().get("/help").getClass());
+    assertEquals(HistoryCommand.class, registry.commands().get("/history").getClass());
     assertEquals(NewCommand.class, registry.commands().get("/new").getClass());
     assertEquals(ExitCommand.class, registry.commands().get("/exit").getClass());
   }

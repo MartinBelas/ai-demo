@@ -8,6 +8,7 @@ public class CommandRegistry {
     return Map.of(
         "/help", new HelpCommand(),
         "/new", new NewCommand(),
+        "/history", new HistoryCommand(),
         "/exit", new ExitCommand());
   }
 }
