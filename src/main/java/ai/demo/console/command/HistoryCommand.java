@@ -16,7 +16,7 @@ public class HistoryCommand implements ConsoleCommand {
   }
 
   @Override
-  public CommandResult execute(ConsoleContext context) {
+  public CommandResult execute(ConsoleContext context, String[] args) {
 
     if (context.conversation().isEmpty()) {
       return CommandResult.success("Conversation is empty.");

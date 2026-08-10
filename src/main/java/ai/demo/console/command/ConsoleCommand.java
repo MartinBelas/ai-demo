@@ -8,5 +8,5 @@ public interface ConsoleCommand {
 
   String description();
 
-  CommandResult execute(ConsoleContext context);
+  CommandResult execute(ConsoleContext context, String[] args);
 }

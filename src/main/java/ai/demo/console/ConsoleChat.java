@@ -4,7 +4,9 @@ import ai.demo.config.AppConfig;
 import ai.demo.console.command.CommandResult;
 import ai.demo.console.command.CommandStatus;
 import ai.demo.console.command.ConsoleCommandDispatcher;
+import ai.demo.console.command.ThinkingMode;
 import ai.demo.exception.LlmException;
+import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import ai.demo.service.ChatService;
@@ -18,9 +20,11 @@ import org.slf4j.LoggerFactory;
  */
 public class ConsoleChat {
 
-  private static final String EXIT_COMMAND = "exit";
-  private static final String QUIT_COMMAND = "quit";
-  private static final String SHORT_QUIT_COMMAND = "q";
+  private static final String EXIT_COMMAND = "/exit";
+
+  private static final String ANSI_GRAY = "\u001B[90m";
+  private static final String ANSI_RESET = "\u001B[0m";
+  private static final String ANSI_ITALIC = "\u001B[3m";
 
   private static final Logger log = LoggerFactory.getLogger(ConsoleChat.class);
 
@@ -67,7 +71,7 @@ public class ConsoleChat {
             exit = true;
           }
         } else {
-          ask(input, context.conversation());
+          ask(input, context);
         }
       }
     }
@@ -78,14 +82,7 @@ public class ConsoleChat {
     System.out.println("==================================");
     System.out.println(" AI Demo");
     System.out.println(" Model: " + config.model());
-    System.out.println(
-        " Type '"
-            + EXIT_COMMAND
-            + "', '"
-            + QUIT_COMMAND
-            + "', or '"
-            + SHORT_QUIT_COMMAND
-            + "' to quit.");
+    System.out.println(" Type '" + EXIT_COMMAND + "' to quit.");
     System.out.println("==================================");
     System.out.println();
   }
@@ -95,32 +92,80 @@ public class ConsoleChat {
     return scanner.nextLine();
   }
 
-  private void ask(final String question, final Conversation conversation) {
+  private void ask(final String question, final ConsoleContext context) {
 
+    Conversation conversation = context.conversation();
     conversation.add(ChatMessage.user(question));
 
-    StringBuilder answer = new StringBuilder();
+    StringBuilder finalAnswer = new StringBuilder();
     long start = System.currentTimeMillis();
 
     try {
 
-      System.out.print("AI: ");
+      final StringBuilder thinkingBuffer = new StringBuilder();
+      final int MINIMAL_LIMIT = 200;
+      final int ON_FLUSH_LIMIT = 120;
+
+      System.out.println("AI:");
 
       chatService.askStreaming(
           conversation,
           chunk -> {
+            if (chunk.type() == ChatChunkType.THINKING) {
+
+              ThinkingMode mode = context.thinkingMode();
+
+              switch (mode) {
+                case OFF -> {
+                  return;
+                }
+
+                case MINIMAL -> {
+                  thinkingBuffer.append(chunk.content()).append(" ");
+
+                  if (thinkingBuffer.length() >= MINIMAL_LIMIT) {
+
+                    System.out.println(
+                        ANSI_GRAY
+                            + ANSI_ITALIC
+                            + thinkingBuffer.toString().trim()
+                            + "..."
+                            + ANSI_RESET);
+
+                    context.setThinkingMode(ThinkingMode.OFF);
+                  }
+
+                  return;
+                }
+
+                case ON -> {
+                  thinkingBuffer.append(chunk.content()).append(" ");
+
+                  if (thinkingBuffer.length() >= ON_FLUSH_LIMIT || chunk.content().endsWith(".")) {
+
+                    System.out.println(
+                        ANSI_GRAY + ANSI_ITALIC + thinkingBuffer.toString().trim() + ANSI_RESET);
+
+                    thinkingBuffer.setLength(0);
+                  }
+
+                  return;
+                }
+              }
+            }
+
+            // CONTENT
             System.out.print(chunk.content());
-            answer.append(chunk.content());
+            finalAnswer.append(chunk.content());
           });
 
       System.out.println();
 
       long duration = System.currentTimeMillis() - start;
 
-      String finalAnswer = answer.toString();
-      conversation.add(ChatMessage.assistant(finalAnswer));
+      conversation.add(ChatMessage.assistant(finalAnswer.toString()));
 
-      printSummary(finalAnswer, duration);
+      printSummary(finalAnswer.toString(), duration);
 
     } catch (LlmException e) {
 
@@ -138,6 +183,8 @@ public class ConsoleChat {
     System.out.println("==================================");
     System.out.println(" Answer length: " + answer.length() + " characters");
     System.out.println(" Duration:      " + durationMs + " ms");
+    System.out.println();
+    System.out.println(" Answer length: " + answer.trim());
     System.out.println("==================================");
     System.out.println();
   }

@@ -8,7 +8,6 @@ public class SystemPromptProvider {
 
   private final PromptTemplateRenderer renderer;
   private final PromptTemplate template;
-  private final PromptTemplateType templateType;
 
   public SystemPromptProvider(
       PromptTemplateType templateType,
@@ -16,10 +15,9 @@ public class SystemPromptProvider {
       PromptTemplateRenderer renderer) {
 
     this.renderer = renderer;
-    this.templateType = templateType;
 
     try {
-      this.template = templateLoader.load(this.templateType);
+      this.template = templateLoader.load(templateType);
     } catch (IOException e) {
       throw new PromptTemplateException("Failed to load prompt template: " + templateType, e);
     }

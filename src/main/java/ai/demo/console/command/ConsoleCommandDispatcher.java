@@ -1,6 +1,7 @@
 package ai.demo.console.command;
 
 import ai.demo.console.ConsoleContext;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 
@@ -14,13 +15,22 @@ public class ConsoleCommandDispatcher {
 
   public CommandResult dispatch(String input, ConsoleContext context) {
 
-    ConsoleCommand command = commands.get(input);
+    String[] parts = input.trim().split("\\s+");
 
-    if (command == null) {
-      return CommandResult.failure("Unknown command: " + input);
+    String commandName = parts[0];
+
+    String[] args = new String[0];
+    if (parts.length > 1) {
+      args = Arrays.copyOfRange(parts, 1, parts.length);
     }
 
-    return command.execute(context);
+    ConsoleCommand command = commands.get(commandName);
+
+    if (command == null) {
+      return CommandResult.failure("Unknown command: " + commandName);
+    }
+
+    return command.execute(context, args);
   }
 
   public Collection<ConsoleCommand> commands() {

@@ -6,23 +6,25 @@ public class HelpCommand implements ConsoleCommand {
 
   @Override
   public String name() {
-    return "";
+    return "/help";
   }
 
   @Override
   public String description() {
-    return "";
+    return "Shows all available commands";
   }
 
   @Override
-  public CommandResult execute(ConsoleContext context) {
-    return CommandResult.success(
-"""
-Available commands:
+  public CommandResult execute(ConsoleContext context, String[] args) {
 
-/help
-/new
-/exit
-""");
+    StringBuilder sb = new StringBuilder();
+    sb.append("Available commands:\n\n");
+
+    new CommandRegistry()
+        .commands()
+        .forEach(
+            (name, cmd) -> sb.append(name).append("  -  ").append(cmd.description()).append("\n"));
+
+    return CommandResult.success(sb.toString());
   }
 }

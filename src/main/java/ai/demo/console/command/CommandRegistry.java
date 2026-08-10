@@ -9,6 +9,7 @@ public class CommandRegistry {
         "/help", new HelpCommand(),
         "/new", new NewCommand(),
         "/history", new HistoryCommand(),
+        "/thinking", new ThinkingCommand(),
         "/exit", new ExitCommand());
   }
 }

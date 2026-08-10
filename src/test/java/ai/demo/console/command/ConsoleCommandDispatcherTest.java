@@ -18,8 +18,8 @@ class ConsoleCommandDispatcherTest {
 
     ConsoleCommand mockCommand = mock(ConsoleCommand.class);
     ConsoleContext context = new ConsoleContext(new Conversation());
-
-    when(mockCommand.execute(context)).thenReturn(CommandResult.success("OK"));
+    String[] args = new String[0];
+    when(mockCommand.execute(context, args)).thenReturn(CommandResult.success("OK"));
 
     ConsoleCommandDispatcher dispatcher =
         new ConsoleCommandDispatcher(Map.of("/test", mockCommand));
@@ -29,7 +29,7 @@ class ConsoleCommandDispatcherTest {
     assertNotNull(result);
     assertEquals(CommandStatus.SUCCESS, result.status());
     assertEquals("OK", result.message());
-    verify(mockCommand).execute(context);
+    verify(mockCommand).execute(context, args);
   }
 
   @Test
@@ -51,10 +51,11 @@ class ConsoleCommandDispatcherTest {
 
     CommandRegistry registry = new CommandRegistry();
 
-    assertEquals(4, registry.commands().size());
+    assertEquals(5, registry.commands().size());
     assertEquals(HelpCommand.class, registry.commands().get("/help").getClass());
     assertEquals(HistoryCommand.class, registry.commands().get("/history").getClass());
     assertEquals(NewCommand.class, registry.commands().get("/new").getClass());
     assertEquals(ExitCommand.class, registry.commands().get("/exit").getClass());
+    assertEquals(ThinkingCommand.class, registry.commands().get("/thinking").getClass());
   }
 }

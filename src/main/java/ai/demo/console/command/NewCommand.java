@@ -16,7 +16,7 @@ public class NewCommand implements ConsoleCommand {
   }
 
   @Override
-  public CommandResult execute(ConsoleContext context) {
+  public CommandResult execute(ConsoleContext context, String[] args) {
     context.setConversation(new Conversation());
     return CommandResult.success("New conversation started.");
   }

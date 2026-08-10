@@ -21,7 +21,7 @@ class NewCommandTest {
 
     NewCommand command = new NewCommand();
 
-    CommandResult result = command.execute(context);
+    CommandResult result = command.execute(context, null);
 
     assertTrue(context.conversation().isEmpty());
     assertEquals("New conversation started.", result.message());

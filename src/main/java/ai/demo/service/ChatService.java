@@ -41,6 +41,18 @@ public class ChatService {
 
   public void askStreaming(Conversation conversation, Consumer<ChatChunk> consumer) {
 
+    if (conversation == null) {
+      throw new IllegalArgumentException("conversation must not be null");
+    }
+
+    if (conversation.isEmpty()) {
+      throw new IllegalStateException("conversation must not be empty");
+    }
+
+    if (consumer == null) {
+      throw new IllegalArgumentException("consumer must not be null");
+    }
+
     Prompt prompt = promptComposer.compose(conversation);
 
     llmClient.stream(prompt, consumer);

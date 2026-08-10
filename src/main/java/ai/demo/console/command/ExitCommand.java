@@ -15,7 +15,7 @@ public class ExitCommand implements ConsoleCommand {
   }
 
   @Override
-  public CommandResult execute(ConsoleContext context) {
+  public CommandResult execute(ConsoleContext context, String[] args) {
     return CommandResult.exit();
   }
 }

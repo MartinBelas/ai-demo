@@ -21,7 +21,7 @@ class HistoryCommandTest {
 
     HistoryCommand command = new HistoryCommand();
 
-    CommandResult result = command.execute(context);
+    CommandResult result = command.execute(context, null);
 
     assertEquals(CommandStatus.SUCCESS, result.status());
     assertEquals(
@@ -40,7 +40,7 @@ class HistoryCommandTest {
 
     HistoryCommand command = new HistoryCommand();
 
-    CommandResult result = command.execute(context);
+    CommandResult result = command.execute(context, null);
 
     assertEquals(CommandStatus.SUCCESS, result.status());
     assertEquals("Conversation is empty.", result.message());
