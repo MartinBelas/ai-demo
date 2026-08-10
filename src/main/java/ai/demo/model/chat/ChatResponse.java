@@ -1,6 +1,6 @@
 package ai.demo.model.chat;
 
-public record ChatResponse(String answer, String model, long durationMs) {
+public record ChatResponse(String answer, String model, long durationInSeconds) {
   public ChatResponse {
 
     if (answer == null || answer.isBlank()) {
@@ -11,8 +11,8 @@ public record ChatResponse(String answer, String model, long durationMs) {
       throw new IllegalArgumentException("model must not be blank");
     }
 
-    if (durationMs < 0) {
-      throw new IllegalArgumentException("durationMs must not be negative");
+    if (durationInSeconds < 0) {
+      throw new IllegalArgumentException("durationInSeconds must not be negative");
     }
   }
 }
