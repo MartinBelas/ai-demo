@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
-import ai.demo.client.TokenUsage;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
@@ -30,7 +29,7 @@ class ChatServiceTest {
     LlmClient llmClient = mock(LlmClient.class);
 
     when(llmClient.chat(any(Prompt.class)))
-        .thenReturn(new LlmResponse("Test response", "test-model", new TokenUsage(0, 0)));
+        .thenReturn(new LlmResponse("Test response", "test-model"));
 
     PromptComposer promptComposer =
         new PromptComposer(

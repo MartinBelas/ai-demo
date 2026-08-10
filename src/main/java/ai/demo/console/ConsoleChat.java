@@ -184,7 +184,7 @@ public class ConsoleChat {
     System.out.println(" Answer length: " + answer.length() + " characters");
     System.out.println(" Duration:      " + durationMs + " ms");
     System.out.println();
-    System.out.println(" Answer length: " + answer.trim());
+    System.out.println(" Answer: " + answer.trim());
     System.out.println("==================================");
     System.out.println();
   }

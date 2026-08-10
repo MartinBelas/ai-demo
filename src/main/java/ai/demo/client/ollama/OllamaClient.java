@@ -9,6 +9,7 @@ import ai.demo.client.ollama.dto.OllamaResponse;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
+import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Role;
 import ai.demo.model.prompt.Prompt;
@@ -46,6 +47,7 @@ public class OllamaClient implements LlmClient {
   public LlmResponse chat(Prompt prompt) {
     OllamaRequest ollamaRequest = toOllamaRequest(prompt);
     OllamaResponse ollamaResponse = send(ollamaRequest);
+
     return toLlmResponse(ollamaResponse);
   }
 
@@ -55,7 +57,6 @@ public class OllamaClient implements LlmClient {
     OllamaRequest request = toStreamingOllamaRequest(prompt);
 
     try {
-
       HttpResponse<InputStream> response = httpTransport.sendStreaming(createHttpRequest(request));
 
       if (response.statusCode() != 200) {
@@ -74,43 +75,40 @@ public class OllamaClient implements LlmClient {
 
           OllamaResponse chunk = objectMapper.readValue(line, OllamaResponse.class);
 
-          // Streaming responses may contain empty/partial message content. Some
-          // providers (Ollama variants) include a `thinking` field inside the
-          // message when `content` is empty. Prefer `content` and fall back to
-          // `thinking` so we don't discard useful partial text.
-          String content = chunk.message().content();
-
-          if (content == null || content.isBlank()) {
-            String thinking = chunk.message().thinking();
-            if (thinking == null || thinking.isBlank()) {
-              if (log.isDebugEnabled()) {
-                // Log the skipped chunk for debugging provider behaviour (debug level only)
-                log.debug(
-                    "Skipping empty streaming chunk: model='{}', done={}, line={}",
-                    chunk.model(),
-                    chunk.done(),
-                    line);
-              }
-
-              continue;
-            }
-
-            content = thinking;
-          }
-
-          consumer.accept(new ChatChunk(content, chunk.done()));
+          emitChunk(chunk, consumer);
         }
       }
 
     } catch (InterruptedException e) {
-
       Thread.currentThread().interrupt();
 
       throw new LlmCommunicationException("Streaming from Ollama was interrupted", e);
 
     } catch (IOException e) {
-
       throw new LlmCommunicationException("Failed to stream from Ollama", e);
+    }
+  }
+
+  private void emitChunk(OllamaResponse chunk, Consumer<ChatChunk> consumer) {
+
+    String content = chunk.message().content();
+
+    if (content != null && !content.isBlank()) {
+      consumer.accept(new ChatChunk(content, ChatChunkType.CONTENT, chunk.done()));
+
+      return;
+    }
+
+    String thinking = chunk.message().thinking();
+
+    if (thinking != null && !thinking.isBlank()) {
+      consumer.accept(new ChatChunk(thinking, ChatChunkType.THINKING, chunk.done()));
+
+      return;
+    }
+
+    if (log.isDebugEnabled()) {
+      log.debug("Skipping empty streaming chunk: model='{}', done={}", chunk.model(), chunk.done());
     }
   }
 
@@ -168,7 +166,7 @@ public class OllamaClient implements LlmClient {
   }
 
   private OllamaMessage toOllamaMessage(ChatMessage chatMessage) {
-    // When sending requests we don't set `thinking` (provider-side field).
+    // When sending requests we don't set provider-side thinking.
     return new OllamaMessage(mapToOllamaRole(chatMessage.role()), chatMessage.content(), null);
   }
 
