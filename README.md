@@ -92,39 +92,66 @@ mvn spotless:apply
 
 ## Roadmap
 
-Phase 1: Core Chat ✅
-- Chat conversations
-- Prompt templates
-- Prompt rendering
-- Streaming responses
-- Ollama integration
-- Logging
-- Unit tests
+Phase 1 – Core LLM application
+✓ LLM client
+✓ Ollama integration
+✓ Configuration
+✓ Error handling
+✓ Logging
+✓ Prompt model
+✓ Prompt composition
+✓ Prompt templates
+✓ Streaming
 
-Phase 2: Context Management
-- Token estimation
-- Context window management
-- Conversation summarization
-- Persistent conversation memory
+Phase 2 – Conversation & observability
+→ Conversation memory
+→ Token usage
+→ Conversation persistence
+→ Metrics
+→ Structured logging
+→ LLM performance metrics
 
-Phase 3: Knowledge Retrieval
-- Document loaders
-- Text chunking
-- Embeddings
-- Vector store
-- Retrieval-Augmented Generation (RAG)
+Phase 3 – Agent
+→ Agent abstraction
+→ Agent loop
+→ Tool abstraction
+→ Tool calling
+→ Multi-step execution
+→ Agent state
 
-Phase 4: Tool Integration
-- Structured outputs
-- Tool calling
-- Tool registry
-- Multi-tool workflows
+Phase 4 – Data & RAG
+→ Document ingestion
+→ Document parsing
+→ Chunking
+→ Embeddings
+→ Vector store
+→ Retrieval
+→ RAG pipeline
+→ Citation generation
 
-Phase 5: AI Agents
-- Planning
-- Agent execution loop
-- Long-term memory
-- Multi-agent collaboration
+Phase 5 – Evaluation
+→ Evaluation dataset
+→ Automated evaluation
+→ Relevance
+→ Correctness
+→ Citation coverage
+→ Confidence scoring
+→ Regression tests
+
+Phase 6 – Production engineering
+→ Retry / resilience
+→ Concurrency
+→ Performance benchmarks
+→ Context-window management
+→ Caching
+→ Metrics
+
+Phase 7 – Integration & deployment
+→ REST API
+→ Docker
+→ GitHub Actions CI
+→ Integration tests
+→ Deployment
 
 ## License
 
