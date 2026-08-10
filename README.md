@@ -110,6 +110,11 @@ Phase 2 – Conversation & observability
 → Metrics
 → Structured logging
 → LLM performance metrics
+→ Langfuse integration  
+→ Tracing
+→ Prompt + response logging
+→ Token usage analytics
+→ Latency + cost dashboards
 
 Phase 3 – Agent
 → Agent abstraction
@@ -128,6 +133,11 @@ Phase 4 – Data & RAG
 → Retrieval
 → RAG pipeline
 → Citation generation
+→ n8n integration  
+→ ingestion workflows
+→ scheduled crawlers
+→ preprocessing pipelines
+→ external API enrichment
 
 Phase 5 – Evaluation
 → Evaluation dataset
