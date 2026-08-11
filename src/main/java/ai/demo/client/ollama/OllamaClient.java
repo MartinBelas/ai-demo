@@ -2,6 +2,8 @@ package ai.demo.client.ollama;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
+import ai.demo.client.TokenUsage;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.client.ollama.dto.OllamaMessage;
 import ai.demo.client.ollama.dto.OllamaRequest;
@@ -47,17 +49,20 @@ public class OllamaClient implements LlmClient {
   public LlmResponse chat(Prompt prompt) {
     OllamaRequest ollamaRequest = toOllamaRequest(prompt);
     OllamaResponse ollamaResponse = send(ollamaRequest);
-
     return toLlmResponse(ollamaResponse);
   }
 
   @Override
-  public void stream(Prompt prompt, Consumer<ChatChunk> consumer) {
+  public StreamingResult stream(Prompt prompt, Consumer<ChatChunk> consumer) {
 
-    OllamaRequest request = toStreamingOllamaRequest(prompt);
+    OllamaRequest ollamaRequest = toStreamingOllamaRequest(prompt);
+
+    Integer promptEvalCount = null;
+    Integer evalCount = null;
 
     try {
-      HttpResponse<InputStream> response = httpTransport.sendStreaming(createHttpRequest(request));
+      HttpResponse<InputStream> response =
+          httpTransport.sendStreaming(createHttpRequest(ollamaRequest));
 
       if (response.statusCode() != 200) {
         throw new LlmCommunicationException("Ollama returned HTTP status " + response.statusCode());
@@ -75,13 +80,26 @@ public class OllamaClient implements LlmClient {
 
           OllamaResponse chunk = objectMapper.readValue(line, OllamaResponse.class);
 
+          // capture token usage if present (only in final chunk)
+          if (chunk.promptEvalCount() != null) {
+            promptEvalCount = chunk.promptEvalCount();
+          }
+          if (chunk.evalCount() != null) {
+            evalCount = chunk.evalCount();
+          }
+
           emitChunk(chunk, consumer);
         }
+
+        TokenUsage tokenUsage =
+            new TokenUsage(
+                promptEvalCount != null ? promptEvalCount : 0, evalCount != null ? evalCount : 0);
+
+        return new StreamingResult(tokenUsage);
       }
 
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-
       throw new LlmCommunicationException("Streaming from Ollama was interrupted", e);
 
     } catch (IOException e) {
@@ -158,7 +176,18 @@ public class OllamaClient implements LlmClient {
   }
 
   private LlmResponse toLlmResponse(OllamaResponse ollamaResponse) {
-    return new LlmResponse(ollamaResponse.message().content(), ollamaResponse.model());
+    return new LlmResponse(
+        ollamaResponse.message().content(), ollamaResponse.model(), toTokenUsage(ollamaResponse));
+  }
+
+  private TokenUsage toTokenUsage(OllamaResponse ollamaResponse) {
+
+    int promptTokens =
+        ollamaResponse.promptEvalCount() != null ? ollamaResponse.promptEvalCount() : 0;
+
+    int completionTokens = ollamaResponse.evalCount() != null ? ollamaResponse.evalCount() : 0;
+
+    return new TokenUsage(promptTokens, completionTokens);
   }
 
   private List<OllamaMessage> toMessages(Prompt prompt) {

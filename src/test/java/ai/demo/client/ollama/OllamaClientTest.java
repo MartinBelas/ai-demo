@@ -1,7 +1,9 @@
 package ai.demo.client.ollama;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -10,6 +12,7 @@ import ai.demo.client.LlmResponse;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.prompt.Prompt;
 import ch.qos.logback.classic.Level;
@@ -48,21 +51,20 @@ class OllamaClientTest {
   void shouldStreamAndSkipEmptyAndIgnoreUnknownFields() throws Exception {
 
     String streamResponse =
-        "{"
-            + "\"model\": \"qwen3:4b\", "
-            + "\"message\": {\"role\": \"assistant\", \"content\": \"\"}, "
-            + "\"done\": false}"
-            + "\n"
-            + "{"
-            + "\"model\": \"qwen3:4b\", "
-            + "\"message\": {\"role\": \"assistant\", \"content\": \"Hel\", \"thinking\": true}, "
-            + "\"done\": false}"
-            + "\n"
-            + "{"
-            + "\"model\": \"qwen3:4b\", "
-            + "\"message\": {\"role\": \"assistant\", \"content\": \"lo\"}, "
-            + "\"done\": true}"
-            + "\n";
+        """
+                    {\
+                    "model": "qwen3:4b", \
+                    "message": {"role": "assistant", "content": ""}, \
+                    "done": false}
+                    {\
+                    "model": "qwen3:4b", \
+                    "message": {"role": "assistant", "content": "Hel", "thinking": true}, \
+                    "done": false}
+                    {\
+                    "model": "qwen3:4b", \
+                    "message": {"role": "assistant", "content": "lo"}, \
+                    "done": true}
+                    """;
 
     ByteArrayInputStream inputStream =
         new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
@@ -71,27 +73,27 @@ class OllamaClientTest {
 
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body()).thenReturn(inputStream);
-    when(httpTransport.sendStreaming(any())).thenReturn((HttpResponse) httpResponse);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
 
-    // Attach test appender to capture debug logs from OllamaClient
     Logger logger = (Logger) LoggerFactory.getLogger(ai.demo.client.ollama.OllamaClient.class);
+
     ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+
     listAppender.start();
+
     logger.setLevel(Level.DEBUG);
     logger.addAppender(listAppender);
 
-    List<ai.demo.model.chat.ChatChunk> chunks = new ArrayList<>();
+    List<ChatChunk> chunks = new ArrayList<>();
 
     ollamaClient.stream(createPrompt(), chunks::add);
 
-    // The first blank content chunk should be skipped; second and third should be delivered.
     assertEquals(2, chunks.size());
     assertEquals("Hel", chunks.get(0).content());
-    assertEquals(false, chunks.get(0).finished());
+    assertFalse(chunks.get(0).finished());
     assertEquals("lo", chunks.get(1).content());
-    assertEquals(true, chunks.get(1).finished());
+    assertTrue(chunks.get(1).finished());
 
-    // Verify debug log recorded the skipped empty chunk
     boolean found =
         listAppender.list.stream()
             .anyMatch(
@@ -99,7 +101,9 @@ class OllamaClientTest {
                     e.getLevel().equals(Level.DEBUG)
                         && e.getFormattedMessage().contains("Skipping empty streaming chunk"));
 
-    assertEquals(true, found);
+    assertTrue(found);
+
+    logger.detachAppender(listAppender);
   }
 
   @Test
@@ -112,7 +116,10 @@ class OllamaClientTest {
               "message": {
                 "role": "assistant",
                 "content": "Hello"
-              }
+              },
+              "done": true,
+              "prompt_eval_count": 100,
+              "eval_count": 50
             }
             """;
 
@@ -126,6 +133,37 @@ class OllamaClientTest {
 
     assertEquals("Hello", response.text());
     assertEquals("qwen3:4b", response.model());
+    assertEquals(100, response.tokenUsage().promptTokens());
+    assertEquals(50, response.tokenUsage().completionTokens());
+    assertEquals(150, response.tokenUsage().totalTokens());
+  }
+
+  @Test
+  void shouldReturnZeroTokenUsageWhenOllamaDoesNotProvideTokenCounts() throws Exception {
+
+    String jsonResponse =
+        """
+            {
+              "model": "qwen3:4b",
+              "message": {
+                "role": "assistant",
+                "content": "Hello"
+              },
+              "done": true
+            }
+            """;
+
+    HttpResponse<String> httpResponse = mock();
+
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body()).thenReturn(jsonResponse);
+    when(httpTransport.send(any())).thenReturn(httpResponse);
+
+    LlmResponse response = ollamaClient.chat(createPrompt());
+
+    assertEquals(0, response.tokenUsage().promptTokens());
+    assertEquals(0, response.tokenUsage().completionTokens());
+    assertEquals(0, response.tokenUsage().totalTokens());
   }
 
   @Test
@@ -137,6 +175,7 @@ class OllamaClientTest {
     when(httpTransport.send(any())).thenReturn(httpResponse);
 
     Prompt prompt = createPrompt();
+
     assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
   }
 
@@ -146,6 +185,7 @@ class OllamaClientTest {
     when(httpTransport.send(any())).thenThrow(new IOException("Connection refused"));
 
     Prompt prompt = createPrompt();
+
     LlmCommunicationException exception =
         assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
 
@@ -162,6 +202,7 @@ class OllamaClientTest {
     when(httpTransport.send(any())).thenReturn(httpResponse);
 
     Prompt prompt = createPrompt();
+
     LlmCommunicationException exception =
         assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
 

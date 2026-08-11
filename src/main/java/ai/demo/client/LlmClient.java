@@ -15,5 +15,5 @@ public interface LlmClient {
    */
   LlmResponse chat(Prompt prompt);
 
-  void stream(Prompt prompt, Consumer<ChatChunk> consumer);
+  StreamingResult stream(Prompt prompt, Consumer<ChatChunk> consumer);
 }

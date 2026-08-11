@@ -10,25 +10,32 @@ class LlmResponseTest {
   @Test
   void shouldCreateResponse() {
 
-    var response = new LlmResponse("Test text", "test-model");
+    TokenUsage tokenUsage = new TokenUsage(100, 50);
+
+    var response = new LlmResponse("Test text", "test-model", tokenUsage);
 
     assertEquals("Test text", response.text());
     assertEquals("test-model", response.model());
+    assertEquals(tokenUsage, response.tokenUsage());
   }
 
   @Test
   void shouldRejectInvalidResponse() {
 
-    assertThrows(IllegalArgumentException.class, () -> new LlmResponse(null, "model"));
+    TokenUsage tokenUsage = new TokenUsage(100, 50);
 
-    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("", "model"));
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse(null, "model", tokenUsage));
 
-    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("   ", "model"));
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("", "model", tokenUsage));
 
-    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", null));
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("   ", "model", tokenUsage));
 
-    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", ""));
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", null, tokenUsage));
 
-    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", "   "));
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", "", tokenUsage));
+
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", "   ", tokenUsage));
+
+    assertThrows(IllegalArgumentException.class, () -> new LlmResponse("text", "model", null));
   }
 }

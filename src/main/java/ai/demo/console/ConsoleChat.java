@@ -1,5 +1,7 @@
 package ai.demo.console;
 
+import ai.demo.client.StreamingResult;
+import ai.demo.client.TokenUsage;
 import ai.demo.config.AppConfig;
 import ai.demo.console.command.CommandResult;
 import ai.demo.console.command.CommandStatus;
@@ -108,56 +110,61 @@ public class ConsoleChat {
 
       System.out.println("AI:");
 
-      chatService.askStreaming(
-          conversation,
-          chunk -> {
-            if (chunk.type() == ChatChunkType.THINKING) {
+      StreamingResult result =
+          chatService.askStreaming(
+              conversation,
+              chunk -> {
+                if (chunk.type() == ChatChunkType.THINKING) {
 
-              ThinkingMode mode = context.thinkingMode();
+                  ThinkingMode mode = context.thinkingMode();
 
-              switch (mode) {
-                case OFF -> {
-                  return;
-                }
+                  switch (mode) {
+                    case OFF, STATUS -> {
+                      return;
+                    }
 
-                case MINIMAL -> {
-                  thinkingBuffer.append(chunk.content()).append(" ");
+                    case MINIMAL -> {
+                      thinkingBuffer.append(chunk.content()).append(" ");
 
-                  if (thinkingBuffer.length() >= MINIMAL_LIMIT) {
+                      if (thinkingBuffer.length() >= MINIMAL_LIMIT) {
 
-                    System.out.println(
-                        ANSI_GRAY
-                            + ANSI_ITALIC
-                            + thinkingBuffer.toString().trim()
-                            + "..."
-                            + ANSI_RESET);
+                        System.out.println(
+                            ANSI_GRAY
+                                + ANSI_ITALIC
+                                + thinkingBuffer.toString().trim()
+                                + "..."
+                                + ANSI_RESET);
 
-                    context.setThinkingMode(ThinkingMode.OFF);
+                        context.setThinkingMode(ThinkingMode.OFF);
+                      }
+
+                      return;
+                    }
+
+                    case ON -> {
+                      thinkingBuffer.append(chunk.content()).append(" ");
+
+                      if (thinkingBuffer.length() >= ON_FLUSH_LIMIT
+                          || chunk.content().endsWith(".")) {
+
+                        System.out.println(
+                            ANSI_GRAY
+                                + ANSI_ITALIC
+                                + thinkingBuffer.toString().trim()
+                                + ANSI_RESET);
+
+                        thinkingBuffer.setLength(0);
+                      }
+
+                      return;
+                    }
                   }
-
-                  return;
                 }
 
-                case ON -> {
-                  thinkingBuffer.append(chunk.content()).append(" ");
-
-                  if (thinkingBuffer.length() >= ON_FLUSH_LIMIT || chunk.content().endsWith(".")) {
-
-                    System.out.println(
-                        ANSI_GRAY + ANSI_ITALIC + thinkingBuffer.toString().trim() + ANSI_RESET);
-
-                    thinkingBuffer.setLength(0);
-                  }
-
-                  return;
-                }
-              }
-            }
-
-            // CONTENT
-            System.out.print(chunk.content());
-            finalAnswer.append(chunk.content());
-          });
+                // CONTENT
+                System.out.print(chunk.content());
+                finalAnswer.append(chunk.content());
+              });
 
       System.out.println();
 
@@ -165,7 +172,7 @@ public class ConsoleChat {
 
       conversation.add(ChatMessage.assistant(finalAnswer.toString()));
 
-      printSummary(finalAnswer.toString(), duration);
+      printSummary(finalAnswer.toString(), duration, result.tokenUsage());
 
     } catch (LlmException e) {
 
@@ -176,13 +183,16 @@ public class ConsoleChat {
     }
   }
 
-  private void printSummary(String answer, long durationMs) {
+  private void printSummary(String answer, long durationMs, TokenUsage usage) {
     System.out.println();
     System.out.println("==================================");
     System.out.println(" AI Response Summary");
     System.out.println("==================================");
     System.out.println(" Answer length: " + answer.length() + " characters");
     System.out.println(" Duration:      " + durationMs + " ms");
+    System.out.println(" Prompt tokens: " + usage.promptTokens());
+    System.out.println(" Completion:    " + usage.completionTokens());
+    System.out.println(" Total tokens:  " + usage.totalTokens());
     System.out.println();
     System.out.println(" Answer: " + answer.trim());
     System.out.println("==================================");

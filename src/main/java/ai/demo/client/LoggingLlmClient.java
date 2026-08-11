@@ -5,6 +5,7 @@ import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.prompt.Prompt;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,46 +33,53 @@ public class LoggingLlmClient implements LlmClient {
       LlmResponse response = delegate.chat(prompt);
 
       log.info(
-          "[{}] Received response from model '{}' in {} ms",
+          "[{}] Received response from model '{}' in {} ms (promptTokens={}, completionTokens={}, totalTokens={})",
           requestId,
           response.model(),
-          elapsedMillis(start));
+          elapsedMillis(start),
+          response.tokenUsage().promptTokens(),
+          response.tokenUsage().completionTokens(),
+          response.tokenUsage().totalTokens());
 
       return response;
-
     } catch (LlmException e) {
-
       log.error("[{}] LLM request failed after {} ms", requestId, elapsedMillis(start), e);
-
       throw e;
-
     } catch (RuntimeException e) {
-
       log.error("[{}] Unexpected error after {} ms", requestId, elapsedMillis(start), e);
-
       throw e;
     }
   }
 
   @Override
-  public void stream(Prompt prompt, Consumer<ChatChunk> consumer) {
+  public StreamingResult stream(Prompt prompt, Consumer<ChatChunk> consumer) {
 
-    log.info("Sending streaming prompt to LLM");
+    long start = System.nanoTime();
+    long requestId = ThreadLocalRandom.current().nextLong();
+
+    log.info("[{}] Sending streaming prompt (messages={})", requestId, prompt.messages().size());
 
     try {
 
-      delegate.stream(prompt, consumer);
+      StreamingResult result = delegate.stream(prompt, consumer);
 
-      log.info("Streaming response completed");
+      log.info(
+          "[{}] Token usage: promptTokens={}, completionTokens={}, totalTokens={}",
+          requestId,
+          result.tokenUsage().promptTokens(),
+          result.tokenUsage().completionTokens(),
+          result.tokenUsage().totalTokens());
 
+      return result;
     } catch (LlmException e) {
-
-      log.error("LLM streaming failed", e);
+      log.error("[{}] LLM streaming failed after {} ms", requestId, elapsedMillis(start), e);
       throw e;
-
     } catch (RuntimeException e) {
-
-      log.error("Unexpected error during LLM streaming", e);
+      log.error(
+          "[{}] Unexpected error during LLM streaming after {} ms",
+          requestId,
+          elapsedMillis(start),
+          e);
       throw e;
     }
   }

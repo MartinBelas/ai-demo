@@ -22,7 +22,8 @@ class LoggingLlmClientTest {
   void shouldLogAndReturnSuccessfulResponse() {
 
     LlmClient mockClient = mock(LlmClient.class);
-    LlmResponse response = new LlmResponse("Test response", "test-model");
+    TokenUsage usage = new TokenUsage(0, 0);
+    LlmResponse response = new LlmResponse("Test response", "test-model", usage);
 
     when(mockClient.chat(any(Prompt.class))).thenReturn(response);
 
@@ -34,6 +35,7 @@ class LoggingLlmClientTest {
 
     assertEquals("Test response", result.text());
     assertEquals("test-model", result.model());
+    assertEquals(usage, result.tokenUsage());
   }
 
   @Test
@@ -77,6 +79,9 @@ class LoggingLlmClientTest {
 
     LlmClient mockClient = mock(LlmClient.class);
 
+    when(mockClient.stream(any(Prompt.class), any()))
+        .thenReturn(new StreamingResult(new TokenUsage(0, 0)));
+
     LoggingLlmClient loggingClient = new LoggingLlmClient(mockClient);
 
     Prompt prompt = new Prompt(List.of(ChatMessage.user("Test question")));
@@ -84,9 +89,12 @@ class LoggingLlmClientTest {
     @SuppressWarnings("unchecked")
     Consumer<ChatChunk> consumer = mock(Consumer.class);
 
-    loggingClient.stream(prompt, consumer);
+    StreamingResult result = loggingClient.stream(prompt, consumer);
 
     verify(mockClient).stream(prompt, consumer);
+
+    assertEquals(0, result.tokenUsage().promptTokens());
+    assertEquals(0, result.tokenUsage().completionTokens());
   }
 
   @Test

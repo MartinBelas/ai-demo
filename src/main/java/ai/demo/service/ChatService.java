@@ -2,6 +2,7 @@ package ai.demo.service;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
@@ -39,7 +40,7 @@ public class ChatService {
     return new ChatResponse(llmResponse.text(), llmResponse.model(), duration);
   }
 
-  public void askStreaming(Conversation conversation, Consumer<ChatChunk> consumer) {
+  public StreamingResult askStreaming(Conversation conversation, Consumer<ChatChunk> consumer) {
 
     if (conversation == null) {
       throw new IllegalArgumentException("conversation must not be null");
@@ -55,6 +56,6 @@ public class ChatService {
 
     Prompt prompt = promptComposer.compose(conversation);
 
-    llmClient.stream(prompt, consumer);
+    return llmClient.stream(prompt, consumer);
   }
 }
