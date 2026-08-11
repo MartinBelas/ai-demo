@@ -3,6 +3,7 @@ package ai.demo.config;
 import ai.demo.exception.ConfigurationException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.Properties;
 
 /** Loads application configuration from {@code application.properties}. */
@@ -31,7 +32,8 @@ public final class AppConfigLoader {
           requiredDouble(properties, "llm.temperature"),
           requiredInt(properties, "llm.max-tokens"),
           requiredInt(properties, "llm.context-window"),
-          requiredDouble(properties, "llm.repeat-penalty"));
+          requiredDouble(properties, "llm.repeat-penalty"),
+          Path.of(requiredProperty(properties, "conversation.file")));
     } catch (IllegalArgumentException e) {
       throw new ConfigurationException(e.getMessage(), e);
     }

@@ -11,6 +11,8 @@ import ai.demo.console.ConsoleChat;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.persistence.ConversationRepository;
+import ai.demo.persistence.FileConversationRepository;
 import ai.demo.prompt.PromptComposer;
 import ai.demo.prompt.template.PromptTemplateLoader;
 import ai.demo.prompt.template.PromptTemplateRenderer;
@@ -65,7 +67,11 @@ public class App {
     ConsoleCommandDispatcher dispatcher =
         new ConsoleCommandDispatcher(new CommandRegistry().commands());
 
-    ConsoleChat consoleChat = new ConsoleChat(chatService, config, dispatcher);
+    ConversationRepository conversationRepository =
+        new FileConversationRepository(config.conversationFile(), new ObjectMapper());
+
+    ConsoleChat consoleChat =
+        new ConsoleChat(chatService, config, dispatcher, conversationRepository);
 
     addShutdownHook(httpClient);
 

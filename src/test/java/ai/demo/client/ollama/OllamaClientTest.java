@@ -24,6 +24,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +41,15 @@ class OllamaClientTest {
   @BeforeEach
   void setUp() {
 
-    AppConfig config = new AppConfig("http://localhost:11434", "qwen3:4b", 0.7, 100, 4096, 1.2);
+    AppConfig config =
+        new AppConfig(
+            "http://localhost:11434",
+            "qwen3:4b",
+            0.7,
+            100,
+            4096,
+            1.2,
+            Path.of("conversation.json"));
 
     httpTransport = mock(HttpTransport.class);
 

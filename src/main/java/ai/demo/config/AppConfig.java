@@ -1,5 +1,7 @@
 package ai.demo.config;
 
+import java.nio.file.Path;
+
 /**
  * Application configuration record. Contains all configuration parameters for the AI Demo
  * application.
@@ -10,7 +12,8 @@ public record AppConfig(
     double temperature,
     int numPredict,
     int numCtx,
-    double repeatPenalty) {
+    double repeatPenalty,
+    Path conversationFile) {
 
   public AppConfig {
 
@@ -36,6 +39,10 @@ public record AppConfig(
 
     if (repeatPenalty < 1.0) {
       throw new IllegalArgumentException("repeatPenalty must be at least 1.0");
+    }
+
+    if (conversationFile == null) {
+      throw new IllegalArgumentException("conversationFile must not be null");
     }
   }
 }

@@ -11,6 +11,7 @@ import ai.demo.exception.LlmException;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
+import ai.demo.persistence.ConversationRepository;
 import ai.demo.service.ChatService;
 import java.util.Scanner;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ public class ConsoleChat {
   private final ChatService chatService;
   private final AppConfig config;
   private final ConsoleCommandDispatcher commandDispatcher;
+  private final ConversationRepository conversationRepository;
 
   /**
    * Creates a new ConsoleChat.
@@ -41,10 +43,15 @@ public class ConsoleChat {
    * @param config the application configuration
    */
   public ConsoleChat(
-      ChatService chatService, AppConfig config, ConsoleCommandDispatcher commandDispatcher) {
+      ChatService chatService,
+      AppConfig config,
+      ConsoleCommandDispatcher commandDispatcher,
+      ConversationRepository conversationRepository) {
+
     this.chatService = chatService;
     this.config = config;
     this.commandDispatcher = commandDispatcher;
+    this.conversationRepository = conversationRepository;
   }
 
   /** Starts the console chat interface. Runs until the user enters an exit command. */
@@ -52,11 +59,15 @@ public class ConsoleChat {
 
     printHeader();
 
-    ConsoleContext context = new ConsoleContext(new Conversation());
+    Conversation conversation =
+        conversationRepository != null ? conversationRepository.load() : new Conversation();
+
+    ConsoleContext context = new ConsoleContext(conversation);
 
     try (Scanner scanner = new Scanner(System.in)) {
 
       boolean exit = false;
+
       while (!exit) {
 
         String input = readQuestion(scanner);
@@ -72,15 +83,19 @@ public class ConsoleChat {
           if (result.status() == CommandStatus.EXIT) {
             exit = true;
           }
+
         } else {
           ask(input, context);
+
+          if (conversationRepository != null) {
+            conversationRepository.save(context.conversation());
+          }
         }
       }
     }
   }
 
   private void printHeader() {
-
     System.out.println("==================================");
     System.out.println(" AI Demo");
     System.out.println(" Model: " + config.model());

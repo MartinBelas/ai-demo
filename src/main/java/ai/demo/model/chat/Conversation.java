@@ -1,11 +1,20 @@
 package ai.demo.model.chat;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Conversation {
+public record Conversation(@JsonProperty("messages") List<ChatMessage> messages) {
 
-  private final List<ChatMessage> messages = new ArrayList<>();
+  @JsonCreator
+  public Conversation(@JsonProperty("messages") List<ChatMessage> messages) {
+    this.messages = messages != null ? new ArrayList<>(messages) : new ArrayList<>();
+  }
+
+  public Conversation() {
+    this(new ArrayList<>());
+  }
 
   public void add(ChatMessage message) {
     if (message.role() == Role.SYSTEM) {
@@ -14,6 +23,7 @@ public class Conversation {
     messages.add(message);
   }
 
+  @Override
   public List<ChatMessage> messages() {
     return List.copyOf(messages);
   }
