@@ -204,6 +204,7 @@ public class OllamaClient implements LlmClient {
       case USER -> "user";
       case ASSISTANT -> "assistant";
       case SYSTEM -> "system";
+      case TOOL -> "tool";
     };
   }
 }

@@ -37,6 +37,7 @@ public class HistoryCommand implements ConsoleCommand {
           case USER -> "You";
           case ASSISTANT -> "AI";
           case SYSTEM -> "System";
+          case TOOL -> "Tool";
         };
 
     return role + ": " + message.content();

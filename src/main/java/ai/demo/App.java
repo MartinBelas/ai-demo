@@ -1,5 +1,9 @@
 package ai.demo;
 
+import ai.demo.agent.Agent;
+import ai.demo.agent.ToolCallingAgent;
+import ai.demo.agent.tool.CalculatorTool;
+import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.client.LlmClient;
 import ai.demo.client.LoggingLlmClient;
 import ai.demo.client.http.HttpTransport;
@@ -23,28 +27,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Main application entry point for AI Demo. Initializes configuration, HTTP client, and starts the
- * console chat interface.
- */
 public class App {
 
   private static final Logger log = LoggerFactory.getLogger(App.class);
 
   public static void main(String[] args) {
     int exitCode = new App().run();
+
     if (exitCode != 0) {
       System.exit(exitCode);
     }
   }
 
-  /**
-   * Run the application. Returns 0 on success or a non-zero exit code on error. Extracted for
-   * testability.
-   */
   public int run() {
 
     AppConfig config;
@@ -57,18 +55,23 @@ public class App {
     }
 
     HttpClient httpClient = createHttpClient();
+    ObjectMapper objectMapper = new ObjectMapper();
 
-    PromptComposer composer = createPromptComposer();
+    LlmClient llmClient = createLlmClient(config, httpClient, objectMapper);
 
-    LlmClient llmClient = createLlmClient(config, httpClient);
+    PromptComposer chatPromptComposer = createPromptComposer(PromptTemplateType.CHAT);
 
-    ChatService chatService = new ChatService(llmClient, composer);
+    PromptComposer agentPromptComposer = createPromptComposer(PromptTemplateType.AGENT);
+
+    ChatService chatService = new ChatService(llmClient, chatPromptComposer);
+
+    Agent agent = createAgent(llmClient, agentPromptComposer, objectMapper);
 
     ConsoleCommandDispatcher dispatcher =
         new ConsoleCommandDispatcher(new CommandRegistry().commands());
 
     ConversationRepository conversationRepository =
-        new FileConversationRepository(config.conversationFile(), new ObjectMapper());
+        new FileConversationRepository(config.conversationFile(), objectMapper);
 
     ConsoleChat consoleChat =
         new ConsoleChat(chatService, config, dispatcher, conversationRepository);
@@ -79,27 +82,41 @@ public class App {
   }
 
   private AppConfig loadConfig() throws IOException {
-    AppConfigLoader loader = new AppConfigLoader();
-    return loader.load();
+    return new AppConfigLoader().load();
   }
 
   private HttpClient createHttpClient() {
     return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
   }
 
-  private PromptComposer createPromptComposer() {
+  private LlmClient createLlmClient(
+      AppConfig config, HttpClient httpClient, ObjectMapper objectMapper) {
+
+    HttpTransport transport = new JdkHttpTransport(httpClient);
+
+    return new LoggingLlmClient(new OllamaClient(config, transport, objectMapper));
+  }
+
+  private PromptComposer createPromptComposer(PromptTemplateType templateType) {
+
     PromptTemplateLoader loader = new PromptTemplateLoader();
+
     PromptTemplateRenderer renderer = new PromptTemplateRenderer();
-    SystemPromptProvider provider =
-        new SystemPromptProvider(PromptTemplateType.CHAT, loader, renderer);
+
+    SystemPromptProvider provider = new SystemPromptProvider(templateType, loader, renderer);
 
     return new PromptComposer(provider);
   }
 
-  private LlmClient createLlmClient(AppConfig config, HttpClient httpClient) {
-    HttpTransport transport = new JdkHttpTransport(httpClient);
-    ObjectMapper mapper = new ObjectMapper();
-    return new LoggingLlmClient(new OllamaClient(config, transport, mapper));
+  private Agent createAgent(
+      LlmClient llmClient, PromptComposer promptComposer, ObjectMapper objectMapper) {
+
+    return new ToolCallingAgent(
+        llmClient,
+        promptComposer,
+        new ToolDescriptionFormatter(),
+        List.of(new CalculatorTool()),
+        objectMapper);
   }
 
   private void addShutdownHook(HttpClient httpClient) {
@@ -116,9 +133,11 @@ public class App {
     try {
       consoleChat.start();
       return 0;
+
     } catch (LlmCommunicationException e) {
       log.error("LLM communication error: {}", e.getMessage(), e);
       return 2;
+
     } catch (Exception e) {
       log.error("Unexpected error: {}", e.getMessage(), e);
       return 99;

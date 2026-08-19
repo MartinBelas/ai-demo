@@ -1,6 +1,8 @@
 package ai.demo.prompt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
@@ -9,6 +11,7 @@ import ai.demo.prompt.template.PromptTemplateLoader;
 import ai.demo.prompt.template.PromptTemplateRenderer;
 import ai.demo.prompt.template.PromptTemplateType;
 import ai.demo.prompt.template.SystemPromptProvider;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class PromptComposerTest {
@@ -39,17 +42,11 @@ class PromptComposerTest {
   @Test
   void shouldNotAddSystemPromptWhenBlank() {
 
-    SystemPromptProvider mockProvider =
-        new SystemPromptProvider(
-            PromptTemplateType.CHAT, new PromptTemplateLoader(), new PromptTemplateRenderer()) {
+    SystemPromptProvider systemPromptProvider = mock(SystemPromptProvider.class);
 
-          @Override
-          public String getSystemPrompt() {
-            return "";
-          }
-        };
+    when(systemPromptProvider.getSystemPrompt(Map.of())).thenReturn("");
 
-    PromptComposer blankPromptComposer = new PromptComposer(mockProvider);
+    PromptComposer blankPromptComposer = new PromptComposer(systemPromptProvider);
 
     Conversation conversation = new Conversation();
     conversation.add(ChatMessage.user("Hello"));
@@ -59,6 +56,7 @@ class PromptComposerTest {
     assertEquals(1, prompt.messages().size());
 
     assertEquals(Role.USER, prompt.messages().getFirst().role());
+
     assertEquals("Hello", prompt.messages().getFirst().content());
   }
 }

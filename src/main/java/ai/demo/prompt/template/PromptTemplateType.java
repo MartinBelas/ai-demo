@@ -1,7 +1,8 @@
 package ai.demo.prompt.template;
 
 public enum PromptTemplateType {
-  CHAT("chat.md");
+  CHAT("chat.md"),
+  AGENT("agent.md");
 
   private final String templateName;
 

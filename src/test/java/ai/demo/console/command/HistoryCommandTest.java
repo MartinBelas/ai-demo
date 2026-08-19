@@ -14,8 +14,8 @@ class HistoryCommandTest {
   void shouldReturnConversationHistory() {
 
     Conversation conversation = new Conversation();
-    conversation.add(new ChatMessage(Role.USER, "Hello"));
-    conversation.add(new ChatMessage(Role.ASSISTANT, "Hi!"));
+    conversation.add(new ChatMessage(Role.USER, "Hello", null));
+    conversation.add(new ChatMessage(Role.ASSISTANT, "Hi!", null));
 
     ConsoleContext context = new ConsoleContext(conversation);
 
