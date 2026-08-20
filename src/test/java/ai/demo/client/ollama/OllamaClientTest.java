@@ -13,6 +13,7 @@ import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
+import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.prompt.Prompt;
 import ch.qos.logback.classic.Level;
@@ -57,23 +58,15 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldStreamAndSkipEmptyAndIgnoreUnknownFields() throws Exception {
+  void shouldStreamThinkingAndContentAndSkipEmptyChunks() throws Exception {
 
     String streamResponse =
         """
-                    {\
-                    "model": "qwen3:4b", \
-                    "message": {"role": "assistant", "content": ""}, \
-                    "done": false}
-                    {\
-                    "model": "qwen3:4b", \
-                    "message": {"role": "assistant", "content": "Hel", "thinking": true}, \
-                    "done": false}
-                    {\
-                    "model": "qwen3:4b", \
-                    "message": {"role": "assistant", "content": "lo"}, \
-                    "done": true}
-                    """;
+            {"model":"qwen3:4b","message":{"role":"assistant","content":""},"done":false}
+            {"model":"qwen3:4b","message":{"role":"assistant","content":"","thinking":"Let me think..."},"done":false}
+            {"model":"qwen3:4b","message":{"role":"assistant","content":"Hel"},"done":false}
+            {"model":"qwen3:4b","message":{"role":"assistant","content":"lo"},"done":true}
+            """;
 
     ByteArrayInputStream inputStream =
         new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
@@ -84,35 +77,83 @@ class OllamaClientTest {
     when(httpResponse.body()).thenReturn(inputStream);
     when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
 
-    Logger logger = (Logger) LoggerFactory.getLogger(ai.demo.client.ollama.OllamaClient.class);
+    Logger logger = (Logger) LoggerFactory.getLogger(OllamaClient.class);
 
     ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
 
-    listAppender.start();
+    Level originalLevel = logger.getLevel();
 
+    listAppender.start();
     logger.setLevel(Level.DEBUG);
     logger.addAppender(listAppender);
+
+    try {
+      List<ChatChunk> chunks = new ArrayList<>();
+
+      ollamaClient.stream(createPrompt(), chunks::add);
+
+      assertEquals(3, chunks.size());
+
+      assertEquals("Let me think...", chunks.getFirst().content());
+      assertEquals(ChatChunkType.THINKING, chunks.get(0).type());
+      assertFalse(chunks.get(0).finished());
+
+      assertEquals("Hel", chunks.get(1).content());
+      assertEquals(ChatChunkType.CONTENT, chunks.get(1).type());
+      assertFalse(chunks.get(1).finished());
+
+      assertEquals("lo", chunks.get(2).content());
+      assertEquals(ChatChunkType.CONTENT, chunks.get(2).type());
+      assertTrue(chunks.get(2).finished());
+
+      boolean skippedChunkLogged =
+          listAppender.list.stream()
+              .anyMatch(
+                  event ->
+                      event.getLevel().equals(Level.DEBUG)
+                          && event
+                              .getFormattedMessage()
+                              .contains("Skipping empty streaming chunk"));
+
+      assertTrue(skippedChunkLogged);
+
+    } finally {
+      logger.detachAppender(listAppender);
+      logger.setLevel(originalLevel);
+      listAppender.stop();
+    }
+  }
+
+  @Test
+  void shouldStreamThinkingAndContentFromSameChunk() throws Exception {
+
+    String streamResponse =
+        """
+            {"model":"qwen3:4b","message":{"role":"assistant","thinking":"Thinking...","content":"Answer"},"done":true}
+            """;
+
+    ByteArrayInputStream inputStream =
+        new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
+
+    HttpResponse<java.io.InputStream> httpResponse = mock();
+
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body()).thenReturn(inputStream);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
 
     List<ChatChunk> chunks = new ArrayList<>();
 
     ollamaClient.stream(createPrompt(), chunks::add);
 
     assertEquals(2, chunks.size());
-    assertEquals("Hel", chunks.get(0).content());
+
+    assertEquals("Thinking...", chunks.getFirst().content());
+    assertEquals(ChatChunkType.THINKING, chunks.get(0).type());
     assertFalse(chunks.get(0).finished());
-    assertEquals("lo", chunks.get(1).content());
+
+    assertEquals("Answer", chunks.get(1).content());
+    assertEquals(ChatChunkType.CONTENT, chunks.get(1).type());
     assertTrue(chunks.get(1).finished());
-
-    boolean found =
-        listAppender.list.stream()
-            .anyMatch(
-                e ->
-                    e.getLevel().equals(Level.DEBUG)
-                        && e.getFormattedMessage().contains("Skipping empty streaming chunk"));
-
-    assertTrue(found);
-
-    logger.detachAppender(listAppender);
   }
 
   @Test

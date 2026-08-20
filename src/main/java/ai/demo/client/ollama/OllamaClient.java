@@ -109,23 +109,25 @@ public class OllamaClient implements LlmClient {
 
   private void emitChunk(OllamaResponse chunk, Consumer<ChatChunk> consumer) {
 
+    boolean emitted = false;
+
+    String thinking = chunk.message().thinking();
+
+    if (thinking != null && !thinking.isBlank()) {
+      consumer.accept(new ChatChunk(thinking, ChatChunkType.THINKING, false));
+
+      emitted = true;
+    }
+
     String content = chunk.message().content();
 
     if (content != null && !content.isBlank()) {
       consumer.accept(new ChatChunk(content, ChatChunkType.CONTENT, chunk.done()));
 
-      return;
+      emitted = true;
     }
 
-    String thinking = chunk.message().thinking();
-
-    if (thinking != null && !thinking.isBlank()) {
-      consumer.accept(new ChatChunk(thinking, ChatChunkType.THINKING, chunk.done()));
-
-      return;
-    }
-
-    if (log.isDebugEnabled()) {
+    if (!emitted && log.isDebugEnabled()) {
       log.debug("Skipping empty streaming chunk: model='{}', done={}", chunk.model(), chunk.done());
     }
   }
