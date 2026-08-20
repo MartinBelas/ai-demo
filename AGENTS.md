@@ -8,6 +8,24 @@ The application is designed with a clean layered architecture and provider-indep
 
 The current LLM provider is Ollama, but the architecture must allow adding other providers in the future.
 
+## Product requirements
+
+Product goals, current scope, functional requirements, constraints, and acceptance criteria are defined in:
+
+```text
+PRD.md
+```
+
+Before designing or implementing a feature:
+
+1. Read the relevant sections of `PRD.md`.
+2. Verify that the change is within the current product scope.
+3. Use the documented requirements when designing tests.
+4. Report conflicts between the request, PRD, and architecture.
+5. Update `PRD.md` when an approved change modifies product behavior, scope, or constraints.
+
+`AGENTS.md` is authoritative for engineering and workflow rules. `PRD.md` is authoritative for product behavior and scope. `README.md` describes current usage, setup, and the implementation roadmap.
+
 ---
 
 # Architecture
@@ -16,15 +34,24 @@ Follow these layers:
 
 ```text
 ai.demo
-├── client          External LLM provider communication
-├── config          Application configuration
-├── exception       Application specific exceptions
-├── model           Domain models
-├── service         Application/business logic
-└── console         User interface
+├── agent          Agent orchestration and tool calling
+├── client         External LLM provider communication
+├── config         Application configuration
+├── console        User interface and commands
+├── exception      Application-specific exceptions
+├── model          Provider-independent domain models
+├── persistence    Conversation storage
+├── prompt         Prompt composition and templates
+└── service        Application/business logic
 ```
 
 ## Layer responsibilities
+
+### agent
+
+Contains agent orchestration, structured decisions, events, and tool execution.
+
+The agent layer may use `AgentLlmGateway` and tool abstractions. It must not depend on a concrete LLM provider.
 
 ### client
 
@@ -48,11 +75,13 @@ Contains application logic.
 
 Services must depend on abstractions, not concrete providers.
 
-Good:
+Current flow:
 
 ```text
-ChatService -> LlmClient
+ChatService -> Agent -> AgentLlmGateway -> LlmClient
 ```
+
+Services must not bypass the agent or reference provider implementations.
 
 Bad:
 
@@ -60,7 +89,7 @@ Bad:
 ChatService -> OllamaClient
 ```
 
-The service layer must not know which LLM provider is used.
+The service layer must not know which LLM provider or tools are used.
 
 ---
 
@@ -99,6 +128,18 @@ Contains application specific exceptions.
 
 Do not use generic exceptions for application errors.
 
+### persistence
+
+Contains provider-independent conversation storage.
+
+Persistence failures must be converted into `PersistenceException`.
+
+### prompt
+
+Contains prompt composition, loading, rendering, and templates.
+
+Prompt logic must not depend on a concrete LLM provider.
+
 ---
 
 # LLM Client Architecture
@@ -112,7 +153,9 @@ The abstraction:
 ```java
 public interface LlmClient {
 
-    LlmResponse chat(Conversation conversation);
+    LlmResponse chat(Prompt prompt);
+
+    StreamingResult stream(Prompt prompt, Consumer<ChatChunk> consumer);
 
 }
 ```
@@ -123,6 +166,16 @@ Example:
 
 ```text
                  ChatService
+
+                      |
+                      v
+
+                    Agent
+
+                      |
+                      v
+
+              AgentLlmGateway
 
                       |
                       v
@@ -147,7 +200,7 @@ Every LLM provider must implement:
 LlmClient
 ```
 
-New providers must not be referenced directly from services.
+New providers must not be referenced directly from services or agents.
 
 Examples:
 
@@ -155,7 +208,7 @@ Examples:
 - OpenAiClient
 - AnthropicClient
 
-The service layer works only with `LlmClient`.
+The agent gateway works only with `LlmClient`. The service layer works with `Agent`.
 
 ---
 
@@ -255,12 +308,18 @@ ai.demo.exception
 
 ├── ConfigurationException
 ├── LlmException
-└── LlmCommunicationException
+├── LlmCommunicationException
+├── PersistenceException
+└── PromptTemplateException
 ```
 
 External communication problems should be converted into Llm exceptions.
 
 Configuration problems should be converted into ConfigurationException.
+
+Persistence problems should be converted into PersistenceException.
+
+Prompt template problems should be converted into PromptTemplateException.
 
 ---
 
@@ -291,6 +350,20 @@ Avoid:
 # Testing
 
 Every new feature or refactoring must include tests.
+
+## Test-driven development
+
+Prefer test-driven development for new behavior and bug fixes:
+
+1. Write or update a test that describes the required behavior.
+2. Run the test and confirm that it fails for the expected reason.
+3. Implement the smallest change that makes the test pass.
+4. Refactor while keeping all tests green.
+5. Run the complete relevant test suite and `mvn verify` before considering the change complete.
+
+For bug fixes, add a regression test that reproduces the defect before changing the implementation whenever practical.
+
+Do not write tests only to mirror implementation details. Tests should express observable behavior, business rules, layer contracts, and documented acceptance criteria.
 
 Testing stack:
 
@@ -420,3 +493,4 @@ When adding a new feature:
 3. Add implementation
 4. Add tests
 5. Update documentation if architecture changes
+6. Update `PRD.md` if product behavior, scope, or constraints change
