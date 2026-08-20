@@ -3,12 +3,9 @@ package ai.demo.agent;
 import ai.demo.agent.tool.Tool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.agent.tool.ToolResult;
-import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
-import ai.demo.model.prompt.Prompt;
-import ai.demo.prompt.PromptComposer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,21 +15,18 @@ import java.util.Objects;
 
 public class ToolCallingAgent implements Agent {
 
-  private final LlmClient llmClient;
-  private final PromptComposer promptComposer;
+  private final AgentLlmGateway llmGateway;
   private final ToolDescriptionFormatter toolDescriptionFormatter;
   private final List<Tool> tools;
   private final ObjectMapper objectMapper;
 
   public ToolCallingAgent(
-      LlmClient llmClient,
-      PromptComposer promptComposer,
+      AgentLlmGateway llmGateway,
       ToolDescriptionFormatter toolDescriptionFormatter,
       List<Tool> tools,
       ObjectMapper objectMapper) {
 
-    this.llmClient = Objects.requireNonNull(llmClient);
-    this.promptComposer = Objects.requireNonNull(promptComposer);
+    this.llmGateway = Objects.requireNonNull(llmGateway);
     this.toolDescriptionFormatter = Objects.requireNonNull(toolDescriptionFormatter);
     this.tools = List.copyOf(tools);
     this.objectMapper = Objects.requireNonNull(objectMapper);
@@ -76,9 +70,7 @@ public class ToolCallingAgent implements Agent {
 
     String toolsDescription = toolDescriptionFormatter.format(tools);
 
-    Prompt prompt = promptComposer.compose(conversation, Map.of("tools", toolsDescription));
-
-    LlmResponse response = llmClient.chat(prompt);
+    LlmResponse response = llmGateway.request(conversation, Map.of("tools", toolsDescription));
 
     return parseDecision(response.text());
   }

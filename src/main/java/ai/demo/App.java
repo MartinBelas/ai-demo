@@ -1,6 +1,8 @@
 package ai.demo;
 
 import ai.demo.agent.Agent;
+import ai.demo.agent.AgentLlmGateway;
+import ai.demo.agent.DefaultAgentLlmGateway;
 import ai.demo.agent.ToolCallingAgent;
 import ai.demo.agent.tool.CalculatorTool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
@@ -111,12 +113,10 @@ public class App {
   private Agent createAgent(
       LlmClient llmClient, PromptComposer promptComposer, ObjectMapper objectMapper) {
 
+    AgentLlmGateway llmGateway = new DefaultAgentLlmGateway(llmClient, promptComposer);
+
     return new ToolCallingAgent(
-        llmClient,
-        promptComposer,
-        new ToolDescriptionFormatter(),
-        List.of(new CalculatorTool()),
-        objectMapper);
+        llmGateway, new ToolDescriptionFormatter(), List.of(new CalculatorTool()), objectMapper);
   }
 
   private void addShutdownHook(HttpClient httpClient) {
