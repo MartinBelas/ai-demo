@@ -1,16 +1,17 @@
 package ai.demo.prompt.template;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SystemPromptProviderTest {
 
   @Test
-  void shouldRenderSystemPromptWithVariables() throws Exception {
+  void shouldRenderSystemPromptWithVariables() throws IOException {
 
     PromptTemplateLoader loader = mock(PromptTemplateLoader.class);
     PromptTemplateRenderer renderer = mock(PromptTemplateRenderer.class);

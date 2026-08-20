@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
@@ -58,7 +59,7 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldStreamThinkingAndContentAndSkipEmptyChunks() throws Exception {
+  void shouldStreamThinkingAndContentAndSkipEmptyChunks() throws IOException, InterruptedException {
 
     String streamResponse =
         """
@@ -90,7 +91,10 @@ class OllamaClientTest {
     try {
       List<ChatChunk> chunks = new ArrayList<>();
 
-      ollamaClient.stream(createPrompt(), chunks::add);
+      StreamingResult result = ollamaClient.stream(createPrompt(), chunks::add);
+
+      assertEquals("qwen3:4b", result.model());
+      assertEquals(0, result.tokenUsage().totalTokens());
 
       assertEquals(3, chunks.size());
 
@@ -125,7 +129,7 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldStreamThinkingAndContentFromSameChunk() throws Exception {
+  void shouldStreamThinkingAndContentFromSameChunk() throws IOException, InterruptedException {
 
     String streamResponse =
         """
@@ -143,7 +147,9 @@ class OllamaClientTest {
 
     List<ChatChunk> chunks = new ArrayList<>();
 
-    ollamaClient.stream(createPrompt(), chunks::add);
+    StreamingResult result = ollamaClient.stream(createPrompt(), chunks::add);
+
+    assertEquals("qwen3:4b", result.model());
 
     assertEquals(2, chunks.size());
 
@@ -157,7 +163,7 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldReturnLlmResponseWhenOllamaReturnsSuccess() throws Exception {
+  void shouldReturnLlmResponseWhenOllamaReturnsSuccess() throws IOException, InterruptedException {
 
     String jsonResponse =
         """
@@ -189,7 +195,8 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldReturnZeroTokenUsageWhenOllamaDoesNotProvideTokenCounts() throws Exception {
+  void shouldReturnZeroTokenUsageWhenOllamaDoesNotProvideTokenCounts()
+      throws IOException, InterruptedException {
 
     String jsonResponse =
         """
@@ -217,7 +224,7 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldThrowExceptionWhenOllamaReturnsHttpError() throws Exception {
+  void shouldThrowExceptionWhenOllamaReturnsHttpError() throws IOException, InterruptedException {
 
     HttpResponse<String> httpResponse = mock();
 
@@ -230,7 +237,7 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldThrowExceptionWhenCommunicationFails() throws Exception {
+  void shouldThrowExceptionWhenCommunicationFails() throws IOException, InterruptedException {
 
     when(httpTransport.send(any())).thenThrow(new IOException("Connection refused"));
 
@@ -243,7 +250,7 @@ class OllamaClientTest {
   }
 
   @Test
-  void shouldThrowExceptionWhenResponseIsInvalidJson() throws Exception {
+  void shouldThrowExceptionWhenResponseIsInvalidJson() throws IOException, InterruptedException {
 
     HttpResponse<String> httpResponse = mock();
 

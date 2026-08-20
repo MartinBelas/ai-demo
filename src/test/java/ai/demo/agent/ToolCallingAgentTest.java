@@ -1,6 +1,9 @@
 package ai.demo.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -9,10 +12,13 @@ import static org.mockito.Mockito.when;
 import ai.demo.agent.tool.Tool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.agent.tool.ToolResult;
-import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
+import ai.demo.model.chat.ChatChunk;
+import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
+import ai.demo.model.chat.Role;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -33,17 +39,18 @@ class ToolCallingAgentTest {
 
     Map<String, String> variables = Map.of("tools", "No tools available.");
 
-    when(llmGateway.request(conversation, variables))
-        .thenReturn(
-            new LlmResponse(
-                """
-                            {
-                              "type": "model_reply",
-                              "content": "Polymorphism allows one interface to have multiple implementations."
-                            }
-                            """,
-                "test-model",
-                new TokenUsage(10, 20)));
+    doAnswer(
+        invocation -> {
+          java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
+          consumer.accept(
+              new ChatChunk(
+                  "{\"type\":\"model_reply\",\"content\":\"Polymorphism allows one interface to have multiple implementations.\"}",
+                  ChatChunkType.CONTENT,
+                  true));
+          return new StreamingResult("test-model", new TokenUsage(10, 20));
+        })
+        .when(llmGateway)
+        .stream(eq(conversation), eq(variables), any());
 
     Agent agent =
         new ToolCallingAgent(llmGateway, toolDescriptionFormatter, List.of(), new ObjectMapper());
@@ -53,7 +60,7 @@ class ToolCallingAgentTest {
     assertEquals(
         "Polymorphism allows one interface to have multiple implementations.", result.answer());
 
-    verify(llmGateway).request(conversation, variables);
+    verify(llmGateway).stream(eq(conversation), eq(variables), any());
   }
 
   @Test
@@ -74,27 +81,41 @@ class ToolCallingAgentTest {
     Map<String, String> variables =
         Map.of("tools", "calculator: Calculates mathematical expressions.");
 
-    when(llmGateway.request(conversation, variables))
-        .thenReturn(
-            new LlmResponse(
-                """
-                            {
-                              "type": "tool_call",
-                              "toolName": "calculator",
-                              "input": "125 * 37"
-                            }
-                            """,
-                "test-model",
-                new TokenUsage(10, 10)),
-            new LlmResponse(
-                """
-                            {
-                              "type": "model_reply",
-                              "content": "125 × 37 = 4625."
-                            }
-                            """,
-                "test-model",
-                new TokenUsage(20, 10)));
+    doAnswer(
+        new org.mockito.stubbing.Answer<StreamingResult>() {
+          private int call;
+
+          @Override
+          public StreamingResult answer(org.mockito.invocation.InvocationOnMock invocation) {
+            java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
+            if (call++ == 0) {
+              consumer.accept(
+                  new ChatChunk(
+                      "{\"type\":\"tool_call\",\"toolName\":\"calculator\",\"input\":\"125 * 37\"}",
+                      ChatChunkType.CONTENT,
+                      true));
+              return new StreamingResult("test-model", new TokenUsage(10, 10));
+            }
+
+            assertEquals(3, conversation.size());
+            assertEquals(Role.ASSISTANT, conversation.messages().get(1).role());
+            assertEquals(
+                "{\"type\":\"tool_call\",\"toolName\":\"calculator\",\"input\":\"125 * 37\"}",
+                conversation.messages().get(1).content());
+            assertEquals(Role.TOOL, conversation.messages().get(2).role());
+            assertEquals("calculator", conversation.messages().get(2).toolName());
+            assertEquals("4625", conversation.messages().get(2).content());
+
+            consumer.accept(
+                new ChatChunk(
+                    "{\"type\":\"model_reply\",\"content\":\"125 × 37 = 4625.\"}",
+                    ChatChunkType.CONTENT,
+                    true));
+            return new StreamingResult("test-model", new TokenUsage(20, 10));
+          }
+        })
+        .when(llmGateway)
+        .stream(eq(conversation), eq(variables), any());
 
     when(calculator.execute("125 * 37")).thenReturn(ToolResult.success("4625"));
 
@@ -106,11 +127,9 @@ class ToolCallingAgentTest {
 
     assertEquals("125 × 37 = 4625.", result.answer());
 
-    assertEquals(2, conversation.size());
-    assertEquals("calculator", conversation.messages().get(1).toolName());
-    assertEquals("4625", conversation.messages().get(1).content());
+    assertEquals(3, conversation.size());
 
     verify(calculator).execute("125 * 37");
-    verify(llmGateway, times(2)).request(conversation, variables);
+    verify(llmGateway, times(2)).stream(eq(conversation), eq(variables), any());
   }
 }

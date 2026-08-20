@@ -80,7 +80,7 @@ class LoggingLlmClientTest {
     LlmClient mockClient = mock(LlmClient.class);
 
     when(mockClient.stream(any(Prompt.class), any()))
-        .thenReturn(new StreamingResult(new TokenUsage(0, 0)));
+        .thenReturn(new StreamingResult("test-model", new TokenUsage(0, 0)));
 
     LoggingLlmClient loggingClient = new LoggingLlmClient(mockClient);
 

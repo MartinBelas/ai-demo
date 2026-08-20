@@ -4,7 +4,10 @@ import ai.demo.agent.tool.Tool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.agent.tool.ToolResult;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
+import ai.demo.model.chat.ChatChunk;
+import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -13,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public class ToolCallingAgent implements Agent {
 
@@ -35,16 +39,28 @@ public class ToolCallingAgent implements Agent {
 
   @Override
   public AgentResult execute(Conversation conversation) {
+    return execute(conversation, event -> {});
+  }
 
-    AgentStep firstStep = requestDecision(conversation);
+  @Override
+  public AgentResult execute(Conversation conversation, Consumer<AgentEvent> eventConsumer) {
+
+    Objects.requireNonNull(conversation);
+    Objects.requireNonNull(eventConsumer);
+
+    AgentStep firstStep = requestDecision(conversation, eventConsumer);
 
     if (firstStep.decision() instanceof ModelReply(String content)) {
+
+      eventConsumer.accept(new ContentEvent(content));
+
       return new AgentResult(
           content, firstStep.response().model(), firstStep.response().tokenUsage());
     }
 
     if (firstStep.decision() instanceof ToolCallDecision toolCall) {
-      return executeToolCall(toolCall, conversation, firstStep.response());
+
+      return executeToolCall(toolCall, conversation, firstStep.response(), eventConsumer);
     }
 
     throw new IllegalStateException(
@@ -52,19 +68,30 @@ public class ToolCallingAgent implements Agent {
   }
 
   private AgentResult executeToolCall(
-      ToolCallDecision toolCall, Conversation conversation, LlmResponse firstResponse) {
+      ToolCallDecision toolCall,
+      Conversation conversation,
+      LlmResponse firstResponse,
+      Consumer<AgentEvent> eventConsumer) {
+
+    eventConsumer.accept(new ToolCallEvent(toolCall.toolName(), toolCall.input()));
 
     Tool tool = findTool(toolCall.toolName());
 
     ToolResult toolResult = tool.execute(toolCall.input());
 
+    eventConsumer.accept(new ToolResultEvent(tool.name(), toolResult.content()));
+
+    conversation.add(ChatMessage.assistant(firstResponse.text()));
     conversation.add(ChatMessage.tool(tool.name(), toolResult.content()));
 
-    AgentStep finalStep = requestDecision(conversation);
+    AgentStep finalStep = requestDecision(conversation, eventConsumer);
 
     if (!(finalStep.decision() instanceof ModelReply(String content))) {
+
       throw new IllegalStateException("Expected model reply after tool execution");
     }
+
+    eventConsumer.accept(new ContentEvent(content));
 
     TokenUsage totalUsage =
         addTokenUsage(firstResponse.tokenUsage(), finalStep.response().tokenUsage());
@@ -72,15 +99,41 @@ public class ToolCallingAgent implements Agent {
     return new AgentResult(content, finalStep.response().model(), totalUsage);
   }
 
-  private AgentStep requestDecision(Conversation conversation) {
+  private AgentStep requestDecision(Conversation conversation, Consumer<AgentEvent> eventConsumer) {
 
     String toolsDescription = toolDescriptionFormatter.format(tools);
 
-    LlmResponse response = llmGateway.request(conversation, Map.of("tools", toolsDescription));
+    Map<String, String> variables = Map.of("tools", toolsDescription);
 
-    AgentDecision decision = parseDecision(response.text());
+    StringBuilder responseContent = new StringBuilder();
+
+    StreamingResult streamingResult =
+        llmGateway.stream(
+            conversation, variables, chunk -> handleChunk(chunk, responseContent, eventConsumer));
+
+    String responseText = responseContent.toString();
+
+    AgentDecision decision = parseDecision(responseText);
+
+    LlmResponse response =
+        new LlmResponse(responseText, streamingResult.model(), streamingResult.tokenUsage());
 
     return new AgentStep(decision, response);
+  }
+
+  private void handleChunk(
+      ChatChunk chunk, StringBuilder responseContent, Consumer<AgentEvent> eventConsumer) {
+
+    if (chunk.type() == ChatChunkType.THINKING) {
+
+      eventConsumer.accept(new ThinkingEvent(chunk.content()));
+
+      return;
+    }
+
+    if (chunk.type() == ChatChunkType.CONTENT) {
+      responseContent.append(chunk.content());
+    }
   }
 
   private AgentDecision parseDecision(String response) {
@@ -100,6 +153,7 @@ public class ToolCallingAgent implements Agent {
       };
 
     } catch (JsonProcessingException e) {
+
       throw new IllegalStateException("Failed to parse agent decision", e);
     }
   }
@@ -116,6 +170,7 @@ public class ToolCallingAgent implements Agent {
     JsonNode node = root.get(fieldName);
 
     if (node == null || node.isNull() || node.asText().isBlank()) {
+
       throw new IllegalStateException("Agent response is missing required field: " + fieldName);
     }
 
@@ -123,6 +178,7 @@ public class ToolCallingAgent implements Agent {
   }
 
   private Tool findTool(String toolName) {
+
     return tools.stream()
         .filter(tool -> tool.name().equals(toolName))
         .findFirst()

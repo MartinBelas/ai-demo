@@ -2,11 +2,14 @@ package ai.demo.agent;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
+import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.Conversation;
 import ai.demo.model.prompt.Prompt;
 import ai.demo.prompt.PromptComposer;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public class DefaultAgentLlmGateway implements AgentLlmGateway {
 
@@ -25,5 +28,14 @@ public class DefaultAgentLlmGateway implements AgentLlmGateway {
     Prompt prompt = promptComposer.compose(conversation, variables);
 
     return llmClient.chat(prompt);
+  }
+
+  @Override
+  public StreamingResult stream(
+      Conversation conversation, Map<String, String> variables, Consumer<ChatChunk> consumer) {
+
+    Prompt prompt = promptComposer.compose(conversation, variables);
+
+    return llmClient.stream(prompt, consumer);
   }
 }

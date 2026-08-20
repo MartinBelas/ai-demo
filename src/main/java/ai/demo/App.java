@@ -16,6 +16,7 @@ import ai.demo.config.AppConfigLoader;
 import ai.demo.console.ConsoleChat;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
+import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.persistence.ConversationRepository;
 import ai.demo.persistence.FileConversationRepository;
@@ -51,7 +52,7 @@ public class App {
 
     try {
       config = loadConfig();
-    } catch (Exception e) {
+    } catch (ConfigurationException | IOException e) {
       log.error("Configuration error: {}", e.getMessage(), e);
       return 1;
     }
@@ -61,13 +62,11 @@ public class App {
 
     LlmClient llmClient = createLlmClient(config, httpClient, objectMapper);
 
-    PromptComposer chatPromptComposer = createPromptComposer(PromptTemplateType.CHAT);
-
-    PromptComposer agentPromptComposer = createPromptComposer(PromptTemplateType.AGENT);
+    PromptComposer agentPromptComposer = createAgentPromptComposer();
 
     Agent agent = createAgent(llmClient, agentPromptComposer, objectMapper);
 
-    ChatService chatService = new ChatService(agent, llmClient, chatPromptComposer);
+    ChatService chatService = new ChatService(agent);
 
     ConsoleCommandDispatcher dispatcher =
         new ConsoleCommandDispatcher(new CommandRegistry().commands());
@@ -99,13 +98,14 @@ public class App {
     return new LoggingLlmClient(new OllamaClient(config, transport, objectMapper));
   }
 
-  private PromptComposer createPromptComposer(PromptTemplateType templateType) {
+  private PromptComposer createAgentPromptComposer() {
 
     PromptTemplateLoader loader = new PromptTemplateLoader();
 
     PromptTemplateRenderer renderer = new PromptTemplateRenderer();
 
-    SystemPromptProvider provider = new SystemPromptProvider(templateType, loader, renderer);
+    SystemPromptProvider provider =
+        new SystemPromptProvider(PromptTemplateType.AGENT, loader, renderer);
 
     return new PromptComposer(provider);
   }
@@ -138,7 +138,7 @@ public class App {
       log.error("LLM communication error: {}", e.getMessage(), e);
       return 2;
 
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.error("Unexpected error: {}", e.getMessage(), e);
       return 99;
     }

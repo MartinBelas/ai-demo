@@ -1,14 +1,10 @@
 package ai.demo.service;
 
 import ai.demo.agent.Agent;
+import ai.demo.agent.AgentEvent;
 import ai.demo.agent.AgentResult;
-import ai.demo.client.LlmClient;
-import ai.demo.client.StreamingResult;
-import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
-import ai.demo.model.prompt.Prompt;
-import ai.demo.prompt.PromptComposer;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -16,40 +12,31 @@ public class ChatService {
 
   private final Agent agent;
 
-  private final LlmClient llmClient;
-  private final PromptComposer promptComposer;
-
-  public ChatService(Agent agent, LlmClient llmClient, PromptComposer promptComposer) {
+  public ChatService(Agent agent) {
 
     this.agent = Objects.requireNonNull(agent);
-    this.llmClient = Objects.requireNonNull(llmClient);
-    this.promptComposer = Objects.requireNonNull(promptComposer);
   }
 
   public ChatResponse ask(Conversation conversation) {
 
+    return ask(conversation, event -> {});
+  }
+
+  public ChatResponse ask(Conversation conversation, Consumer<AgentEvent> eventConsumer) {
+
     validateConversation(conversation);
+
+    if (eventConsumer == null) {
+      throw new IllegalArgumentException("eventConsumer must not be null");
+    }
 
     long start = System.currentTimeMillis();
 
-    AgentResult result = agent.execute(conversation);
+    AgentResult result = agent.execute(conversation, eventConsumer);
 
-    long duration = System.currentTimeMillis() - start;
+    long durationMs = System.currentTimeMillis() - start;
 
-    return new ChatResponse(result.answer(), result.model(), duration);
-  }
-
-  public StreamingResult askStreaming(Conversation conversation, Consumer<ChatChunk> consumer) {
-
-    validateConversation(conversation);
-
-    if (consumer == null) {
-      throw new IllegalArgumentException("consumer must not be null");
-    }
-
-    Prompt prompt = promptComposer.compose(conversation);
-
-    return llmClient.stream(prompt, consumer);
+    return new ChatResponse(result.answer(), result.model(), result.tokenUsage(), durationMs);
   }
 
   private void validateConversation(Conversation conversation) {

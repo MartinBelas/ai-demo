@@ -135,7 +135,7 @@ public class CalculatorTool implements Tool {
       try {
         return new BigDecimal(input.substring(start, position));
       } catch (NumberFormatException e) {
-        throw new IllegalArgumentException("Invalid number.");
+        throw new IllegalArgumentException("Invalid number.", e);
       }
     }
 

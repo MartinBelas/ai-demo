@@ -1,17 +1,24 @@
 package ai.demo.agent;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
+import ai.demo.model.chat.ChatChunk;
+import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import ai.demo.model.prompt.Prompt;
 import ai.demo.prompt.PromptComposer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -55,5 +62,36 @@ class DefaultAgentLlmGatewayTest {
     verify(promptComposer).compose(conversation, variables);
 
     verify(llmClient).chat(prompt);
+  }
+
+  @Test
+  void shouldComposePromptAndStreamFromLlmClient() {
+    LlmClient llmClient = mock(LlmClient.class);
+    PromptComposer promptComposer = mock(PromptComposer.class);
+    Conversation conversation = new Conversation();
+    conversation.add(ChatMessage.user("Hello"));
+    Map<String, String> variables = Map.of("tools", "calculator");
+    Prompt prompt = new Prompt(List.of(ChatMessage.user("Hello")));
+    StreamingResult expected = new StreamingResult("test-model", new TokenUsage(5, 3));
+    ChatChunk expectedChunk = new ChatChunk("streamed response", ChatChunkType.CONTENT, true);
+    List<ChatChunk> chunks = new ArrayList<>();
+
+    when(promptComposer.compose(conversation, variables)).thenReturn(prompt);
+    doAnswer(
+        invocation -> {
+          java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(1);
+          consumer.accept(expectedChunk);
+          return expected;
+        })
+        .when(llmClient)
+        .stream(eq(prompt), any());
+
+    AgentLlmGateway gateway = new DefaultAgentLlmGateway(llmClient, promptComposer);
+    StreamingResult result = gateway.stream(conversation, variables, chunks::add);
+
+    assertEquals(expected, result);
+    assertEquals(List.of(expectedChunk), chunks);
+    verify(promptComposer).compose(conversation, variables);
+    verify(llmClient).stream(eq(prompt), any());
   }
 }

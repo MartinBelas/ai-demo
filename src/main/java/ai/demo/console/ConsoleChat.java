@@ -1,6 +1,10 @@
 package ai.demo.console;
 
-import ai.demo.client.StreamingResult;
+import ai.demo.agent.AgentEvent;
+import ai.demo.agent.ContentEvent;
+import ai.demo.agent.ThinkingEvent;
+import ai.demo.agent.ToolCallEvent;
+import ai.demo.agent.ToolResultEvent;
 import ai.demo.client.TokenUsage;
 import ai.demo.config.AppConfig;
 import ai.demo.console.command.CommandResult;
@@ -8,11 +12,12 @@ import ai.demo.console.command.CommandStatus;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.console.command.ThinkingMode;
 import ai.demo.exception.LlmException;
-import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
+import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.persistence.ConversationRepository;
 import ai.demo.service.ChatService;
+import java.util.Locale;
 import java.util.Scanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,11 +28,12 @@ import org.slf4j.LoggerFactory;
  */
 public class ConsoleChat {
 
-  private static final String EXIT_COMMAND = "/exit";
-
   private static final String ANSI_GRAY = "\u001B[90m";
   private static final String ANSI_RESET = "\u001B[0m";
   private static final String ANSI_ITALIC = "\u001B[3m";
+  private static final String SECTION_SEPARATOR = "==================================";
+  private static final int MINIMAL_THINKING_LIMIT = 200;
+  private static final int ON_THINKING_FLUSH_LIMIT = 120;
 
   private static final Logger log = LoggerFactory.getLogger(ConsoleChat.class);
 
@@ -41,6 +47,8 @@ public class ConsoleChat {
    *
    * @param chatService the chat service to use for AI interactions
    * @param config the application configuration
+   * @param commandDispatcher the command dispatcher for handling console commands
+   * @param conversationRepository the repository for managing conversation data
    */
   public ConsoleChat(
       ChatService chatService,
@@ -59,10 +67,7 @@ public class ConsoleChat {
 
     printHeader();
 
-    Conversation conversation =
-        conversationRepository != null ? conversationRepository.load() : new Conversation();
-
-    ConsoleContext context = new ConsoleContext(conversation);
+    ConsoleContext context = new ConsoleContext(loadConversation());
 
     try (Scanner scanner = new Scanner(System.in)) {
 
@@ -86,108 +91,30 @@ public class ConsoleChat {
 
         } else {
           ask(input, context);
-
-          if (conversationRepository != null) {
-            conversationRepository.save(context.conversation());
-          }
         }
       }
     }
   }
 
-  private void printHeader() {
-    System.out.println("==================================");
-    System.out.println(" AI Demo");
-    System.out.println(" Model: " + config.model());
-    System.out.println(" Type '" + EXIT_COMMAND + "' to quit.");
-    System.out.println("==================================");
-    System.out.println();
-  }
-
-  private String readQuestion(Scanner scanner) {
-    System.out.print("You > ");
-    return scanner.nextLine();
-  }
-
-  private void ask(final String question, final ConsoleContext context) {
+  private void ask(String question, ConsoleContext context) {
 
     Conversation conversation = context.conversation();
-    conversation.add(ChatMessage.user(question));
+    ThinkingOutput thinkingOutput = new ThinkingOutput();
 
-    StringBuilder finalAnswer = new StringBuilder();
-    long start = System.currentTimeMillis();
+    conversation.add(ChatMessage.user(question));
 
     try {
 
-      final StringBuilder thinkingBuffer = new StringBuilder();
-      final int MINIMAL_LIMIT = 200;
-      final int ON_FLUSH_LIMIT = 120;
+      ChatResponse response =
+          chatService.ask(conversation, event -> printAgentEvent(event, context, thinkingOutput));
 
-      System.out.println("AI:");
+      flushThinking(context, thinkingOutput);
 
-      StreamingResult result =
-          chatService.askStreaming(
-              conversation,
-              chunk -> {
-                if (chunk.type() == ChatChunkType.THINKING) {
+      conversation.add(ChatMessage.assistant(response.answer()));
 
-                  ThinkingMode mode = context.thinkingMode();
+      conversationRepository.save(conversation);
 
-                  switch (mode) {
-                    case OFF, STATUS -> {
-                      return;
-                    }
-
-                    case MINIMAL -> {
-                      thinkingBuffer.append(chunk.content()).append(" ");
-
-                      if (thinkingBuffer.length() >= MINIMAL_LIMIT) {
-
-                        System.out.println(
-                            ANSI_GRAY
-                                + ANSI_ITALIC
-                                + thinkingBuffer.toString().trim()
-                                + "..."
-                                + ANSI_RESET);
-
-                        context.setThinkingMode(ThinkingMode.OFF);
-                      }
-
-                      return;
-                    }
-
-                    case ON -> {
-                      thinkingBuffer.append(chunk.content()).append(" ");
-
-                      if (thinkingBuffer.length() >= ON_FLUSH_LIMIT
-                          || chunk.content().endsWith(".")) {
-
-                        System.out.println(
-                            ANSI_GRAY
-                                + ANSI_ITALIC
-                                + thinkingBuffer.toString().trim()
-                                + ANSI_RESET);
-
-                        thinkingBuffer.setLength(0);
-                      }
-
-                      return;
-                    }
-                  }
-                }
-
-                // CONTENT
-                System.out.print(chunk.content());
-                finalAnswer.append(chunk.content());
-              });
-
-      System.out.println();
-
-      long duration = System.currentTimeMillis() - start;
-
-      conversation.add(ChatMessage.assistant(finalAnswer.toString()));
-
-      printSummary(finalAnswer.toString(), duration, result.tokenUsage());
+      printSummary(response);
 
     } catch (LlmException e) {
 
@@ -195,22 +122,162 @@ public class ConsoleChat {
 
       System.out.println();
       System.out.println("Unable to communicate with the AI model: " + e.getMessage());
+      System.out.println();
     }
   }
 
-  private void printSummary(String answer, long durationMs, TokenUsage usage) {
+  private void printAgentEvent(
+      AgentEvent event, ConsoleContext context, ThinkingOutput thinkingOutput) {
+
+    if (event instanceof ThinkingEvent(String content1)) {
+
+      printThinking(content1, context, thinkingOutput);
+
+    } else if (event instanceof ToolCallEvent(String toolName, String input)) {
+
+      flushThinking(context, thinkingOutput);
+
+      System.out.println();
+      System.out.println();
+      System.out.println("Using tool: " + toolName);
+
+      System.out.println("Input: " + input);
+
+    } else if (event instanceof ToolResultEvent toolResult) {
+
+      System.out.println("Tool result: " + toolResult.content());
+
+      System.out.println();
+
+    } else if (event instanceof ContentEvent(String content1)) {
+
+      flushThinking(context, thinkingOutput);
+
+      System.out.println();
+      System.out.println("AI: " + content1);
+    }
+  }
+
+  private void printThinking(
+      String content, ConsoleContext context, ThinkingOutput thinkingOutput) {
+
+    ThinkingMode mode = context.thinkingMode();
+
+    switch (mode) {
+      case OFF, STATUS -> {
+        // Thinking output is intentionally suppressed.
+      }
+      case MINIMAL -> {
+        if (thinkingOutput.printed) {
+          return;
+        }
+
+        appendWithSeparator(thinkingOutput.buffer, content);
+
+        if (thinkingOutput.buffer.length() >= MINIMAL_THINKING_LIMIT) {
+          printStyledThinking(thinkingOutput.buffer.substring(0, MINIMAL_THINKING_LIMIT) + "...");
+          thinkingOutput.buffer.setLength(0);
+          thinkingOutput.printed = true;
+        }
+      }
+      case ON -> {
+        appendWithSeparator(thinkingOutput.buffer, content);
+
+        if (thinkingOutput.buffer.length() >= ON_THINKING_FLUSH_LIMIT || content.endsWith(".")) {
+          printStyledThinking(thinkingOutput.buffer.toString());
+          thinkingOutput.buffer.setLength(0);
+        }
+      }
+    }
+  }
+
+  private void flushThinking(ConsoleContext context, ThinkingOutput thinkingOutput) {
+    if (thinkingOutput.buffer.isEmpty()) {
+      return;
+    }
+
+    ThinkingMode mode = context.thinkingMode();
+
+    if ((mode == ThinkingMode.MINIMAL && !thinkingOutput.printed) || mode == ThinkingMode.ON) {
+      printStyledThinking(thinkingOutput.buffer.toString());
+    }
+
+    thinkingOutput.buffer.setLength(0);
+    thinkingOutput.printed = true;
+  }
+
+  private void appendWithSeparator(StringBuilder buffer, String content) {
+    if (!buffer.isEmpty()) {
+      buffer.append(' ');
+    }
+    buffer.append(content);
+  }
+
+  private void printStyledThinking(String content) {
+    System.out.println(ANSI_GRAY + ANSI_ITALIC + content + ANSI_RESET);
+  }
+
+  private Conversation loadConversation() {
+    return conversationRepository.load();
+  }
+
+  private void printHeader() {
+
+    System.out.println(SECTION_SEPARATOR);
+
+    System.out.println(" AI Demo");
+
+    System.out.println(" Model: " + config.model());
+
+    System.out.println(SECTION_SEPARATOR);
+
     System.out.println();
-    System.out.println("==================================");
+  }
+
+  private String readQuestion(Scanner scanner) {
+
+    System.out.print("You > ");
+
+    return scanner.nextLine();
+  }
+
+  private void printSummary(ChatResponse response) {
+
+    TokenUsage tokenUsage = response.tokenUsage();
+
+    System.out.println();
+
+    System.out.println(SECTION_SEPARATOR);
+
     System.out.println(" AI Response Summary");
-    System.out.println("==================================");
-    System.out.println(" Answer length: " + answer.length() + " characters");
-    System.out.println(" Duration:      " + durationMs + " ms");
-    System.out.println(" Prompt tokens: " + usage.promptTokens());
-    System.out.println(" Completion:    " + usage.completionTokens());
-    System.out.println(" Total tokens:  " + usage.totalTokens());
+
+    System.out.println(SECTION_SEPARATOR);
+
+    System.out.println(" Model:             " + response.model());
+    System.out.println(" Prompt tokens:     " + tokenUsage.promptTokens());
+    System.out.println(" Completion tokens: " + tokenUsage.completionTokens());
+    System.out.println(" Total tokens:      " + tokenUsage.totalTokens());
+    System.out.println(" Duration:          " + formatDuration(response.durationMs()));
+    System.out.println(" Response:          " + response.answer());
+
+    System.out.println(SECTION_SEPARATOR);
+
     System.out.println();
-    System.out.println(" Answer: " + answer.trim());
-    System.out.println("==================================");
-    System.out.println();
+  }
+
+  private String formatDuration(long durationMs) {
+
+    long minutes = durationMs / 60_000;
+
+    long seconds = (durationMs % 60_000) / 1_000;
+
+    long millis = durationMs % 1_000;
+
+    return String.format(Locale.ROOT, "%02d:%02d.%03d", minutes, seconds, millis);
+  }
+
+  private static final class ThinkingOutput {
+    private final StringBuilder buffer = new StringBuilder();
+    private boolean printed;
   }
 }

@@ -1,5 +1,6 @@
 package ai.demo.persistence;
 
+import ai.demo.exception.PersistenceException;
 import ai.demo.model.chat.Conversation;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +27,7 @@ public class FileConversationRepository implements ConversationRepository {
     try {
       objectMapper.writeValue(file.toFile(), conversation);
     } catch (IOException e) {
-      throw new RuntimeException("Failed to save conversation to " + file, e);
+      throw new PersistenceException("Failed to save conversation to " + file, e);
     }
   }
 
@@ -45,14 +46,10 @@ public class FileConversationRepository implements ConversationRepository {
 
       Conversation loaded = objectMapper.readValue(json, Conversation.class);
 
-      if (loaded.messages() == null) {
-        return new Conversation();
-      }
-
       return loaded;
 
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to load conversation from " + file, e);
+    } catch (IOException e) {
+      throw new PersistenceException("Failed to load conversation from " + file, e);
     }
   }
 }

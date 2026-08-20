@@ -26,7 +26,7 @@ public class ThinkingCommand implements ConsoleCommand {
 
     try {
       next = ThinkingMode.valueOf(mode);
-    } catch (IllegalArgumentException e) {
+    } catch (IllegalArgumentException ignored) {
       return CommandResult.failure("Usage: /thinking ON|OFF|MINIMAL|STATUS");
     }
 

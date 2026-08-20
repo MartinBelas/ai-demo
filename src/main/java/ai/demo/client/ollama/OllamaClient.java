@@ -57,9 +57,6 @@ public class OllamaClient implements LlmClient {
 
     OllamaRequest ollamaRequest = toStreamingOllamaRequest(prompt);
 
-    Integer promptEvalCount = null;
-    Integer evalCount = null;
-
     try {
       HttpResponse<InputStream> response =
           httpTransport.sendStreaming(createHttpRequest(ollamaRequest));
@@ -68,35 +65,7 @@ public class OllamaClient implements LlmClient {
         throw new LlmCommunicationException("Ollama returned HTTP status " + response.statusCode());
       }
 
-      try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body()))) {
-
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-
-          if (line.isBlank()) {
-            continue;
-          }
-
-          OllamaResponse chunk = objectMapper.readValue(line, OllamaResponse.class);
-
-          // capture token usage if present (only in final chunk)
-          if (chunk.promptEvalCount() != null) {
-            promptEvalCount = chunk.promptEvalCount();
-          }
-          if (chunk.evalCount() != null) {
-            evalCount = chunk.evalCount();
-          }
-
-          emitChunk(chunk, consumer);
-        }
-
-        TokenUsage tokenUsage =
-            new TokenUsage(
-                promptEvalCount != null ? promptEvalCount : 0, evalCount != null ? evalCount : 0);
-
-        return new StreamingResult(tokenUsage);
-      }
+      return readStreamingResponse(response.body(), consumer);
 
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -105,6 +74,44 @@ public class OllamaClient implements LlmClient {
     } catch (IOException e) {
       throw new LlmCommunicationException("Failed to stream from Ollama", e);
     }
+  }
+
+  private StreamingResult readStreamingResponse(
+      InputStream responseBody, Consumer<ChatChunk> consumer) throws IOException {
+    Integer promptEvalCount = null;
+    Integer evalCount = null;
+    String model = null;
+
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(responseBody))) {
+      String line;
+
+      while ((line = reader.readLine()) != null) {
+        if (line.isBlank()) {
+          continue;
+        }
+
+        OllamaResponse chunk = objectMapper.readValue(line, OllamaResponse.class);
+
+        if (chunk.model() != null && !chunk.model().isBlank()) {
+          model = chunk.model();
+        }
+
+        if (chunk.promptEvalCount() != null) {
+          promptEvalCount = chunk.promptEvalCount();
+        }
+        if (chunk.evalCount() != null) {
+          evalCount = chunk.evalCount();
+        }
+
+        emitChunk(chunk, consumer);
+      }
+    }
+
+    TokenUsage tokenUsage =
+        new TokenUsage(
+            promptEvalCount != null ? promptEvalCount : 0, evalCount != null ? evalCount : 0);
+
+    return new StreamingResult(model != null ? model : config.model(), tokenUsage);
   }
 
   private void emitChunk(OllamaResponse chunk, Consumer<ChatChunk> consumer) {

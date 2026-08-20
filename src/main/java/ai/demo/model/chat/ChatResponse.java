@@ -1,6 +1,8 @@
 package ai.demo.model.chat;
 
-public record ChatResponse(String answer, String model, long durationInSeconds) {
+import ai.demo.client.TokenUsage;
+
+public record ChatResponse(String answer, String model, TokenUsage tokenUsage, long durationMs) {
   public ChatResponse {
 
     if (answer == null || answer.isBlank()) {
@@ -11,8 +13,12 @@ public record ChatResponse(String answer, String model, long durationInSeconds) 
       throw new IllegalArgumentException("model must not be blank");
     }
 
-    if (durationInSeconds < 0) {
-      throw new IllegalArgumentException("durationInSeconds must not be negative");
+    if (tokenUsage == null) {
+      throw new IllegalArgumentException("tokenUsage must not be null");
+    }
+
+    if (durationMs < 0) {
+      throw new IllegalArgumentException("durationMs must not be negative");
     }
   }
 }
