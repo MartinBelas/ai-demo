@@ -6,23 +6,23 @@ Available tools:
 
 Decide whether a tool is needed to answer the user's request.
 
-If a tool is needed, respond ONLY with valid JSON:
+If a tool is needed, respond ONLY with valid JSON in this exact format:
 
 {
-"tool": "<tool-name>",
-"input": "<tool-input>",
-"answer": null
+"type": "tool_call",
+"toolName": "<tool-name>",
+"input": "<tool-input>"
 }
 
-If no tool is needed, respond ONLY with valid JSON:
+If no tool is needed, respond ONLY with valid JSON in this exact format:
 
 {
-"tool": null,
-"input": null,
-"answer": "<final-answer>"
+"type": "model_reply",
+"content": "<answer>"
 }
 
-When a tool result is provided, use the result to produce the final answer.
+When a tool result is provided, use it to produce the final model reply.
 
 Do not invent tools.
 Only use tools listed above.
+Do not include markdown, explanations, or any text outside the JSON object.

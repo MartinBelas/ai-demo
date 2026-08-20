@@ -1,3 +1,3 @@
 package ai.demo.agent;
 
-public record AgentDecision(String tool, String input, String answer) {}
+public sealed interface AgentDecision permits ToolCallDecision, ModelReply {}

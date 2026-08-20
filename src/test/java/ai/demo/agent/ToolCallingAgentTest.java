@@ -44,9 +44,8 @@ class ToolCallingAgentTest {
             new LlmResponse(
                 """
                             {
-                              "tool": null,
-                              "input": null,
-                              "answer": "Polymorphism allows one interface to have multiple implementations."
+                              "type": "model_reply",
+                              "content": "Polymorphism allows one interface to have multiple implementations."
                             }
                             """,
                 "test-model",
@@ -95,9 +94,9 @@ class ToolCallingAgentTest {
             new LlmResponse(
                 """
                             {
-                              "tool": "calculator",
-                              "input": "125 * 37",
-                              "answer": null
+                              "type": "tool_call",
+                              "toolName": "calculator",
+                              "input": "125 * 37"
                             }
                             """,
                 "test-model",
@@ -110,9 +109,8 @@ class ToolCallingAgentTest {
             new LlmResponse(
                 """
                             {
-                              "tool": null,
-                              "input": null,
-                              "answer": "125 × 37 = 4625."
+                              "type": "model_reply",
+                              "content": "125 × 37 = 4625."
                             }
                             """,
                 "test-model",
