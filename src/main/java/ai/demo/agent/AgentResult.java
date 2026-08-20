@@ -1,3 +1,5 @@
 package ai.demo.agent;
 
-public record AgentResult(String answer) {}
+import ai.demo.client.TokenUsage;
+
+public record AgentResult(String answer, String model, TokenUsage tokenUsage) {}

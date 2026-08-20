@@ -4,6 +4,7 @@ import ai.demo.agent.tool.Tool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.agent.tool.ToolResult;
 import ai.demo.client.LlmResponse;
+import ai.demo.client.TokenUsage;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,21 +36,23 @@ public class ToolCallingAgent implements Agent {
   @Override
   public AgentResult execute(Conversation conversation) {
 
-    AgentDecision decision = requestDecision(conversation);
+    AgentStep firstStep = requestDecision(conversation);
 
-    if (decision instanceof ModelReply(String content)) {
-      return new AgentResult(content);
+    if (firstStep.decision() instanceof ModelReply(String content)) {
+      return new AgentResult(
+          content, firstStep.response().model(), firstStep.response().tokenUsage());
     }
 
-    if (decision instanceof ToolCallDecision toolCall) {
-      return executeToolCall(toolCall, conversation);
+    if (firstStep.decision() instanceof ToolCallDecision toolCall) {
+      return executeToolCall(toolCall, conversation, firstStep.response());
     }
 
     throw new IllegalStateException(
-        "Unsupported agent decision: " + decision.getClass().getSimpleName());
+        "Unsupported agent decision: " + firstStep.decision().getClass().getSimpleName());
   }
 
-  private AgentResult executeToolCall(ToolCallDecision toolCall, Conversation conversation) {
+  private AgentResult executeToolCall(
+      ToolCallDecision toolCall, Conversation conversation, LlmResponse firstResponse) {
 
     Tool tool = findTool(toolCall.toolName());
 
@@ -57,22 +60,27 @@ public class ToolCallingAgent implements Agent {
 
     conversation.add(ChatMessage.tool(tool.name(), toolResult.content()));
 
-    AgentDecision decision = requestDecision(conversation);
+    AgentStep finalStep = requestDecision(conversation);
 
-    if (decision instanceof ModelReply(String content)) {
-      return new AgentResult(content);
+    if (!(finalStep.decision() instanceof ModelReply(String content))) {
+      throw new IllegalStateException("Expected model reply after tool execution");
     }
 
-    throw new IllegalStateException("Expected model reply after tool execution");
+    TokenUsage totalUsage =
+        addTokenUsage(firstResponse.tokenUsage(), finalStep.response().tokenUsage());
+
+    return new AgentResult(content, finalStep.response().model(), totalUsage);
   }
 
-  private AgentDecision requestDecision(Conversation conversation) {
+  private AgentStep requestDecision(Conversation conversation) {
 
     String toolsDescription = toolDescriptionFormatter.format(tools);
 
     LlmResponse response = llmGateway.request(conversation, Map.of("tools", toolsDescription));
 
-    return parseDecision(response.text());
+    AgentDecision decision = parseDecision(response.text());
+
+    return new AgentStep(decision, response);
   }
 
   private AgentDecision parseDecision(String response) {
@@ -80,7 +88,7 @@ public class ToolCallingAgent implements Agent {
     try {
       JsonNode root = objectMapper.readTree(response);
 
-      String type = root.path("type").asText();
+      String type = requiredText(root, "type");
 
       return switch (type) {
         case "tool_call" ->
@@ -94,6 +102,13 @@ public class ToolCallingAgent implements Agent {
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("Failed to parse agent decision", e);
     }
+  }
+
+  private TokenUsage addTokenUsage(TokenUsage first, TokenUsage second) {
+
+    return new TokenUsage(
+        first.promptTokens() + second.promptTokens(),
+        first.completionTokens() + second.completionTokens());
   }
 
   private String requiredText(JsonNode root, String fieldName) {

@@ -3,23 +3,19 @@ package ai.demo.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ai.demo.agent.Agent;
+import ai.demo.agent.AgentResult;
 import ai.demo.client.LlmClient;
-import ai.demo.client.LlmResponse;
 import ai.demo.client.TokenUsage;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
-import ai.demo.model.prompt.Prompt;
 import ai.demo.prompt.PromptComposer;
-import ai.demo.prompt.template.PromptTemplateLoader;
-import ai.demo.prompt.template.PromptTemplateRenderer;
-import ai.demo.prompt.template.PromptTemplateType;
-import ai.demo.prompt.template.SystemPromptProvider;
 import org.junit.jupiter.api.Test;
 
 class ChatServiceTest {
@@ -27,44 +23,44 @@ class ChatServiceTest {
   @Test
   void shouldReturnChatResponse() {
 
+    Agent agent = mock(Agent.class);
     LlmClient llmClient = mock(LlmClient.class);
-
-    TokenUsage usage = new TokenUsage(0, 0);
-    when(llmClient.chat(any(Prompt.class)))
-        .thenReturn(new LlmResponse("Test response", "test-model", usage));
-
-    PromptComposer promptComposer =
-        new PromptComposer(
-            new SystemPromptProvider(
-                PromptTemplateType.CHAT, new PromptTemplateLoader(), new PromptTemplateRenderer()));
+    PromptComposer promptComposer = mock(PromptComposer.class);
 
     Conversation conversation = new Conversation();
     conversation.add(ChatMessage.user("Test question"));
 
-    ChatService chatService = new ChatService(llmClient, promptComposer);
+    when(agent.execute(conversation))
+        .thenReturn(new AgentResult("Test response", "test-model", new TokenUsage(10, 20)));
+
+    ChatService chatService = new ChatService(agent, llmClient, promptComposer);
 
     ChatResponse response = chatService.ask(conversation);
 
     assertEquals("Test response", response.answer());
     assertEquals("test-model", response.model());
     assertTrue(response.durationInSeconds() >= 0);
+
+    verify(agent).execute(conversation);
+    verifyNoInteractions(llmClient);
+    verifyNoInteractions(promptComposer);
   }
 
   @Test
   void shouldRejectEmptyConversation() {
 
+    Agent agent = mock(Agent.class);
     LlmClient llmClient = mock(LlmClient.class);
-    PromptComposer promptComposer =
-        new PromptComposer(
-            new SystemPromptProvider(
-                PromptTemplateType.CHAT, new PromptTemplateLoader(), new PromptTemplateRenderer()));
+    PromptComposer promptComposer = mock(PromptComposer.class);
 
     Conversation conversation = new Conversation();
 
-    ChatService chatService = new ChatService(llmClient, promptComposer);
+    ChatService chatService = new ChatService(agent, llmClient, promptComposer);
 
     assertThrows(IllegalStateException.class, () -> chatService.ask(conversation));
 
+    verifyNoInteractions(agent);
     verifyNoInteractions(llmClient);
+    verifyNoInteractions(promptComposer);
   }
 }

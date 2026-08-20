@@ -65,9 +65,9 @@ public class App {
 
     PromptComposer agentPromptComposer = createPromptComposer(PromptTemplateType.AGENT);
 
-    ChatService chatService = new ChatService(llmClient, chatPromptComposer);
-
     Agent agent = createAgent(llmClient, agentPromptComposer, objectMapper);
+
+    ChatService chatService = new ChatService(agent, llmClient, chatPromptComposer);
 
     ConsoleCommandDispatcher dispatcher =
         new ConsoleCommandDispatcher(new CommandRegistry().commands());
