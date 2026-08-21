@@ -16,7 +16,7 @@ public class AgentDecisionParser {
 
   public AgentDecision parse(String response) {
     try {
-      JsonNode root = objectMapper.readTree(response);
+      JsonNode root = objectMapper.readTree(unwrapMarkdownBlock(response));
       String type = requiredText(root, "type");
 
       return switch (type) {
@@ -28,6 +28,23 @@ public class AgentDecisionParser {
     } catch (JsonProcessingException e) {
       throw new AgentDecisionException("Failed to parse agent decision", e);
     }
+  }
+
+  private String unwrapMarkdownBlock(String response) {
+    String trimmed = response.trim();
+    int firstLineEnd = trimmed.indexOf('\n');
+
+    if (firstLineEnd < 0 || !trimmed.endsWith("```")) {
+      return trimmed;
+    }
+
+    String openingFence = trimmed.substring(0, firstLineEnd).trim();
+
+    if (!openingFence.equals("```") && !openingFence.equalsIgnoreCase("```json")) {
+      return trimmed;
+    }
+
+    return trimmed.substring(firstLineEnd + 1, trimmed.length() - 3).trim();
   }
 
   private String requiredText(JsonNode root, String fieldName) {

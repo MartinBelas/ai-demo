@@ -63,6 +63,8 @@ Ollama is the current provider, but provider-specific details must remain isolat
 ### Tool calling
 
 - The model returns a structured direct-reply or tool-call decision.
+- JSON wrapped in a Markdown code block is accepted.
+- An invalid decision triggers at most one repair request.
 - Only registered tools can be executed.
 - The assistant tool decision and tool result are preserved in conversation order.
 - The model produces the final reply after receiving the tool result.
@@ -128,4 +130,14 @@ A product change is complete when:
 5. `mvn verify` succeeds.
 6. README or PRD is updated when user-visible behavior, scope, or constraints change.
 
-The detailed implementation roadmap remains in `README.md`.
+## Document responsibilities
+
+- `PRD.md` defines product goals, scope, requirements, constraints, and acceptance criteria.
+- `AGENTS.md` defines architecture, engineering practices, testing rules, and AI-agent workflow.
+- `README.md` describes current features, setup, usage, and the implementation roadmap.
+
+If these documents conflict:
+
+1. `PRD.md` is authoritative for product behavior and scope.
+2. `AGENTS.md` is authoritative for engineering and workflow rules.
+3. The conflict must be reported before implementation continues.

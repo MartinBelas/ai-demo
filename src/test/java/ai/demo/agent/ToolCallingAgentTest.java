@@ -1,6 +1,7 @@
 package ai.demo.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -14,6 +15,7 @@ import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.agent.tool.ToolResult;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
+import ai.demo.exception.AgentDecisionException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -131,5 +133,70 @@ class ToolCallingAgentTest {
 
     verify(calculator).execute("125 * 37");
     verify(llmGateway, times(2)).stream(eq(conversation), eq(variables), any());
+  }
+
+  @Test
+  void shouldRepairInvalidDecisionOnce() {
+    AgentLlmGateway llmGateway = mock(AgentLlmGateway.class);
+    ToolDescriptionFormatter toolDescriptionFormatter = mock(ToolDescriptionFormatter.class);
+    Conversation conversation = new Conversation();
+    conversation.add(ChatMessage.user("Say hello"));
+
+    when(toolDescriptionFormatter.format(List.of())).thenReturn("No tools available.");
+    doAnswer(
+        new org.mockito.stubbing.Answer<StreamingResult>() {
+          private int call;
+
+          @Override
+          public StreamingResult answer(org.mockito.invocation.InvocationOnMock invocation) {
+            java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
+            if (call++ == 0) {
+              consumer.accept(new ChatChunk("not-json", ChatChunkType.CONTENT, true));
+              return new StreamingResult("test-model", new TokenUsage(10, 5));
+            }
+
+            consumer.accept(
+                new ChatChunk(
+                    "{\"type\":\"model_reply\",\"content\":\"Hello\"}",
+                    ChatChunkType.CONTENT,
+                    true));
+            return new StreamingResult("test-model", new TokenUsage(12, 6));
+          }
+        })
+        .when(llmGateway)
+        .stream(any(), any(), any());
+
+    Agent agent =
+        new ToolCallingAgent(llmGateway, toolDescriptionFormatter, List.of(), new ObjectMapper());
+
+    AgentResult result = agent.execute(conversation);
+
+    assertEquals("Hello", result.answer());
+    assertEquals(new TokenUsage(22, 11), result.tokenUsage());
+    verify(llmGateway, times(2)).stream(any(), any(), any());
+  }
+
+  @Test
+  void shouldFailAfterOneUnsuccessfulRepair() {
+    AgentLlmGateway llmGateway = mock(AgentLlmGateway.class);
+    ToolDescriptionFormatter toolDescriptionFormatter = mock(ToolDescriptionFormatter.class);
+    Conversation conversation = new Conversation();
+    conversation.add(ChatMessage.user("Say hello"));
+
+    when(toolDescriptionFormatter.format(List.of())).thenReturn("No tools available.");
+    doAnswer(
+        invocation -> {
+          java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
+          consumer.accept(new ChatChunk("not-json", ChatChunkType.CONTENT, true));
+          return new StreamingResult("test-model", new TokenUsage(10, 5));
+        })
+        .when(llmGateway)
+        .stream(any(), any(), any());
+
+    Agent agent =
+        new ToolCallingAgent(llmGateway, toolDescriptionFormatter, List.of(), new ObjectMapper());
+
+    assertThrows(AgentDecisionException.class, () -> agent.execute(conversation));
+    verify(llmGateway, times(2)).stream(any(), any(), any());
   }
 }

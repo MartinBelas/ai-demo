@@ -6,6 +6,7 @@ import ai.demo.agent.tool.ToolResult;
 import ai.demo.client.LlmResponse;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
+import ai.demo.exception.AgentDecisionException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -99,6 +100,25 @@ public class ToolCallingAgent implements Agent {
 
   private AgentStep requestDecision(Conversation conversation, Consumer<AgentEvent> eventConsumer) {
 
+    LlmResponse response = requestResponse(conversation, eventConsumer);
+
+    try {
+      return new AgentStep(decisionParser.parse(response.text()), response);
+    } catch (AgentDecisionException e) {
+      Conversation repairConversation = createRepairConversation(conversation, response.text(), e);
+      LlmResponse repairedResponse = requestResponse(repairConversation, eventConsumer);
+      AgentDecision repairedDecision = decisionParser.parse(repairedResponse.text());
+      TokenUsage totalUsage = addTokenUsage(response.tokenUsage(), repairedResponse.tokenUsage());
+      LlmResponse combinedResponse =
+          new LlmResponse(repairedResponse.text(), repairedResponse.model(), totalUsage);
+
+      return new AgentStep(repairedDecision, combinedResponse);
+    }
+  }
+
+  private LlmResponse requestResponse(
+      Conversation conversation, Consumer<AgentEvent> eventConsumer) {
+
     String toolsDescription = toolDescriptionFormatter.format(tools);
 
     Map<String, String> variables = Map.of("tools", toolsDescription);
@@ -111,12 +131,23 @@ public class ToolCallingAgent implements Agent {
 
     String responseText = responseContent.toString();
 
-    AgentDecision decision = decisionParser.parse(responseText);
+    return new LlmResponse(responseText, streamingResult.model(), streamingResult.tokenUsage());
+  }
 
-    LlmResponse response =
-        new LlmResponse(responseText, streamingResult.model(), streamingResult.tokenUsage());
+  private Conversation createRepairConversation(
+      Conversation conversation, String invalidResponse, AgentDecisionException error) {
+    Conversation repairConversation = new Conversation(conversation.messages());
+    repairConversation.add(
+        ChatMessage.user(
+            """
+            Your previous response was invalid.
+            Error: %s
+            Response: %s
+            Return only corrected JSON matching the required format.
+            """
+                .formatted(error.getMessage(), invalidResponse)));
 
-    return new AgentStep(decision, response);
+    return repairConversation;
   }
 
   private void handleChunk(

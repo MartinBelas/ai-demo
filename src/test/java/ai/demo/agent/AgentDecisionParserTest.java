@@ -27,6 +27,19 @@ class AgentDecisionParserTest {
   }
 
   @Test
+  void shouldParseJsonFromMarkdownBlock() {
+    AgentDecision decision =
+        parser.parse(
+            """
+            ```json
+            {"type":"model_reply","content":"Ahoj"}
+            ```
+            """);
+
+    assertEquals(new ModelReply("Ahoj"), decision);
+  }
+
+  @Test
   void shouldRejectInvalidJson() {
     AgentDecisionException exception =
         assertThrows(AgentDecisionException.class, () -> parser.parse("not-json"));

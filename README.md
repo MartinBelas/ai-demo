@@ -361,7 +361,7 @@ Phase 3 – Agent
 → Parallel tool execution
 → Agent state
 → Agent execution trace
-→ Invalid agent-output recovery
+✓ One repair attempt for invalid agent output
 → Repeated tool-call recovery
 
 Phase 4 – Data & RAG
