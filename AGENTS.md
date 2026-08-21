@@ -306,6 +306,7 @@ Current exceptions:
 ```text
 ai.demo.exception
 
+├── AgentDecisionException
 ├── ConfigurationException
 ├── LlmException
 ├── LlmCommunicationException

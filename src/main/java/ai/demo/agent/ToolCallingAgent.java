@@ -10,8 +10,6 @@ import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +21,7 @@ public class ToolCallingAgent implements Agent {
   private final AgentLlmGateway llmGateway;
   private final ToolDescriptionFormatter toolDescriptionFormatter;
   private final List<Tool> tools;
-  private final ObjectMapper objectMapper;
+  private final AgentDecisionParser decisionParser;
 
   public ToolCallingAgent(
       AgentLlmGateway llmGateway,
@@ -34,7 +32,7 @@ public class ToolCallingAgent implements Agent {
     this.llmGateway = Objects.requireNonNull(llmGateway);
     this.toolDescriptionFormatter = Objects.requireNonNull(toolDescriptionFormatter);
     this.tools = List.copyOf(tools);
-    this.objectMapper = Objects.requireNonNull(objectMapper);
+    this.decisionParser = new AgentDecisionParser(objectMapper);
   }
 
   @Override
@@ -113,7 +111,7 @@ public class ToolCallingAgent implements Agent {
 
     String responseText = responseContent.toString();
 
-    AgentDecision decision = parseDecision(responseText);
+    AgentDecision decision = decisionParser.parse(responseText);
 
     LlmResponse response =
         new LlmResponse(responseText, streamingResult.model(), streamingResult.tokenUsage());
@@ -136,45 +134,11 @@ public class ToolCallingAgent implements Agent {
     }
   }
 
-  private AgentDecision parseDecision(String response) {
-
-    try {
-      JsonNode root = objectMapper.readTree(response);
-
-      String type = requiredText(root, "type");
-
-      return switch (type) {
-        case "tool_call" ->
-            new ToolCallDecision(requiredText(root, "toolName"), requiredText(root, "input"));
-
-        case "model_reply" -> new ModelReply(requiredText(root, "content"));
-
-        default -> throw new IllegalStateException("Unknown agent decision type: " + type);
-      };
-
-    } catch (JsonProcessingException e) {
-
-      throw new IllegalStateException("Failed to parse agent decision", e);
-    }
-  }
-
   private TokenUsage addTokenUsage(TokenUsage first, TokenUsage second) {
 
     return new TokenUsage(
         first.promptTokens() + second.promptTokens(),
         first.completionTokens() + second.completionTokens());
-  }
-
-  private String requiredText(JsonNode root, String fieldName) {
-
-    JsonNode node = root.get(fieldName);
-
-    if (node == null || node.isNull() || node.asText().isBlank()) {
-
-      throw new IllegalStateException("Agent response is missing required field: " + fieldName);
-    }
-
-    return node.asText();
   }
 
   private Tool findTool(String toolName) {
