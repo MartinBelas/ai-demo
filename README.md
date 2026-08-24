@@ -2,7 +2,7 @@
 
 AI Demo is a Java 21 console application demonstrating provider-independent LLM integration, streaming responses, conversation persistence, reasoning output, and tool calling.
 
-The current provider is Ollama. Application and service layers depend on abstractions, so additional LLM providers can be added without changing the business logic.
+The supported providers are local Ollama, OpenAI, GroqCloud, and Gemini API. Application and service layers depend on abstractions, so providers can be selected without changing business logic.
 
 ## Features
 
@@ -10,6 +10,9 @@ The current provider is Ollama. Application and service layers depend on abstrac
 - Clean layered architecture
 - Provider-independent `LlmClient`
 - Ollama integration using Java `HttpClient`
+- OpenAI Responses API integration
+- Provider selection through configuration
+- Runtime provider switching without losing conversation history
 - Streaming content and thinking output
 - Persistent conversation history
 - Agent-based tool calling
@@ -112,9 +115,9 @@ Invalid expressions and division by zero are returned as tool failures rather th
 
 - Java 21
 - Maven 3.9+
-- Ollama
+- Ollama only when using the local Ollama provider
 
-## Ollama Setup
+## Optional Ollama Setup
 
 Install Ollama from:
 
@@ -149,19 +152,58 @@ src/main/resources/application.properties
 Example:
 
 ```properties
-llm.base-url=http://localhost:11434
-llm.model=qwen3:4b
+llm.provider=ollama
 llm.temperature=0.4
-llm.max-tokens=300
-llm.context-window=4096
-llm.repeat-penalty=1.18
+llm.max-output-tokens=1000
+llm.system-message=You are a helpful AI assistant. Be concise and clear. If you are uncertain, state it directly.
+
+ollama.model=qwen3:4b
+ollama.base-url=http://localhost:11434
+ollama.context-window=4096
+ollama.repeat-penalty=1.18
+
+openai.model=gpt-5.4-mini
+openai.base-url=https://api.openai.com/v1
+openai.api-key-env=OPENAI_API_KEY
+
+groq.model=openai/gpt-oss-20b
+groq.base-url=https://api.groq.com/openai/v1
+groq.api-key-env=GROQ_API_KEY
+
+gemini.model=gemini-3.7-flash
+gemini.base-url=https://generativelanguage.googleapis.com/v1beta
+gemini.api-key-env=GEMINI_API_KEY
 
 conversation.file=conversation.json
 ```
 
 Invalid or missing configuration results in a `ConfigurationException`.
 
-> `temperature`, `max-tokens`, and `context-window` are currently loaded and validated but are not yet included in the Ollama request. The current request configuration applies `repeat-penalty`.
+All configured Ollama generation options are forwarded inside the provider's `options` object.
+
+`llm.provider` selects the startup provider. Each provider has its own model. To use or switch to OpenAI, provide the API key through the environment variable named by `openai.api-key-env`. Never store API keys in the properties file. The OpenAI client is created lazily, so a missing key does not prevent startup with Ollama.
+
+For local development, copy `.env.example` to `.env` and add the key:
+
+```dotenv
+OPENAI_API_KEY=your-api-key
+GROQ_API_KEY=your-api-key
+GEMINI_API_KEY=your-api-key
+```
+
+The `.env` file is ignored by Git and must never be committed. A value already defined in the system environment takes precedence over `.env`.
+
+For the current PowerShell session, set the key before starting the application:
+
+```powershell
+$env:OPENAI_API_KEY = "your-api-key"
+```
+
+To store it for the current Windows user, run the following once and then open a new terminal:
+
+```powershell
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "your-api-key", "User")
+```
 
 ## Console Commands
 
@@ -170,6 +212,11 @@ Invalid or missing configuration results in a `ConfigurationException`.
 | `/help` | Show available commands |
 | `/new` | Start a new conversation |
 | `/history` | Show conversation history |
+| `/llm OLLAMA` | Switch subsequent requests to Ollama |
+| `/llm OPENAI` | Switch subsequent requests to OpenAI |
+| `/llm GROQ` | Switch subsequent requests to GroqCloud |
+| `/llm GEMINI` | Switch subsequent requests to Gemini API |
+| `/llm STATUS` | Show the active provider |
 | `/thinking ON` | Show streamed reasoning |
 | `/thinking MINIMAL` | Show up to the first 200 reasoning characters |
 | `/thinking OFF` | Hide reasoning |
@@ -177,6 +224,8 @@ Invalid or missing configuration results in a `ConfigurationException`.
 | `/exit` | Exit the application |
 
 The default thinking mode is `MINIMAL`.
+
+Changing the provider does not clear or rewrite the conversation. The next provider receives the existing provider-independent history. If switching fails, the previous provider remains active.
 
 ## Response Summary
 
@@ -214,6 +263,12 @@ Compile the project:
 
 ```bash
 mvn compile
+```
+
+Create and verify the JAR:
+
+```bash
+mvn verify
 ```
 
 Run all tests:
@@ -261,14 +316,13 @@ Covered areas include:
 
 ## Current Limitations
 
-- Ollama is the only implemented LLM provider.
+- Ollama, OpenAI, GroqCloud, and Gemini API are the implemented LLM providers.
 - Only the calculator tool is available.
 - A tool request requires two LLM calls.
 - The agent supports a single tool execution before the final response.
 - There is no retry or timeout recovery strategy beyond HTTP error handling.
 - The application currently exposes only a console interface.
 - Conversation history is stored in a local JSON file.
-- Some loaded generation settings are not yet forwarded to Ollama.
 
 ## Roadmap
 

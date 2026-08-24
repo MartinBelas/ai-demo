@@ -2,47 +2,56 @@ package ai.demo.config;
 
 import java.nio.file.Path;
 
-/**
- * Application configuration record. Contains all configuration parameters for the AI Demo
- * application.
- */
+/** Provider-independent application configuration. */
 public record AppConfig(
-    String baseUrl,
-    String model,
-    double temperature,
-    int numPredict,
-    int numCtx,
-    double repeatPenalty,
+    LlmProvider provider,
+    GenerationConfig generation,
+    OllamaConfig ollama,
+    OpenAiConfig openAi,
+    GroqConfig groq,
+    GeminiConfig gemini,
     Path conversationFile) {
+
+  public AppConfig(
+      LlmProvider provider,
+      GenerationConfig generation,
+      OllamaConfig ollama,
+      OpenAiConfig openAi,
+      Path conversationFile) {
+    this(provider, generation, ollama, openAi, null, null, conversationFile);
+  }
 
   public AppConfig {
 
-    if (baseUrl == null || baseUrl.isBlank()) {
-      throw new IllegalArgumentException("baseUrl must not be blank");
+    if (provider == null) throw new IllegalArgumentException("provider must not be null");
+    if (generation == null) throw new IllegalArgumentException("generation must not be null");
+    if (provider == LlmProvider.OLLAMA && ollama == null) {
+      throw new IllegalArgumentException("ollama configuration is required for provider OLLAMA");
     }
-
-    if (model == null || model.isBlank()) {
-      throw new IllegalArgumentException("model must not be blank");
+    if (provider == LlmProvider.OPENAI && openAi == null) {
+      throw new IllegalArgumentException("openAi configuration is required for provider OPENAI");
     }
-
-    if (temperature < 0.0 || temperature > 2.0) {
-      throw new IllegalArgumentException("temperature must be between 0.0 and 2.0");
+    if (provider == LlmProvider.GROQ && groq == null) {
+      throw new IllegalArgumentException("groq configuration is required for provider GROQ");
     }
-
-    if (numPredict < 1) {
-      throw new IllegalArgumentException("numPredict must be positive");
+    if (provider == LlmProvider.GEMINI && gemini == null) {
+      throw new IllegalArgumentException("gemini configuration is required for provider GEMINI");
     }
-
-    if (numCtx < 1) {
-      throw new IllegalArgumentException("numCtx must be positive");
-    }
-
-    if (repeatPenalty < 1.0) {
-      throw new IllegalArgumentException("repeatPenalty must be at least 1.0");
-    }
-
     if (conversationFile == null) {
       throw new IllegalArgumentException("conversationFile must not be null");
     }
+  }
+
+  public String model() {
+    return model(provider);
+  }
+
+  public String model(LlmProvider selectedProvider) {
+    return switch (selectedProvider) {
+      case OLLAMA -> ollama.model();
+      case OPENAI -> openAi.model();
+      case GROQ -> groq.model();
+      case GEMINI -> gemini.model();
+    };
   }
 }

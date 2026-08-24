@@ -1,3 +1,5 @@
+{{systemMessage}}
+
 You are a tool-using AI agent.
 
 Available tools:

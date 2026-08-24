@@ -16,6 +16,7 @@ import ai.demo.agent.tool.ToolResult;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
 import ai.demo.exception.AgentDecisionException;
+import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -198,5 +199,28 @@ class ToolCallingAgentTest {
 
     assertThrows(AgentDecisionException.class, () -> agent.execute(conversation));
     verify(llmGateway, times(2)).stream(any(), any(), any());
+  }
+
+  @Test
+  void shouldReportEmptyStreamAsLlmCommunicationFailure() {
+    AgentLlmGateway llmGateway = mock(AgentLlmGateway.class);
+    ToolDescriptionFormatter toolDescriptionFormatter = mock(ToolDescriptionFormatter.class);
+    Conversation conversation = new Conversation();
+    conversation.add(ChatMessage.user("What is Spring?"));
+
+    when(toolDescriptionFormatter.format(List.of())).thenReturn("No tools available.");
+    when(llmGateway.stream(any(), any(), any()))
+        .thenReturn(new StreamingResult("test-model", new TokenUsage(552, 300)));
+
+    Agent agent =
+        new ToolCallingAgent(llmGateway, toolDescriptionFormatter, List.of(), new ObjectMapper());
+
+    LlmCommunicationException exception =
+        assertThrows(LlmCommunicationException.class, () -> agent.execute(conversation));
+
+    assertEquals(
+        "The model returned no response content. It may have exhausted the output token limit"
+            + " while reasoning.",
+        exception.getMessage());
   }
 }

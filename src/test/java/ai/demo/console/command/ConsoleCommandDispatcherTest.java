@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ai.demo.client.LlmProviderSelector;
 import ai.demo.console.ConsoleContext;
 import ai.demo.model.chat.Conversation;
 import java.util.Map;
@@ -57,5 +58,13 @@ class ConsoleCommandDispatcherTest {
     assertEquals(NewCommand.class, registry.commands().get("/new").getClass());
     assertEquals(ExitCommand.class, registry.commands().get("/exit").getClass());
     assertEquals(ThinkingCommand.class, registry.commands().get("/thinking").getClass());
+  }
+
+  @Test
+  void shouldRegisterProviderCommandWhenSelectorIsAvailable() {
+    CommandRegistry registry = new CommandRegistry(mock(LlmProviderSelector.class));
+
+    assertEquals(6, registry.commands().size());
+    assertEquals(ProviderCommand.class, registry.commands().get("/llm").getClass());
   }
 }

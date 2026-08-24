@@ -73,27 +73,31 @@ public class ConsoleChat {
 
       boolean exit = false;
 
-      while (!exit) {
-
-        String input = readQuestion(scanner);
-
-        if (input.startsWith("/")) {
-
-          CommandResult result = commandDispatcher.dispatch(input, context);
-
-          if (result.message() != null) {
-            System.out.println(result.message());
-          }
-
-          if (result.status() == CommandStatus.EXIT) {
-            exit = true;
-          }
-
-        } else {
-          ask(input, context);
-        }
+      while (!exit && hasInput(scanner)) {
+        exit = handleInput(scanner.nextLine(), context);
       }
     }
+  }
+
+  private boolean hasInput(Scanner scanner) {
+    System.out.print("You > ");
+    return scanner.hasNextLine();
+  }
+
+  private boolean handleInput(String input, ConsoleContext context) {
+    if (input.isBlank()) {
+      return false;
+    }
+    if (!input.startsWith("/")) {
+      ask(input, context);
+      return false;
+    }
+
+    CommandResult result = commandDispatcher.dispatch(input, context);
+    if (result.message() != null) {
+      System.out.println(result.message());
+    }
+    return result.status() == CommandStatus.EXIT;
   }
 
   private void ask(String question, ConsoleContext context) {
@@ -232,13 +236,6 @@ public class ConsoleChat {
     System.out.println(SECTION_SEPARATOR);
 
     System.out.println();
-  }
-
-  private String readQuestion(Scanner scanner) {
-
-    System.out.print("You > ");
-
-    return scanner.nextLine();
   }
 
   private void printSummary(ChatResponse response) {

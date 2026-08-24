@@ -12,6 +12,9 @@ import ai.demo.client.LlmResponse;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
+import ai.demo.config.GenerationConfig;
+import ai.demo.config.LlmProvider;
+import ai.demo.config.OllamaConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
@@ -45,12 +48,10 @@ class OllamaClientTest {
 
     AppConfig config =
         new AppConfig(
-            "http://localhost:11434",
-            "qwen3:4b",
-            0.7,
-            100,
-            4096,
-            1.2,
+            LlmProvider.OLLAMA,
+            new GenerationConfig(0.7, 100, "Be helpful."),
+            new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.2),
+            null,
             Path.of("conversation.json"));
 
     httpTransport = mock(HttpTransport.class);

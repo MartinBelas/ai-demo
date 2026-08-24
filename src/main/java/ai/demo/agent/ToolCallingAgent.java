@@ -7,6 +7,7 @@ import ai.demo.client.LlmResponse;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
 import ai.demo.exception.AgentDecisionException;
+import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -130,6 +131,12 @@ public class ToolCallingAgent implements Agent {
             conversation, variables, chunk -> handleChunk(chunk, responseContent, eventConsumer));
 
     String responseText = responseContent.toString();
+
+    if (responseText.isBlank()) {
+      throw new LlmCommunicationException(
+          "The model returned no response content. It may have exhausted the output token limit"
+              + " while reasoning.");
+    }
 
     return new LlmResponse(responseText, streamingResult.model(), streamingResult.tokenUsage());
   }

@@ -18,12 +18,29 @@ class AppConfigLoaderTest {
 
     AppConfig config = loader.loadFromResource("app-config/valid.properties");
 
-    assertEquals("http://localhost:11434", config.baseUrl());
+    assertEquals(LlmProvider.OLLAMA, config.provider());
+    assertEquals("http://localhost:11434", config.ollama().baseUrl());
     assertEquals("qwen3:4b", config.model());
-    assertEquals(0.7, config.temperature());
-    assertEquals(2000, config.numPredict());
-    assertEquals(4096, config.numCtx());
-    assertEquals(1.2, config.repeatPenalty());
+    assertEquals(0.7, config.generation().temperature());
+    assertEquals(2000, config.generation().maxOutputTokens());
+    assertEquals(4096, config.ollama().contextWindow());
+    assertEquals(1.2, config.ollama().repeatPenalty());
+  }
+
+  @Test
+  void shouldLoadOpenAiConfiguration() throws IOException {
+    AppConfig config = loader.loadFromResource("app-config/valid-openai.properties");
+
+    assertEquals(LlmProvider.OPENAI, config.provider());
+    assertEquals("https://api.openai.com/v1", config.openAi().baseUrl());
+    assertEquals("OPENAI_API_KEY", config.openAi().apiKeyEnvironmentVariable());
+  }
+
+  @Test
+  void shouldRejectUnknownProvider() {
+    assertThrows(
+        ConfigurationException.class,
+        () -> loader.loadFromResource("app-config/unknown-provider.properties"));
   }
 
   @Test
@@ -45,8 +62,8 @@ class AppConfigLoaderTest {
   @ParameterizedTest(name = "{1}")
   @CsvSource({
     "app-config/invalid-temperature.properties, temperature",
-    "app-config/invalid-max-tokens.properties, numPredict",
-    "app-config/invalid-num-ctx.properties, numCtx",
+    "app-config/invalid-num-predict.properties, maxOutputTokens",
+    "app-config/invalid-num-ctx.properties, contextWindow",
     "app-config/invalid-repeat-penalty.properties, repeatPenalty"
   })
   void shouldFailForInvalidNumericProperty(String resource, String propertyName) {

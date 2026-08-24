@@ -1,14 +1,10 @@
 package ai.demo.client.ollama.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
 public record OllamaRequest(
-    String model,
-    List<OllamaMessage> messages,
-    boolean stream,
-    @JsonProperty("repeat_penalty") double repeatPenalty) {
+    String model, List<OllamaMessage> messages, boolean stream, OllamaOptions options) {
 
   public OllamaRequest {
 
@@ -28,8 +24,8 @@ public record OllamaRequest(
       throw new IllegalArgumentException("messages must not contain null elements");
     }
 
-    if (repeatPenalty < 1.0) {
-      throw new IllegalArgumentException("repeatPenalty must be at least 1.0");
+    if (options == null) {
+      throw new IllegalArgumentException("options must not be null");
     }
   }
 }

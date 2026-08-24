@@ -13,56 +13,39 @@ class AppConfigTest {
 
     var config =
         new AppConfig(
-            "http://localhost:11434",
-            "qwen3:4b",
-            0.5,
-            2000,
-            4096,
-            1.2,
+            LlmProvider.OLLAMA,
+            new GenerationConfig(0.5, 2000, "Be helpful."),
+            new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.2),
+            null,
             Path.of("conversation.json"));
 
-    assertEquals("http://localhost:11434", config.baseUrl());
+    assertEquals(LlmProvider.OLLAMA, config.provider());
+    assertEquals("http://localhost:11434", config.ollama().baseUrl());
     assertEquals("qwen3:4b", config.model());
-    assertEquals(0.5, config.temperature());
-    assertEquals(2000, config.numPredict());
-    assertEquals(4096, config.numCtx());
-    assertEquals(1.2, config.repeatPenalty());
+    assertEquals(0.5, config.generation().temperature());
+    assertEquals(2000, config.generation().maxOutputTokens());
+    assertEquals(4096, config.ollama().contextWindow());
+    assertEquals(1.2, config.ollama().repeatPenalty());
     assertEquals(Path.of("conversation.json"), config.conversationFile());
   }
 
   @Test
   void shouldRejectInvalidConfiguration() {
 
+    var generation = new GenerationConfig(0.5, 100, "Be helpful.");
+    var ollama = new OllamaConfig("model", "url", 100, 1.2);
+    Path conversationFile = Path.of("x");
     assertThrows(
         IllegalArgumentException.class,
-        () -> new AppConfig(null, "model", 0.5, 100, 100, 1.2, Path.of("x")));
-
+        () -> new AppConfig(null, generation, ollama, null, conversationFile));
     assertThrows(
         IllegalArgumentException.class,
-        () -> new AppConfig("url", null, 0.5, 100, 100, 1.2, Path.of("x")));
-
+        () -> new AppConfig(LlmProvider.OLLAMA, null, ollama, null, conversationFile));
     assertThrows(
         IllegalArgumentException.class,
-        () -> new AppConfig("url", "model", -1.0, 100, 100, 1.2, Path.of("x")));
-
+        () -> new AppConfig(LlmProvider.OLLAMA, generation, null, null, conversationFile));
     assertThrows(
         IllegalArgumentException.class,
-        () -> new AppConfig("url", "model", 3.0, 100, 100, 1.2, Path.of("x")));
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> new AppConfig("url", "model", 0.5, 0, 100, 1.2, Path.of("x")));
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> new AppConfig("url", "model", 0.5, 100, 0, 1.2, Path.of("x")));
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> new AppConfig("url", "model", 0.5, 100, 100, 0.5, Path.of("x")));
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> new AppConfig("url", "model", 0.5, 100, 100, 1.2, null));
+        () -> new AppConfig(LlmProvider.OLLAMA, generation, ollama, null, null));
   }
 }

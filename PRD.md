@@ -4,7 +4,7 @@
 
 AI Demo is an educational Java 21 console application that demonstrates how to build an LLM application without hiding its core behavior behind an AI framework. It uses clean architecture, provider-independent models, streaming responses, persistent conversations, configurable thinking output, and agent-based tool calling.
 
-Ollama is the current provider, but provider-specific details must remain isolated so another provider can be added without changing application logic.
+Ollama, OpenAI, GroqCloud, and Gemini API are supported providers. Provider-specific details remain isolated so another provider can be added without changing application logic.
 
 ## Target users
 
@@ -16,7 +16,7 @@ Ollama is the current provider, but provider-specific details must remain isolat
 
 - Keep the complete request, streaming, agent, and tool flow understandable
 - Demonstrate provider-independent LLM integration
-- Support local model experimentation without cloud credentials
+- Support both local model experimentation and an optional cloud API provider
 - Include realistic configuration, persistence, logging, error handling, and tests
 - Remain small enough to serve as a reference implementation
 
@@ -34,6 +34,10 @@ Ollama is the current provider, but provider-specific details must remain isolat
 
 - Interactive console chat
 - Ollama chat and streaming integration
+- OpenAI and Groq Responses API streaming integration
+- Gemini Generate Content API streaming integration
+- Provider selection through configuration
+- Runtime provider switching without losing conversation history
 - Conversation history persisted in a local JSON file
 - Thinking modes `ON`, `OFF`, `MINIMAL`, and `STATUS`
 - Response summary with model, token usage, duration, and complete answer
@@ -78,6 +82,16 @@ Ollama is the current provider, but provider-specific details must remain isolat
 - Unknown JSON properties are ignored.
 - Read and write failures produce `PersistenceException`.
 
+### Provider selection
+
+- Ollama, OpenAI, GroqCloud, and Gemini API can be selected as the startup provider.
+- `/llm OLLAMA`, `/llm OPENAI`, `/llm GROQ`, `/llm GEMINI`, and `/llm STATUS` are supported.
+- Switching providers preserves the current provider-independent conversation.
+- Alternate providers are initialized lazily.
+- A failed switch leaves the previously active provider unchanged.
+- Provider secrets can be supplied through the system environment or a local `.env` file.
+- System environment values take precedence over `.env`, and `.env` is excluded from Git.
+
 ### Response summary
 
 - The summary displays the model name.
@@ -90,7 +104,7 @@ Ollama is the current provider, but provider-specific details must remain isolat
 - Production authentication and authorization
 - Multiple simultaneous users
 - REST or web interfaces
-- Cloud LLM providers
+- Additional cloud LLM providers beyond OpenAI, GroqCloud, and Gemini API
 - Unbounded autonomous agent loops
 - Arbitrary code execution
 - RAG and vector storage
@@ -100,14 +114,14 @@ These capabilities may be introduced through later roadmap phases, but must not 
 
 ## Constraints and known limitations
 
-- Java 21, Maven, and Ollama are required.
-- Ollama is the only implemented LLM provider.
+- Java 21 and Maven are required; Ollama is required only when using the local Ollama provider.
+- Ollama, OpenAI, GroqCloud, and Gemini API are the implemented LLM providers.
 - Conversation persistence uses a local file.
 - Only the calculator tool is currently registered.
 - Tool-based answers require two LLM calls and normally use more time and tokens.
 - The agent supports one tool execution before the final response.
 - Small local models may return invalid structured output.
-- Some loaded generation settings are not yet forwarded to Ollama.
+- Provider-specific generation settings differ and unsupported settings are not forwarded.
 
 ## Success criteria
 

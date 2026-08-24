@@ -14,6 +14,9 @@ import ai.demo.agent.ContentEvent;
 import ai.demo.agent.ThinkingEvent;
 import ai.demo.client.TokenUsage;
 import ai.demo.config.AppConfig;
+import ai.demo.config.GenerationConfig;
+import ai.demo.config.LlmProvider;
+import ai.demo.config.OllamaConfig;
 import ai.demo.console.command.CommandResult;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.model.chat.ChatResponse;
@@ -40,7 +43,11 @@ class ConsoleChatTest {
 
     AppConfig config =
         new AppConfig(
-            "http://localhost:11434", "test-model", 0.7, 10, 100, 1.2, Path.of("conv.json"));
+            LlmProvider.OLLAMA,
+            new GenerationConfig(0.7, 10, "Be helpful."),
+            new OllamaConfig("test-model", "http://localhost:11434", 100, 1.2),
+            null,
+            Path.of("conv.json"));
 
     var console = new ConsoleChat(mockService, config, mockDispatcher, mockRepo);
 
@@ -55,7 +62,11 @@ class ConsoleChatTest {
     ConversationRepository repository = mock(ConversationRepository.class);
     AppConfig config =
         new AppConfig(
-            "http://localhost:11434", "configured-model", 0.7, 10, 100, 1.2, Path.of("conv.json"));
+            LlmProvider.OLLAMA,
+            new GenerationConfig(0.7, 10, "Be helpful."),
+            new OllamaConfig("configured-model", "http://localhost:11434", 100, 1.2),
+            null,
+            Path.of("conv.json"));
     String thinking = "x".repeat(250);
 
     when(repository.load()).thenReturn(new Conversation());

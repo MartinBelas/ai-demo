@@ -7,12 +7,14 @@ import ai.demo.agent.ToolCallingAgent;
 import ai.demo.agent.tool.CalculatorTool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.client.LlmClient;
+import ai.demo.client.LlmClientFactory;
 import ai.demo.client.LoggingLlmClient;
+import ai.demo.client.SwitchableLlmClient;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.client.http.JdkHttpTransport;
-import ai.demo.client.ollama.OllamaClient;
 import ai.demo.config.AppConfig;
 import ai.demo.config.AppConfigLoader;
+import ai.demo.config.EnvironmentConfigLoader;
 import ai.demo.console.ConsoleChat;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
@@ -29,6 +31,7 @@ import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.http.HttpClient;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import org.slf4j.Logger;
@@ -60,16 +63,24 @@ public class App {
     HttpClient httpClient = createHttpClient();
     ObjectMapper objectMapper = new ObjectMapper();
 
-    LlmClient llmClient = createLlmClient(config, httpClient, objectMapper);
+    SwitchableLlmClient providerClient;
+    try {
+      providerClient = createLlmClient(config, httpClient, objectMapper);
+    } catch (ConfigurationException e) {
+      httpClient.shutdownNow();
+      log.error("Configuration error: {}", e.getMessage(), e);
+      return 1;
+    }
+    LlmClient llmClient = new LoggingLlmClient(providerClient);
 
-    PromptComposer agentPromptComposer = createAgentPromptComposer();
+    PromptComposer agentPromptComposer = createAgentPromptComposer(config);
 
     Agent agent = createAgent(llmClient, agentPromptComposer, objectMapper);
 
     ChatService chatService = new ChatService(agent);
 
     ConsoleCommandDispatcher dispatcher =
-        new ConsoleCommandDispatcher(new CommandRegistry().commands());
+        new ConsoleCommandDispatcher(new CommandRegistry(providerClient).commands());
 
     ConversationRepository conversationRepository =
         new FileConversationRepository(config.conversationFile(), objectMapper);
@@ -90,15 +101,17 @@ public class App {
     return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
   }
 
-  private LlmClient createLlmClient(
+  private SwitchableLlmClient createLlmClient(
       AppConfig config, HttpClient httpClient, ObjectMapper objectMapper) {
 
     HttpTransport transport = new JdkHttpTransport(httpClient);
 
-    return new LoggingLlmClient(new OllamaClient(config, transport, objectMapper));
+    EnvironmentConfigLoader environment =
+        new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
+    return new LlmClientFactory(transport, objectMapper, environment::get).createSwitchable(config);
   }
 
-  private PromptComposer createAgentPromptComposer() {
+  private PromptComposer createAgentPromptComposer(AppConfig config) {
 
     PromptTemplateLoader loader = new PromptTemplateLoader();
 
@@ -107,7 +120,8 @@ public class App {
     SystemPromptProvider provider =
         new SystemPromptProvider(PromptTemplateType.AGENT, loader, renderer);
 
-    return new PromptComposer(provider);
+    return new PromptComposer(
+        provider, java.util.Map.of("systemMessage", config.generation().systemMessage()));
   }
 
   private Agent createAgent(

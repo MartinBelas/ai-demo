@@ -6,6 +6,7 @@ import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.client.ollama.dto.OllamaMessage;
+import ai.demo.client.ollama.dto.OllamaOptions;
 import ai.demo.client.ollama.dto.OllamaRequest;
 import ai.demo.client.ollama.dto.OllamaResponse;
 import ai.demo.config.AppConfig;
@@ -111,7 +112,7 @@ public class OllamaClient implements LlmClient {
         new TokenUsage(
             promptEvalCount != null ? promptEvalCount : 0, evalCount != null ? evalCount : 0);
 
-    return new StreamingResult(model != null ? model : config.model(), tokenUsage);
+    return new StreamingResult(model != null ? model : config.ollama().model(), tokenUsage);
   }
 
   private void emitChunk(OllamaResponse chunk, Consumer<ChatChunk> consumer) {
@@ -173,15 +174,23 @@ public class OllamaClient implements LlmClient {
   }
 
   private URI chatUri() {
-    return URI.create(config.baseUrl() + CHAT_ENDPOINT);
+    return URI.create(config.ollama().baseUrl() + CHAT_ENDPOINT);
   }
 
   private OllamaRequest toOllamaRequest(Prompt prompt) {
-    return new OllamaRequest(config.model(), toMessages(prompt), false, config.repeatPenalty());
+    return new OllamaRequest(config.ollama().model(), toMessages(prompt), false, toOptions());
   }
 
   private OllamaRequest toStreamingOllamaRequest(Prompt prompt) {
-    return new OllamaRequest(config.model(), toMessages(prompt), true, config.repeatPenalty());
+    return new OllamaRequest(config.ollama().model(), toMessages(prompt), true, toOptions());
+  }
+
+  private OllamaOptions toOptions() {
+    return new OllamaOptions(
+        config.generation().temperature(),
+        config.generation().maxOutputTokens(),
+        config.ollama().contextWindow(),
+        config.ollama().repeatPenalty());
   }
 
   private LlmResponse toLlmResponse(OllamaResponse ollamaResponse) {

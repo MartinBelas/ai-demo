@@ -11,9 +11,16 @@ import java.util.Map;
 public class PromptComposer {
 
   private final SystemPromptProvider systemPromptProvider;
+  private final Map<String, String> defaultVariables;
 
   public PromptComposer(SystemPromptProvider systemPromptProvider) {
+    this(systemPromptProvider, Map.of());
+  }
+
+  public PromptComposer(
+      SystemPromptProvider systemPromptProvider, Map<String, String> defaultVariables) {
     this.systemPromptProvider = systemPromptProvider;
+    this.defaultVariables = Map.copyOf(defaultVariables);
   }
 
   public Prompt compose(Conversation conversation) {
@@ -32,7 +39,9 @@ public class PromptComposer {
 
     List<ChatMessage> messages = new ArrayList<>();
 
-    String systemPrompt = systemPromptProvider.getSystemPrompt(variables);
+    Map<String, String> mergedVariables = new java.util.HashMap<>(defaultVariables);
+    mergedVariables.putAll(variables);
+    String systemPrompt = systemPromptProvider.getSystemPrompt(mergedVariables);
 
     if (systemPrompt != null && !systemPrompt.isBlank()) {
       messages.add(ChatMessage.system(systemPrompt));
