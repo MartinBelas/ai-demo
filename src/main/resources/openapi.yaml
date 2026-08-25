@@ -7,6 +7,8 @@ info:
 tags:
   - name: System
     description: Application health and operational endpoints.
+  - name: LLM Providers
+    description: LLM providers available in the current deployment.
 
 paths:
   /api/health:
@@ -24,6 +26,23 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
               example:
                 status: UP
+  /api/llm/providers:
+    get:
+      tags:
+        - LLM Providers
+      summary: List available LLM providers
+      operationId: getLlmProviders
+      responses:
+        "200":
+          description: Providers with complete configuration and required credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmProvidersResponse"
+              example:
+                providers:
+                  - id: OLLAMA
+                    model: qwen3:4b
 
 components:
   schemas:
@@ -37,6 +56,33 @@ components:
           type: string
           enum:
             - UP
+    LlmProvidersResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - providers
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LlmProvider"
+    LlmProvider:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - model
+      properties:
+        id:
+          type: string
+          enum:
+            - OLLAMA
+            - OPENAI
+            - GROQ
+            - GEMINI
+        model:
+          type: string
+          minLength: 1
     ErrorResponse:
       type: object
       additionalProperties: false

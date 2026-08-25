@@ -6,18 +6,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
 /** Resolves environment configuration with an optional local .env fallback. */
 public final class EnvironmentConfigLoader {
 
-  private static final Pattern VARIABLE_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+  private static final Pattern VARIABLE_NAME = Pattern.compile("[A-Za-z_]\\w*");
 
-  private final Function<String, String> systemEnvironment;
+  private final UnaryOperator<String> systemEnvironment;
   private final Map<String, String> fileEnvironment;
 
-  public EnvironmentConfigLoader(Path dotenvFile, Function<String, String> systemEnvironment) {
+  public EnvironmentConfigLoader(Path dotenvFile, UnaryOperator<String> systemEnvironment) {
     this.systemEnvironment = systemEnvironment;
     this.fileEnvironment = load(dotenvFile);
   }

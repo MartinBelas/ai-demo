@@ -85,7 +85,7 @@ demo.limits.enabled=true|false
 
 Local execution may enable Ollama in either console or HTTP mode. The Cloud Run deployment must set `app.interface=http`, disable Ollama, and enable demo limits.
 
-`GET /api/providers` exposes only providers available in the current deployment. A request for a disabled provider returns an application-specific client error. The cloud web interface must not display Ollama.
+`GET /api/llm/providers` exposes only providers available in the current deployment. A request for a disabled provider returns an application-specific client error. The cloud web interface must not display Ollama.
 
 ## Functional requirements
 
@@ -114,7 +114,7 @@ The MVP API includes at least:
 
 ```text
 GET    /api/health
-GET    /api/providers
+GET    /api/llm/providers
 POST   /api/chat/stream
 GET    /api/rag/documents
 POST   /api/rag/documents

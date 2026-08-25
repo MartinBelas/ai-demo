@@ -17,6 +17,7 @@ import ai.demo.config.AppConfig;
 import ai.demo.config.AppConfigLoader;
 import ai.demo.config.AppInterface;
 import ai.demo.config.EnvironmentConfigLoader;
+import ai.demo.config.LlmProviderAvailability;
 import ai.demo.console.ConsoleChat;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
@@ -101,7 +102,21 @@ public class App {
   }
 
   private int startServer(AppConfig config) {
-    try (ApiServer server = new ApiServer(config.server().port())) {
+    try {
+      EnvironmentConfigLoader environment =
+          new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
+      LlmProviderAvailability providerAvailability =
+          new LlmProviderAvailability(config, environment::get);
+      return runServer(config, providerAvailability);
+    } catch (ConfigurationException e) {
+      log.error("Configuration error: {}", e.getMessage(), e);
+      return 1;
+    }
+  }
+
+  private int runServer(AppConfig config, LlmProviderAvailability providerAvailability) {
+    try (ApiServer server =
+        new ApiServer(config.server().port(), providerAvailability, new ObjectMapper())) {
       server.start();
       Runtime.getRuntime().addShutdownHook(new Thread(server::close));
       log.info("HTTP server started on port {}", server.port());

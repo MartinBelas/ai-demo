@@ -1,6 +1,9 @@
 package ai.demo.api;
 
+import ai.demo.config.LlmProviderAvailability;
 import ai.demo.exception.ServerException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 
 /** Embedded HTTP server exposing the public API. */
@@ -10,11 +13,20 @@ public final class ApiServer implements AutoCloseable {
 
   private final int configuredPort;
   private final String openApiDocument;
+  private final LlmProviderAvailability providerAvailability;
+  private final ObjectMapper objectMapper;
   private Javalin app;
 
   public ApiServer(int configuredPort) {
+    this(configuredPort, null, new ObjectMapper());
+  }
+
+  public ApiServer(
+      int configuredPort, LlmProviderAvailability providerAvailability, ObjectMapper objectMapper) {
     this.configuredPort = configuredPort;
     this.openApiDocument = OpenApiDocument.load();
+    this.providerAvailability = providerAvailability;
+    this.objectMapper = objectMapper;
   }
 
   public void start() {
@@ -31,10 +43,28 @@ public final class ApiServer implements AutoCloseable {
                           .get(
                               "/openapi.yaml",
                               context ->
-                                  context.contentType("application/yaml").result(openApiDocument)))
+                                  context.contentType("application/yaml").result(openApiDocument))
+                          .get(
+                              "/api/llm/providers",
+                              context ->
+                                  context
+                                      .contentType("application/json")
+                                      .result(llmProvidersResponse())))
               .start(configuredPort);
     } catch (RuntimeException e) {
       throw new ServerException("Unable to start HTTP server", e);
+    }
+  }
+
+  private String llmProvidersResponse() {
+    if (providerAvailability == null) {
+      return "{\"providers\":[]}";
+    }
+    try {
+      return objectMapper.writeValueAsString(
+          LlmProvidersResponse.from(providerAvailability.availableProviders()));
+    } catch (JsonProcessingException e) {
+      throw new ServerException("Unable to serialize provider response", e);
     }
   }
 

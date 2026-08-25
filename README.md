@@ -194,6 +194,7 @@ HTTP mode currently exposes:
 
 ```text
 GET /api/health
+GET /api/llm/providers
 GET /openapi.yaml
 ```
 
@@ -357,7 +358,8 @@ MVP – Public demo target (two weeks)
 ✓ Add HTTP mode and health endpoint
 ✓ Add configurable Ollama availability
 ✓ Add OpenAPI specification foundation
-→ Add stateless REST API
+✓ Add LLM provider availability endpoint
+→ Add stateless chat REST API
 → Add SSE chat streaming and REST tests
 → Add Bruno API collection
 → Add simple web chat with browser-local history
