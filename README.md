@@ -187,6 +187,18 @@ Invalid or missing configuration results in a `ConfigurationException`.
 `server.port` locally. The `APP_INTERFACE` and `PORT` environment variables override these values,
 which allows the same configuration and artifact to run on Cloud Run.
 
+## HTTP API
+
+Server mode currently exposes:
+
+```text
+GET /api/health
+GET /openapi.yaml
+```
+
+The OpenAPI-first contract is maintained in `src/main/resources/openapi.yaml`. The application
+serves the same document through `/openapi.yaml`, and automated tests validate its structure.
+
 All configured Ollama generation options are forwarded inside the provider's `options` object.
 
 `llm.provider` selects the startup provider. Each provider has its own model. To use or switch to OpenAI, provide the API key through the environment variable named by `openai.api-key-env`. Never store API keys in the properties file. The OpenAI client is created lazily, so a missing key does not prevent startup with Ollama.
@@ -338,6 +350,7 @@ MVP – Public demo target (two weeks)
 ✓ Define MVP scope, limits, and acceptance criteria in PRD
 → Add local and cloud runtime configuration
 ✓ Add server mode and health endpoint
+✓ Add OpenAPI specification foundation
 → Add stateless REST API
 → Add SSE chat streaming and REST tests
 → Add Bruno API collection
@@ -528,7 +541,8 @@ Phase 6 – Production engineering
 Phase 7 – Integration & deployment
 → REST API
 → Streaming REST endpoint
-→ OpenAPI documentation
+✓ OpenAPI specification foundation
+→ Interactive API documentation
 → REST API tests
 → Web user interface
 → Docker

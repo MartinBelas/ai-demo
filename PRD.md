@@ -126,7 +126,10 @@ GET    /api/demo/status
 - REST handlers call application services and must not call provider clients directly.
 - JSON errors use a stable error code and a safe English message.
 - Bruno files cover successful requests, validation failures, limit failures, RAG, and streaming where supported.
-- OpenAPI documentation is desirable but not required for the first MVP deployment.
+- `src/main/resources/openapi.yaml` is the authoritative REST API contract.
+- The OpenAPI document is served publicly through `GET /openapi.yaml`.
+- REST endpoints, tests, Bruno files, and documentation must remain consistent with the contract.
+- Generated server code is not required for the MVP.
 
 ### Web interface
 

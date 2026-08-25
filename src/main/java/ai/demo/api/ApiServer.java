@@ -9,10 +9,12 @@ public final class ApiServer implements AutoCloseable {
   private static final String HEALTH_RESPONSE = "{\"status\":\"UP\"}";
 
   private final int configuredPort;
+  private final String openApiDocument;
   private Javalin app;
 
   public ApiServer(int configuredPort) {
     this.configuredPort = configuredPort;
+    this.openApiDocument = OpenApiDocument.load();
   }
 
   public void start() {
@@ -20,10 +22,16 @@ public final class ApiServer implements AutoCloseable {
       app =
           Javalin.create(
                   config ->
-                      config.routes.get(
-                          "/api/health",
-                          context ->
-                              context.contentType("application/json").result(HEALTH_RESPONSE)))
+                      config
+                          .routes
+                          .get(
+                              "/api/health",
+                              context ->
+                                  context.contentType("application/json").result(HEALTH_RESPONSE))
+                          .get(
+                              "/openapi.yaml",
+                              context ->
+                                  context.contentType("application/yaml").result(openApiDocument)))
               .start(configuredPort);
     } catch (RuntimeException e) {
       throw new ServerException("Unable to start HTTP server", e);
