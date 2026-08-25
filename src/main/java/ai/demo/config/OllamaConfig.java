@@ -1,6 +1,12 @@
 package ai.demo.config;
 
-public record OllamaConfig(String model, String baseUrl, int contextWindow, double repeatPenalty) {
+public record OllamaConfig(
+    String model, String baseUrl, int contextWindow, double repeatPenalty, boolean enabled) {
+
+  public OllamaConfig(String model, String baseUrl, int contextWindow, double repeatPenalty) {
+    this(model, baseUrl, contextWindow, repeatPenalty, true);
+  }
+
   public OllamaConfig {
     if (model == null || model.isBlank()) {
       throw new IllegalArgumentException("Ollama model must not be blank");

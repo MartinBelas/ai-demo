@@ -1,7 +1,9 @@
 package ai.demo.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import ai.demo.exception.ConfigurationException;
 import java.io.IOException;
@@ -25,6 +27,7 @@ class AppConfigLoaderTest {
     assertEquals(2000, config.generation().maxOutputTokens());
     assertEquals(4096, config.ollama().contextWindow());
     assertEquals(1.2, config.ollama().repeatPenalty());
+    assertTrue(config.ollama().enabled());
     assertEquals(AppInterface.CONSOLE, config.appInterface());
     assertEquals(8080, config.server().port());
   }
@@ -53,6 +56,26 @@ class AppConfigLoaderTest {
       case "PORT" -> "9090";
       default -> null;
     };
+  }
+
+  @Test
+  void shouldOverrideOllamaAvailabilityFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "OLLAMA_ENABLED".equals(key) ? "false" : null);
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid-openai.properties");
+
+    assertFalse(config.ollama().enabled());
+  }
+
+  @Test
+  void shouldRejectDisabledSelectedOllamaProvider() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "OLLAMA_ENABLED".equals(key) ? "false" : null);
+
+    assertThrows(
+        ConfigurationException.class,
+        () -> environmentLoader.loadFromResource("app-config/valid.properties"));
   }
 
   @Test

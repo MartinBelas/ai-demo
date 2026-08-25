@@ -50,6 +50,9 @@ public record AppConfig(
     if (provider == LlmProvider.OLLAMA && ollama == null) {
       throw new IllegalArgumentException("ollama configuration is required for provider OLLAMA");
     }
+    if (provider == LlmProvider.OLLAMA && !ollama.enabled()) {
+      throw new IllegalArgumentException("provider OLLAMA must be enabled when selected");
+    }
     if (provider == LlmProvider.OPENAI && openAi == null) {
       throw new IllegalArgumentException("openAi configuration is required for provider OPENAI");
     }

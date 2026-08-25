@@ -50,11 +50,27 @@ class LlmClientFactoryTest {
   @Test
   void shouldRejectMissingOpenAiApiKey() {
     var factory = new LlmClientFactory(mock(HttpTransport.class), new ObjectMapper(), key -> null);
+    AppConfig config = openAiConfig();
 
     ConfigurationException exception =
-        assertThrows(ConfigurationException.class, () -> factory.create(openAiConfig()));
+        assertThrows(ConfigurationException.class, () -> factory.create(config));
 
     assertTrue(exception.getMessage().contains("$env:OPENAI_API_KEY='your-api-key'"));
+  }
+
+  @Test
+  void shouldRejectDisabledOllamaProvider() {
+    var factory =
+        new LlmClientFactory(mock(HttpTransport.class), new ObjectMapper(), key -> "secret");
+    AppConfig config =
+        new AppConfig(
+            LlmProvider.OPENAI,
+            new GenerationConfig(0.4, 300, "Be helpful."),
+            new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18, false),
+            new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+            Path.of("conversation.json"));
+
+    assertThrows(ConfigurationException.class, () -> factory.create(config, LlmProvider.OLLAMA));
   }
 
   private AppConfig ollamaConfig() {

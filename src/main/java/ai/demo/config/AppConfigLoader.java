@@ -124,7 +124,20 @@ public final class AppConfigLoader {
         requiredProperty(properties, "ollama.model"),
         requiredProperty(properties, "ollama.base-url"),
         requiredInt(properties, "ollama.context-window"),
-        requiredDouble(properties, "ollama.repeat-penalty"));
+        requiredDouble(properties, "ollama.repeat-penalty"),
+        ollamaEnabled(properties));
+  }
+
+  private boolean ollamaEnabled(Properties properties) {
+    String environmentValue = environment.apply("OLLAMA_ENABLED");
+    if (environmentValue != null && !environmentValue.isBlank()) {
+      return parseBoolean(environmentValue, "OLLAMA_ENABLED");
+    }
+    String configuredValue = properties.getProperty("ollama.enabled");
+    if (configuredValue == null || configuredValue.isBlank()) {
+      return true;
+    }
+    return parseBoolean(configuredValue, "ollama.enabled");
   }
 
   private OpenAiConfig loadOpenAi(Properties properties) {
@@ -188,5 +201,15 @@ public final class AppConfigLoader {
     } catch (NumberFormatException e) {
       throw new ConfigurationException("Property '" + key + "' must be a valid number", e);
     }
+  }
+
+  private boolean parseBoolean(String value, String key) {
+    if ("true".equalsIgnoreCase(value)) {
+      return true;
+    }
+    if ("false".equalsIgnoreCase(value)) {
+      return false;
+    }
+    throw new ConfigurationException("Property '" + key + "' must be true or false");
   }
 }

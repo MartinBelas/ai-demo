@@ -10,18 +10,18 @@ import ai.demo.config.LlmProvider;
 import ai.demo.exception.ConfigurationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.EnumMap;
-import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /** Creates the configured provider adapter without leaking provider selection into services. */
 public final class LlmClientFactory {
 
   private final HttpTransport transport;
   private final ObjectMapper objectMapper;
-  private final Function<String, String> environment;
+  private final UnaryOperator<String> environment;
 
   public LlmClientFactory(
-      HttpTransport transport, ObjectMapper objectMapper, Function<String, String> environment) {
+      HttpTransport transport, ObjectMapper objectMapper, UnaryOperator<String> environment) {
     this.transport = transport;
     this.objectMapper = objectMapper;
     this.environment = environment;
@@ -33,7 +33,7 @@ public final class LlmClientFactory {
 
   public LlmClient create(AppConfig config, LlmProvider provider) {
     return switch (provider) {
-      case OLLAMA -> new OllamaClient(config, transport, objectMapper);
+      case OLLAMA -> createOllama(config);
       case OPENAI -> createOpenAi(config);
       case GROQ -> createGroq(config);
       case GEMINI -> createGemini(config);
@@ -42,7 +42,7 @@ public final class LlmClientFactory {
 
   public SwitchableLlmClient createSwitchable(AppConfig config) {
     EnumMap<LlmProvider, Supplier<LlmClient>> factories = new EnumMap<>(LlmProvider.class);
-    if (config.ollama() != null) {
+    if (config.ollama() != null && config.ollama().enabled()) {
       factories.put(LlmProvider.OLLAMA, () -> create(config, LlmProvider.OLLAMA));
     }
     if (config.openAi() != null) {
@@ -55,6 +55,13 @@ public final class LlmClientFactory {
       factories.put(LlmProvider.GEMINI, () -> create(config, LlmProvider.GEMINI));
     }
     return new SwitchableLlmClient(config.provider(), factories);
+  }
+
+  private LlmClient createOllama(AppConfig config) {
+    if (config.ollama() == null || !config.ollama().enabled()) {
+      throw new ConfigurationException("Provider OLLAMA is disabled");
+    }
+    return new OllamaClient(config, transport, objectMapper);
   }
 
   private LlmClient createGroq(AppConfig config) {

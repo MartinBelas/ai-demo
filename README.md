@@ -162,6 +162,7 @@ llm.max-output-tokens=1000
 llm.system-message=You are a helpful AI assistant. Be concise and clear. If you are uncertain, state it directly.
 
 ollama.model=qwen3:4b
+ollama.enabled=true
 ollama.base-url=http://localhost:11434
 ollama.context-window=4096
 ollama.repeat-penalty=1.18
@@ -200,6 +201,10 @@ The OpenAPI-first contract is maintained in `src/main/resources/openapi.yaml`. T
 serves the same document through `/openapi.yaml`, and automated tests validate its structure.
 
 All configured Ollama generation options are forwarded inside the provider's `options` object.
+
+`ollama.enabled` controls whether Ollama is available in the current deployment. The
+`OLLAMA_ENABLED` environment variable overrides the property. Local runs default to enabled;
+Cloud Run must set `OLLAMA_ENABLED=false`.
 
 `llm.provider` selects the startup provider. Each provider has its own model. To use or switch to OpenAI, provide the API key through the environment variable named by `openai.api-key-env`. Never store API keys in the properties file. The OpenAI client is created lazily, so a missing key does not prevent startup with Ollama.
 
@@ -350,6 +355,7 @@ MVP – Public demo target (two weeks)
 ✓ Define MVP scope, limits, and acceptance criteria in PRD
 → Add local and cloud runtime configuration
 ✓ Add HTTP mode and health endpoint
+✓ Add configurable Ollama availability
 ✓ Add OpenAPI specification foundation
 → Add stateless REST API
 → Add SSE chat streaming and REST tests
