@@ -63,7 +63,7 @@ public class App {
       return 1;
     }
 
-    if (config.appInterface() == AppInterface.SERVER) {
+    if (config.appInterface() == AppInterface.HTTP) {
       return startServer(config);
     }
 

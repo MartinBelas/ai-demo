@@ -8,9 +8,9 @@ import org.junit.jupiter.api.Test;
 class AppInterfaceTest {
 
   @Test
-  void shouldDefaultToConsoleAndParseServer() {
+  void shouldDefaultToConsoleAndParseHttp() {
     assertEquals(AppInterface.CONSOLE, AppInterface.from(null));
-    assertEquals(AppInterface.SERVER, AppInterface.from(" server "));
+    assertEquals(AppInterface.HTTP, AppInterface.from(" http "));
   }
 
   @Test

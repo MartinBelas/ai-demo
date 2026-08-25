@@ -183,13 +183,13 @@ conversation.file=conversation.json
 
 Invalid or missing configuration results in a `ConfigurationException`.
 
-`app.interface` selects `console` or `server`. Server mode exposes `GET /api/health` and uses
+`app.interface` selects `console` or `http`. HTTP mode exposes `GET /api/health` and uses
 `server.port` locally. The `APP_INTERFACE` and `PORT` environment variables override these values,
 which allows the same configuration and artifact to run on Cloud Run.
 
 ## HTTP API
 
-Server mode currently exposes:
+HTTP mode currently exposes:
 
 ```text
 GET /api/health
@@ -349,7 +349,7 @@ Covered areas include:
 MVP – Public demo target (two weeks)
 ✓ Define MVP scope, limits, and acceptance criteria in PRD
 → Add local and cloud runtime configuration
-✓ Add server mode and health endpoint
+✓ Add HTTP mode and health endpoint
 ✓ Add OpenAPI specification foundation
 → Add stateless REST API
 → Add SSE chat streaming and REST tests

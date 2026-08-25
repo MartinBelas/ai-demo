@@ -77,13 +77,13 @@ The application uses one codebase and one application image. Capabilities are co
 Required runtime configuration includes:
 
 ```properties
-app.interface=console|server
+app.interface=console|http
 ollama.enabled=true|false
 rag.enabled=true|false
 demo.limits.enabled=true|false
 ```
 
-Local execution may enable Ollama in either console or server mode. The Cloud Run deployment must set `app.interface=server`, disable Ollama, and enable demo limits.
+Local execution may enable Ollama in either console or HTTP mode. The Cloud Run deployment must set `app.interface=http`, disable Ollama, and enable demo limits.
 
 `GET /api/providers` exposes only providers available in the current deployment. A request for a disabled provider returns an application-specific client error. The cloud web interface must not display Ollama.
 

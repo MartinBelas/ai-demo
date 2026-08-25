@@ -5,7 +5,7 @@ import java.util.Locale;
 /** User interface started by the application. */
 public enum AppInterface {
   CONSOLE,
-  SERVER;
+  HTTP;
 
   public static AppInterface from(String value) {
     if (value == null || value.isBlank()) {

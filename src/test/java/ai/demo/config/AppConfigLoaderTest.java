@@ -31,9 +31,9 @@ class AppConfigLoaderTest {
 
   @Test
   void shouldLoadServerConfiguration() throws IOException {
-    AppConfig config = loader.loadFromResource("app-config/valid-server.properties");
+    AppConfig config = loader.loadFromResource("app-config/valid-http.properties");
 
-    assertEquals(AppInterface.SERVER, config.appInterface());
+    assertEquals(AppInterface.HTTP, config.appInterface());
     assertEquals(7070, config.server().port());
   }
 
@@ -43,13 +43,13 @@ class AppConfigLoaderTest {
 
     AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
 
-    assertEquals(AppInterface.SERVER, config.appInterface());
+    assertEquals(AppInterface.HTTP, config.appInterface());
     assertEquals(9090, config.server().port());
   }
 
   private String serverEnvironment(String key) {
     return switch (key) {
-      case "APP_INTERFACE" -> "server";
+      case "APP_INTERFACE" -> "http";
       case "PORT" -> "9090";
       default -> null;
     };
