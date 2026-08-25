@@ -326,6 +326,23 @@ Covered areas include:
 
 ## Roadmap
 
+MVP – Public demo target (two weeks)
+✓ Define MVP scope, limits, and acceptance criteria in PRD
+→ Add local and cloud runtime configuration
+→ Add stateless REST API and health endpoint
+→ Add SSE chat streaming and REST tests
+→ Add Bruno API collection
+→ Add simple web chat with browser-local history
+→ Add provider-independent embedding and vector store abstractions
+→ Add TXT and Markdown ingestion, chunking, and retrieval
+→ Add RAG context assembly and source attribution
+→ Add Firestore-backed demo quotas and LLM limits
+→ Add public aggregate metrics endpoint and status page
+→ Add Dockerfile and Docker Compose with optional Ollama
+→ Add end-to-end and deployment smoke tests
+→ Deploy the Docker image to Google Cloud Run
+→ Complete MVP documentation and release verification
+
 Phase 1 – Core LLM application
 ✓ LLM client abstraction
 ✓ Ollama integration
@@ -348,9 +365,9 @@ Phase 1 – Core LLM application
 ✓ Configuration validation tests
 ✓ Prompt composition tests
 ✓ Prompt template tests
-→ Forward all configured generation options to Ollama
-→ Additional LLM providers
-→ Provider selection through configuration
+✓ Forward all configured generation options to Ollama
+✓ Additional LLM providers
+✓ Provider selection through configuration
 → Ollama integration tests
 
 Phase 2 – Conversation & observability
@@ -384,7 +401,7 @@ Phase 2 – Conversation & observability
 → Tracing
 → Token usage analytics
 → Latency + cost dashboards
-→ End-to-end console tests
+✓ End-to-end console tests
 
 Phase 3 – Agent
 ✓ Agent abstraction
