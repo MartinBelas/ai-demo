@@ -6,11 +6,23 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
+import java.util.function.UnaryOperator;
 
 /** Loads application configuration from {@code application.properties}. */
 public final class AppConfigLoader {
 
   private static final String CONFIG_FILE = "application.properties";
+  private static final int DEFAULT_SERVER_PORT = 8080;
+
+  private final UnaryOperator<String> environment;
+
+  public AppConfigLoader() {
+    this(System::getenv);
+  }
+
+  AppConfigLoader(UnaryOperator<String> environment) {
+    this.environment = environment;
+  }
 
   /**
    * Loads the application configuration.
@@ -53,6 +65,8 @@ public final class AppConfigLoader {
       OpenAiConfig openAi = loadOpenAi(properties);
       GroqConfig groq = loadGroq(properties);
       GeminiConfig gemini = loadGemini(properties);
+      AppInterface appInterface = appInterface(properties);
+      ServerConfig server = new ServerConfig(serverPort(properties));
       return new AppConfig(
           provider,
           generation,
@@ -60,10 +74,32 @@ public final class AppConfigLoader {
           openAi,
           groq,
           gemini,
-          Path.of(requiredProperty(properties, "conversation.file")));
+          Path.of(requiredProperty(properties, "conversation.file")),
+          appInterface,
+          server);
     } catch (IllegalArgumentException e) {
       throw new ConfigurationException(e.getMessage(), e);
     }
+  }
+
+  private AppInterface appInterface(Properties properties) {
+    String environmentInterface = environment.apply("APP_INTERFACE");
+    if (environmentInterface != null && !environmentInterface.isBlank()) {
+      return AppInterface.from(environmentInterface);
+    }
+    return AppInterface.from(properties.getProperty("app.interface"));
+  }
+
+  private int serverPort(Properties properties) {
+    String environmentPort = environment.apply("PORT");
+    if (environmentPort != null && !environmentPort.isBlank()) {
+      return parseInt(environmentPort, "PORT");
+    }
+    String configuredPort = properties.getProperty("server.port");
+    if (configuredPort == null || configuredPort.isBlank()) {
+      return DEFAULT_SERVER_PORT;
+    }
+    return parseInt(configuredPort, "server.port");
   }
 
   private GroqConfig loadGroq(Properties properties) {
@@ -130,6 +166,11 @@ public final class AppConfigLoader {
   private int requiredInt(Properties properties, String key) {
 
     String value = requiredProperty(properties, key);
+
+    return parseInt(value, key);
+  }
+
+  private int parseInt(String value, String key) {
 
     try {
       return Integer.parseInt(value);

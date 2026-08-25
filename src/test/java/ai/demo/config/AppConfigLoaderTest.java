@@ -25,6 +25,34 @@ class AppConfigLoaderTest {
     assertEquals(2000, config.generation().maxOutputTokens());
     assertEquals(4096, config.ollama().contextWindow());
     assertEquals(1.2, config.ollama().repeatPenalty());
+    assertEquals(AppInterface.CONSOLE, config.appInterface());
+    assertEquals(8080, config.server().port());
+  }
+
+  @Test
+  void shouldLoadServerConfiguration() throws IOException {
+    AppConfig config = loader.loadFromResource("app-config/valid-server.properties");
+
+    assertEquals(AppInterface.SERVER, config.appInterface());
+    assertEquals(7070, config.server().port());
+  }
+
+  @Test
+  void shouldOverrideServerConfigurationFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader = new AppConfigLoader(this::serverEnvironment);
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
+
+    assertEquals(AppInterface.SERVER, config.appInterface());
+    assertEquals(9090, config.server().port());
+  }
+
+  private String serverEnvironment(String key) {
+    return switch (key) {
+      case "APP_INTERFACE" -> "server";
+      case "PORT" -> "9090";
+      default -> null;
+    };
   }
 
   @Test

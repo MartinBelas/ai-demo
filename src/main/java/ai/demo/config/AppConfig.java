@@ -10,7 +10,29 @@ public record AppConfig(
     OpenAiConfig openAi,
     GroqConfig groq,
     GeminiConfig gemini,
-    Path conversationFile) {
+    Path conversationFile,
+    AppInterface appInterface,
+    ServerConfig server) {
+
+  public AppConfig(
+      LlmProvider provider,
+      GenerationConfig generation,
+      OllamaConfig ollama,
+      OpenAiConfig openAi,
+      GroqConfig groq,
+      GeminiConfig gemini,
+      Path conversationFile) {
+    this(
+        provider,
+        generation,
+        ollama,
+        openAi,
+        groq,
+        gemini,
+        conversationFile,
+        AppInterface.CONSOLE,
+        new ServerConfig(8080));
+  }
 
   public AppConfig(
       LlmProvider provider,
@@ -39,6 +61,12 @@ public record AppConfig(
     }
     if (conversationFile == null) {
       throw new IllegalArgumentException("conversationFile must not be null");
+    }
+    if (appInterface == null) {
+      throw new IllegalArgumentException("appInterface must not be null");
+    }
+    if (server == null) {
+      throw new IllegalArgumentException("server must not be null");
     }
   }
 

@@ -35,6 +35,7 @@ Follow these layers:
 ```text
 ai.demo
 ├── agent          Agent orchestration and tool calling
+├── api            HTTP server, REST endpoints, and SSE transport
 ├── client         External LLM provider communication
 ├── config         Application configuration
 ├── console        User interface and commands
@@ -46,6 +47,14 @@ ai.demo
 ```
 
 ## Layer responsibilities
+
+### api
+
+Contains the embedded HTTP server, provider-independent REST models, endpoint handlers, and SSE
+transport.
+
+API handlers may use application services. They must not depend directly on concrete LLM providers,
+persistence implementations, or provider-specific DTOs.
 
 ### agent
 

@@ -6,6 +6,7 @@ import ai.demo.agent.DefaultAgentLlmGateway;
 import ai.demo.agent.ToolCallingAgent;
 import ai.demo.agent.tool.CalculatorTool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
+import ai.demo.api.ApiServer;
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmClientFactory;
 import ai.demo.client.LoggingLlmClient;
@@ -14,12 +15,14 @@ import ai.demo.client.http.HttpTransport;
 import ai.demo.client.http.JdkHttpTransport;
 import ai.demo.config.AppConfig;
 import ai.demo.config.AppConfigLoader;
+import ai.demo.config.AppInterface;
 import ai.demo.config.EnvironmentConfigLoader;
 import ai.demo.console.ConsoleChat;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.ServerException;
 import ai.demo.persistence.ConversationRepository;
 import ai.demo.persistence.FileConversationRepository;
 import ai.demo.prompt.PromptComposer;
@@ -60,6 +63,10 @@ public class App {
       return 1;
     }
 
+    if (config.appInterface() == AppInterface.SERVER) {
+      return startServer(config);
+    }
+
     HttpClient httpClient = createHttpClient();
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -91,6 +98,19 @@ public class App {
     addShutdownHook(httpClient);
 
     return startConsole(consoleChat);
+  }
+
+  private int startServer(AppConfig config) {
+    try (ApiServer server = new ApiServer(config.server().port())) {
+      server.start();
+      Runtime.getRuntime().addShutdownHook(new Thread(server::close));
+      log.info("HTTP server started on port {}", server.port());
+      server.awaitShutdown();
+      return 0;
+    } catch (ServerException e) {
+      log.error("HTTP server error: {}", e.getMessage(), e);
+      return 3;
+    }
   }
 
   private AppConfig loadConfig() throws IOException {

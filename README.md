@@ -29,6 +29,7 @@ The supported providers are local Ollama, OpenAI, GroqCloud, and Gemini API. App
 ```text
 ai.demo
 ├── agent        Agent orchestration and tool calling
+├── api          HTTP server, REST endpoints, and SSE transport
 ├── client       External LLM provider communication
 ├── config       Application configuration
 ├── console      Console user interface and commands
@@ -152,6 +153,9 @@ src/main/resources/application.properties
 Example:
 
 ```properties
+app.interface=console
+server.port=8080
+
 llm.provider=ollama
 llm.temperature=0.4
 llm.max-output-tokens=1000
@@ -178,6 +182,10 @@ conversation.file=conversation.json
 ```
 
 Invalid or missing configuration results in a `ConfigurationException`.
+
+`app.interface` selects `console` or `server`. Server mode exposes `GET /api/health` and uses
+`server.port` locally. The `APP_INTERFACE` and `PORT` environment variables override these values,
+which allows the same configuration and artifact to run on Cloud Run.
 
 All configured Ollama generation options are forwarded inside the provider's `options` object.
 
@@ -329,7 +337,8 @@ Covered areas include:
 MVP – Public demo target (two weeks)
 ✓ Define MVP scope, limits, and acceptance criteria in PRD
 → Add local and cloud runtime configuration
-→ Add stateless REST API and health endpoint
+✓ Add server mode and health endpoint
+→ Add stateless REST API
 → Add SSE chat streaming and REST tests
 → Add Bruno API collection
 → Add simple web chat with browser-local history

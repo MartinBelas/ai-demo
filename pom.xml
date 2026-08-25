@@ -16,6 +16,7 @@
         <jackson.version>2.22.1</jackson.version>
         <slf4j.version>2.0.18</slf4j.version>
         <logback.version>1.5.38</logback.version>
+        <javalin.version>7.2.3</javalin.version>
         <junit.version>6.1.1</junit.version>
         <mockito.version>5.23.0</mockito.version>
         <compiler.plugin.version>3.15.0</compiler.plugin.version>
@@ -38,6 +39,11 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin</artifactId>
+            <version>${javalin.version}</version>
         </dependency>
 
         <dependency>
