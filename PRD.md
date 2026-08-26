@@ -95,7 +95,7 @@ Local execution may enable Ollama in either console or HTTP mode. The Cloud Run 
 - The REST streaming endpoint uses SSE.
 - Content and thinking chunks are processed in their received order.
 - Empty provider chunks are ignored.
-- The server sends typed SSE events for content, thinking, completion, and errors.
+- The server sends typed SSE events named `content`, `thinking`, `completion`, and `error`.
 - A successful console answer is added to the local conversation and persisted.
 - The cloud server does not persist conversation history.
 - Provider failures produce an application-specific LLM exception and a safe API error.

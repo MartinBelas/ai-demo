@@ -1,11 +1,17 @@
 package ai.demo.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ai.demo.agent.AgentEvent;
+import ai.demo.agent.ContentEvent;
+import ai.demo.agent.ThinkingEvent;
 import ai.demo.client.TokenUsage;
 import ai.demo.config.AppConfig;
 import ai.demo.config.GenerationConfig;
@@ -15,6 +21,7 @@ import ai.demo.config.OllamaConfig;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatResponse;
+import ai.demo.model.chat.Conversation;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -24,9 +31,18 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class ApiServerTest {
+
+  private static final String APPLICATION_JSON = "application/json";
+  private static final String CONTENT_TYPE = "Content-Type";
+  private static final String EVENT_STREAM = "text/event-stream";
+  private static final String LOCAL_SERVER = "http://localhost:";
+  private static final String OLLAMA_MODEL = "qwen3:4b";
+  private static final String PROVIDER_FAILURE_DETAILS = "Secret provider details";
+  private static final String SAFE_LLM_ERROR = "Unable to communicate with the AI model.";
 
   @Test
   void shouldExposeHealthEndpoint() throws IOException, InterruptedException {
@@ -35,13 +51,13 @@ class ApiServerTest {
       server.start();
 
       HttpRequest request =
-          HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/api/health"))
+          HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/health"))
               .GET()
               .build();
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
-      assertEquals("application/json", response.headers().firstValue("Content-Type").orElseThrow());
+      assertEquals(APPLICATION_JSON, response.headers().firstValue(CONTENT_TYPE).orElseThrow());
       assertEquals("{\"status\":\"UP\"}", response.body());
 
       server.close();
@@ -56,13 +72,13 @@ class ApiServerTest {
       server.start();
 
       HttpRequest request =
-          HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/openapi.yaml"))
+          HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/openapi.yaml"))
               .GET()
               .build();
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
-      assertEquals("application/yaml", response.headers().firstValue("Content-Type").orElseThrow());
+      assertEquals("application/yaml", response.headers().firstValue(CONTENT_TYPE).orElseThrow());
       try (var inputStream = getClass().getResourceAsStream("/openapi.yaml")) {
         assertNotNull(inputStream);
         assertEquals(
@@ -77,7 +93,7 @@ class ApiServerTest {
         new AppConfig(
             LlmProvider.OLLAMA,
             new GenerationConfig(0.4, 1000, "Be helpful."),
-            new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18),
+            new OllamaConfig(OLLAMA_MODEL, "http://localhost:11434", 4096, 1.18),
             null,
             Path.of("conversation.json"));
     LlmProviderAvailability availability = new LlmProviderAvailability(config, key -> null);
@@ -86,15 +102,16 @@ class ApiServerTest {
       server.start();
 
       HttpRequest request =
-          HttpRequest.newBuilder(
-                  URI.create("http://localhost:" + server.port() + "/api/llm/providers"))
+          HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/llm/providers"))
               .GET()
               .build();
       HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
-      assertEquals("application/json", response.headers().firstValue("Content-Type").orElseThrow());
-      assertEquals("{\"providers\":[{\"id\":\"OLLAMA\",\"model\":\"qwen3:4b\"}]}", response.body());
+      assertEquals(APPLICATION_JSON, response.headers().firstValue(CONTENT_TYPE).orElseThrow());
+      assertEquals(
+          "{\"providers\":[{\"id\":\"OLLAMA\",\"model\":\"" + OLLAMA_MODEL + "\"}]}",
+          response.body());
     }
   }
 
@@ -104,7 +121,7 @@ class ApiServerTest {
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
     when(chatService.ask(org.mockito.ArgumentMatchers.any()))
-        .thenReturn(new ChatResponse("Hello!", "qwen3:4b", new TokenUsage(12, 4), 25));
+        .thenReturn(new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25));
 
     try (ApiServer server =
             new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
@@ -122,7 +139,9 @@ class ApiServerTest {
 
       assertEquals(200, response.statusCode());
       assertEquals(
-          "{\"answer\":\"Hello!\",\"model\":\"qwen3:4b\",\"tokenUsage\":{"
+          "{\"answer\":\"Hello!\",\"model\":\""
+              + OLLAMA_MODEL
+              + "\",\"tokenUsage\":{"
               + "\"promptTokens\":12,\"completionTokens\":4,\"totalTokens\":16},\"durationMs\":25}",
           response.body());
     }
@@ -179,7 +198,7 @@ class ApiServerTest {
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
     when(chatService.ask(org.mockito.ArgumentMatchers.any()))
-        .thenThrow(new LlmCommunicationException("Secret provider details"));
+        .thenThrow(new LlmCommunicationException(PROVIDER_FAILURE_DETAILS));
     try (ApiServer server =
             new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
         HttpClient client = HttpClient.newHttpClient()) {
@@ -192,15 +211,87 @@ class ApiServerTest {
 
       assertEquals(502, response.statusCode());
       assertEquals(
-          "{\"code\":\"LLM_COMMUNICATION_ERROR\",\"message\":"
-              + "\"Unable to communicate with the AI model.\"}",
+          "{\"code\":\"LLM_COMMUNICATION_ERROR\",\"message\":" + "\"" + SAFE_LLM_ERROR + "\"}",
           response.body());
     }
   }
 
+  @Test
+  void shouldStreamTypedChatEventsInOrder() throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenAnswer(
+            invocation -> {
+              Consumer<AgentEvent> eventConsumer = invocation.getArgument(1);
+              eventConsumer.accept(new ThinkingEvent("Checking"));
+              eventConsumer.accept(new ContentEvent("Hello!"));
+              return new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25);
+            });
+
+    try (ApiServer server =
+            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(
+              streamingChatRequest(
+                  server, "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}"),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(200, response.statusCode());
+      assertTrue(
+          response.headers().firstValue(CONTENT_TYPE).orElseThrow().startsWith(EVENT_STREAM));
+      String body = response.body();
+      int thinking = body.indexOf("event: thinking\ndata: {\"content\":\"Checking\"}");
+      int content = body.indexOf("event: content\ndata: {\"content\":\"Hello!\"}");
+      int completion = body.indexOf("event: completion\ndata: {\"model\":\"" + OLLAMA_MODEL + "\"");
+      assertTrue(thinking >= 0);
+      assertTrue(content > thinking);
+      assertTrue(completion > content);
+    }
+  }
+
+  @Test
+  void shouldStreamSafeTerminalErrorWhenLlmFails() throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenThrow(new LlmCommunicationException(PROVIDER_FAILURE_DETAILS));
+
+    try (ApiServer server =
+            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(
+              streamingChatRequest(
+                  server, "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}"),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(200, response.statusCode());
+      assertTrue(response.body().contains("event: error"));
+      assertTrue(response.body().contains("\"code\":\"LLM_COMMUNICATION_ERROR\""));
+      assertTrue(response.body().contains(SAFE_LLM_ERROR));
+      assertFalse(response.body().contains(PROVIDER_FAILURE_DETAILS));
+    }
+  }
+
   private HttpRequest chatRequest(ApiServer server, String body) {
-    return HttpRequest.newBuilder(URI.create("http://localhost:" + server.port() + "/api/chat"))
-        .header("Content-Type", "application/json")
+    return HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/chat"))
+        .header(CONTENT_TYPE, APPLICATION_JSON)
+        .POST(HttpRequest.BodyPublishers.ofString(body))
+        .build();
+  }
+
+  private HttpRequest streamingChatRequest(ApiServer server, String body) {
+    return HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/chat/stream"))
+        .header(CONTENT_TYPE, APPLICATION_JSON)
+        .header("Accept", EVENT_STREAM)
         .POST(HttpRequest.BodyPublishers.ofString(body))
         .build();
   }

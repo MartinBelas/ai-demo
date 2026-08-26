@@ -1,0 +1,41 @@
+meta {
+  name: Stream Chat Response
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/chat/stream
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: text/event-stream
+}
+
+body:json {
+  {
+    "provider": "{{llmProvider}}",
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is Spring Framework?"
+      }
+    ]
+  }
+}
+
+tests {
+  test("returns an SSE stream", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getHeader("content-type")).to.contain("text/event-stream");
+  });
+
+  test("ends with a completion or error event", function () {
+    const body = res.getBody();
+    expect(body).to.satisfy(function (value) {
+      return value.includes("event: completion") || value.includes("event: error");
+    });
+  });
+}

@@ -11,13 +11,14 @@ import io.javalin.Javalin;
 public final class ApiServer implements AutoCloseable {
 
   private static final String HEALTH_RESPONSE = "{\"status\":\"UP\"}";
-  private static final String JSON_CONTENT_TYPE = "application/json";
+  private static final String JSON_CONTENT_TYPE = ApiResponseWriter.JSON_CONTENT_TYPE;
 
   private final int configuredPort;
   private final String openApiDocument;
   private final LlmProviderAvailability providerAvailability;
   private final ObjectMapper objectMapper;
   private final ChatEndpoint chatEndpoint;
+  private final StreamingChatEndpoint streamingChatEndpoint;
   private Javalin app;
 
   public ApiServer(int configuredPort) {
@@ -39,10 +40,15 @@ public final class ApiServer implements AutoCloseable {
     this.openApiDocument = OpenApiDocument.load();
     this.providerAvailability = providerAvailability;
     this.objectMapper = objectMapper;
-    this.chatEndpoint =
-        chatServiceResolver == null
-            ? null
-            : new ChatEndpoint(chatServiceResolver, defaultProvider, objectMapper);
+    if (chatServiceResolver == null) {
+      this.chatEndpoint = null;
+      this.streamingChatEndpoint = null;
+    } else {
+      ChatRequestParser requestParser = new ChatRequestParser(defaultProvider, objectMapper);
+      this.chatEndpoint = new ChatEndpoint(chatServiceResolver, requestParser, objectMapper);
+      this.streamingChatEndpoint =
+          new StreamingChatEndpoint(chatServiceResolver, requestParser, objectMapper);
+    }
   }
 
   public void start() {
@@ -66,7 +72,8 @@ public final class ApiServer implements AutoCloseable {
                                   context
                                       .contentType(JSON_CONTENT_TYPE)
                                       .result(llmProvidersResponse()))
-                          .post("/api/chat", this::handleChat))
+                          .post("/api/chat", this::handleChat)
+                          .post("/api/chat/stream", this::handleStreamingChat))
               .start(configuredPort);
     } catch (RuntimeException e) {
       throw new ServerException("Unable to start HTTP server", e);
@@ -75,13 +82,23 @@ public final class ApiServer implements AutoCloseable {
 
   private void handleChat(io.javalin.http.Context context) {
     if (chatEndpoint == null) {
-      context
-          .status(503)
-          .contentType(JSON_CONTENT_TYPE)
-          .result("{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"Chat is not available.\"}");
+      writeServiceUnavailable(context);
       return;
     }
     chatEndpoint.handle(context);
+  }
+
+  private void handleStreamingChat(io.javalin.http.Context context) {
+    if (streamingChatEndpoint == null) {
+      writeServiceUnavailable(context);
+      return;
+    }
+    streamingChatEndpoint.handle(context);
+  }
+
+  private void writeServiceUnavailable(io.javalin.http.Context context) {
+    ApiResponseWriter.writeError(
+        context, 503, "SERVICE_UNAVAILABLE", "Chat is not available.", objectMapper);
   }
 
   private String llmProvidersResponse() {

@@ -40,5 +40,10 @@ class OpenApiSpecificationTest {
     assertEquals(List.of("Chat"), chatOperation.getTags());
     assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("ChatRequest"));
     assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("ChatResponse"));
+    var streamingOperation = result.getOpenAPI().getPaths().get("/api/chat/stream").getPost();
+    assertNotNull(streamingOperation);
+    assertEquals("streamChatResponse", streamingOperation.getOperationId());
+    assertEquals(List.of("Chat"), streamingOperation.getTags());
+    assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("SseCompletionEvent"));
   }
 }

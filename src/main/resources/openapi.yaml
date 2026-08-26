@@ -88,6 +88,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/chat/stream:
+    post:
+      tags:
+        - Chat
+      summary: Stream a stateless chat response
+      description: |
+        Returns Server-Sent Events named `thinking`, `content`, `completion`, and `error`.
+        The client supplies the complete bounded conversation context in the request body.
+      operationId: streamChatResponse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: Typed SSE events followed by completion or a terminal error.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                completed:
+                  summary: Successful stream
+                  value: |-
+                    event: content
+                    data: {"content":"Hello!"}
+
+                    event: completion
+                    data: {"model":"qwen3:4b","tokenUsage":{"promptTokens":12,"completionTokens":4,"totalTokens":16},"durationMs":25}
+        "400":
+          description: Invalid request or unavailable LLM provider before streaming starts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -200,6 +237,31 @@ components:
           minimum: 0
         totalTokens:
           type: integer
+          minimum: 0
+    SseTextEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - content
+      properties:
+        content:
+          type: string
+    SseCompletionEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - model
+        - tokenUsage
+        - durationMs
+      properties:
+        model:
+          type: string
+          minLength: 1
+        tokenUsage:
+          $ref: "#/components/schemas/TokenUsage"
+        durationMs:
+          type: integer
+          format: int64
           minimum: 0
     ErrorResponse:
       type: object

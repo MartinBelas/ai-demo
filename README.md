@@ -196,6 +196,7 @@ HTTP mode currently exposes:
 GET /api/health
 GET /api/llm/providers
 POST /api/chat
+POST /api/chat/stream
 GET /openapi.yaml
 ```
 
@@ -206,6 +207,12 @@ serves the same document through `/openapi.yaml`, and automated tests validate i
 `ASSISTANT` messages, ending with a `USER` message. The optional `provider` field selects an
 available LLM provider; when omitted, the configured `llm.provider` is used. The server does not
 save HTTP conversation history.
+
+`POST /api/chat/stream` accepts the same request and returns `text/event-stream`. It emits typed
+`thinking`, `content`, `completion`, and terminal `error` events. Because the request uses POST,
+browser clients consume it with `fetch()` and a `ReadableStream` rather than `EventSource`.
+Thinking can arrive incrementally; the current structured agent emits final answer content after
+its decision has been validated.
 
 ### Bruno collection
 
@@ -381,7 +388,7 @@ MVP – Public demo target (two weeks)
 ✓ Add OpenAPI specification foundation
 ✓ Add LLM provider availability endpoint
 ✓ Add stateless chat REST API
-→ Add SSE chat streaming and REST tests
+✓ Add SSE chat streaming and REST tests
 ✓ Add Bruno API collection foundation
 → Add simple web chat with browser-local history
 → Add provider-independent embedding and vector store abstractions
