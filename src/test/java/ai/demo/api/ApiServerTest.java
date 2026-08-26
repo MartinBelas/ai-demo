@@ -162,7 +162,10 @@ class ApiServerTest {
 
       assertEquals(400, response.statusCode());
       assertEquals(
-          "{\"code\":\"INVALID_REQUEST\",\"message\":\"Invalid chat request.\"}", response.body());
+          "{\"code\":\"INVALID_REQUEST\",\"message\":\"Invalid chat request.\","
+              + "\"details\":[{\"field\":\"messages\",\"message\":"
+              + "\"At least one chat message is required.\"}]}",
+          response.body());
       verifyNoInteractions(resolver);
     }
   }
@@ -189,6 +192,27 @@ class ApiServerTest {
           "{\"code\":\"LLM_PROVIDER_UNAVAILABLE\",\"message\":"
               + "\"The selected LLM provider is not available.\"}",
           response.body());
+    }
+  }
+
+  @Test
+  void shouldIdentifyInvalidMessageRole() throws IOException, InterruptedException {
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    try (ApiServer server =
+            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(
+              chatRequest(
+                  server, "{\"messages\":[{\"role\":\"SYSTEM\",\"content\":\"Be helpful\"}]}"),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(400, response.statusCode());
+      assertTrue(response.body().contains("\"field\":\"messages[0].role\""));
+      assertTrue(response.body().contains("Role is invalid."));
+      verifyNoInteractions(resolver);
     }
   }
 

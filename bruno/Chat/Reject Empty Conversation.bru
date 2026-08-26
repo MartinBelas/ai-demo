@@ -25,7 +25,13 @@ tests {
   test("returns the stable validation error", function () {
     expect(res.getBody()).to.eql({
       code: "INVALID_REQUEST",
-      message: "Invalid chat request."
+      message: "Invalid chat request.",
+      details: [
+        {
+          field: "messages",
+          message: "At least one chat message is required."
+        }
+      ]
     });
   });
 }

@@ -214,6 +214,10 @@ browser clients consume it with `fetch()` and a `ReadableStream` rather than `Ev
 Thinking can arrive incrementally; the current structured agent emits final answer content after
 its decision has been validated.
 
+Non-success responses use a stable `code` and safe English `message`. Request validation errors
+also include optional `details` entries with `field` and `message` so the caller can correct its
+input; provider and internal failures do not expose their underlying details.
+
 ### Bruno collection
 
 The `bruno` directory contains requests and tests for the currently implemented HTTP API. Open

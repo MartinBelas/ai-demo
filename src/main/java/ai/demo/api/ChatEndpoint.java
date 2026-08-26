@@ -32,12 +32,12 @@ final class ChatEndpoint {
           serviceResolver.resolve(request.provider()).ask(request.conversation());
       ApiResponseWriter.write(context, 200, ApiChatResponse.from(response), objectMapper);
     } catch (ApiRequestException e) {
-      writeError(context, 400, "INVALID_REQUEST", "Invalid chat request.");
+      writeValidationError(context, e);
     } catch (ConfigurationException e) {
-      writeError(
-          context, 400, "LLM_PROVIDER_UNAVAILABLE", "The selected LLM provider is not available.");
+      log.warn("Selected LLM provider is unavailable", e);
+      writeProviderUnavailable(context);
     } catch (LlmException e) {
-      log.warn("LLM request failed: {}", e.getMessage());
+      log.warn("LLM request failed", e);
       writeError(
           context, 502, "LLM_COMMUNICATION_ERROR", "Unable to communicate with the AI model.");
     } catch (RuntimeException e) {
@@ -48,5 +48,17 @@ final class ChatEndpoint {
 
   private void writeError(Context context, int status, String code, String message) {
     ApiResponseWriter.writeError(context, status, code, message, objectMapper);
+  }
+
+  private void writeValidationError(Context context, ApiRequestException exception) {
+    ApiErrorResponse error =
+        ApiErrorResponse.withDetail(
+            "INVALID_REQUEST", "Invalid chat request.", exception.field(), exception.getMessage());
+    ApiResponseWriter.write(context, 400, error, objectMapper);
+  }
+
+  private void writeProviderUnavailable(Context context) {
+    writeError(
+        context, 400, "LLM_PROVIDER_UNAVAILABLE", "The selected LLM provider is not available.");
   }
 }

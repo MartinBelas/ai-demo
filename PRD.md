@@ -125,7 +125,9 @@ GET    /api/demo/status
 
 - REST models are provider independent.
 - REST handlers call application services and must not call provider clients directly.
-- JSON errors use a stable error code and a safe English message.
+- JSON errors use a stable error code and a safe English message. Request validation errors include
+  optional field-level `details` that help callers correct their input. Server and provider failures
+  do not expose internal details; their technical causes are logged instead.
 - Bruno files cover successful requests, validation failures, limit failures, RAG, and streaming where supported.
 - `src/main/resources/openapi.yaml` is the authoritative REST API contract.
 - The OpenAPI document is served publicly through `GET /openapi.yaml`.

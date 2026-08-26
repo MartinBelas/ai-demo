@@ -38,11 +38,11 @@ final class StreamingChatEndpoint {
       request = requestParser.parse(context.body());
       chatService = serviceResolver.resolve(request.provider());
     } catch (ApiRequestException e) {
-      writeJsonError(context, 400, "INVALID_REQUEST", "Invalid chat request.");
+      writeValidationError(context, e);
       return;
     } catch (ConfigurationException e) {
-      writeJsonError(
-          context, 400, "LLM_PROVIDER_UNAVAILABLE", "The selected LLM provider is not available.");
+      log.warn("Selected LLM provider is unavailable", e);
+      writeProviderUnavailable(context);
       return;
     }
 
@@ -59,7 +59,7 @@ final class StreamingChatEndpoint {
     } catch (SseConnectionException e) {
       log.debug("SSE client disconnected", e);
     } catch (LlmException e) {
-      log.warn("Streaming LLM request failed: {}", e.getMessage());
+      log.warn("Streaming LLM request failed", e);
       writer.send(
           "error",
           ApiErrorResponse.of(
@@ -88,7 +88,19 @@ final class StreamingChatEndpoint {
     }
   }
 
-  private void writeJsonError(Context context, int status, String code, String message) {
-    ApiResponseWriter.writeError(context, status, code, message, objectMapper);
+  private void writeValidationError(Context context, ApiRequestException exception) {
+    ApiErrorResponse error =
+        ApiErrorResponse.withDetail(
+            "INVALID_REQUEST", "Invalid chat request.", exception.field(), exception.getMessage());
+    ApiResponseWriter.write(context, 400, error, objectMapper);
+  }
+
+  private void writeProviderUnavailable(Context context) {
+    ApiResponseWriter.writeError(
+        context,
+        400,
+        "LLM_PROVIDER_UNAVAILABLE",
+        "The selected LLM provider is not available.",
+        objectMapper);
   }
 }

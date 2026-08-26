@@ -276,3 +276,21 @@ components:
         message:
           type: string
           example: A usage limit for this demo application has been reached. Please try again later.
+        details:
+          type: array
+          description: Safe field-level details when the client can correct the request.
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+    ErrorDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+          example: messages[0].content
+        message:
+          type: string
+          example: Content must not be blank.

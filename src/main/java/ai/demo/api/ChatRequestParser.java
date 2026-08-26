@@ -19,12 +19,12 @@ final class ChatRequestParser {
     try {
       ChatRequest request = objectMapper.readValue(body, ChatRequest.class);
       if (request == null) {
-        throw new ApiRequestException("Chat request is required");
+        throw new ApiRequestException("request", "Request body is required.");
       }
       return new ResolvedChatRequest(
           request.selectedProvider(defaultProvider), request.toConversation());
     } catch (JsonProcessingException e) {
-      throw new ApiRequestException("Invalid chat request JSON", e);
+      throw new ApiRequestException("request", "Request body must contain valid JSON.", e);
     }
   }
 }
