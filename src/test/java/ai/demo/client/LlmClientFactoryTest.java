@@ -73,6 +73,15 @@ class LlmClientFactoryTest {
     assertThrows(ConfigurationException.class, () -> factory.create(config, LlmProvider.OLLAMA));
   }
 
+  @Test
+  void shouldRejectUnconfiguredProvider() {
+    var factory =
+        new LlmClientFactory(mock(HttpTransport.class), new ObjectMapper(), key -> "secret");
+    AppConfig config = ollamaConfig();
+
+    assertThrows(ConfigurationException.class, () -> factory.create(config, LlmProvider.GROQ));
+  }
+
   private AppConfig ollamaConfig() {
     return new AppConfig(
         LlmProvider.OLLAMA,

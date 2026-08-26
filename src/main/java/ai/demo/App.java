@@ -7,6 +7,7 @@ import ai.demo.agent.ToolCallingAgent;
 import ai.demo.agent.tool.CalculatorTool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.api.ApiServer;
+import ai.demo.api.ChatServiceResolver;
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmClientFactory;
 import ai.demo.client.LoggingLlmClient;
@@ -17,6 +18,7 @@ import ai.demo.config.AppConfig;
 import ai.demo.config.AppConfigLoader;
 import ai.demo.config.AppInterface;
 import ai.demo.config.EnvironmentConfigLoader;
+import ai.demo.config.LlmProvider;
 import ai.demo.config.LlmProviderAvailability;
 import ai.demo.console.ConsoleChat;
 import ai.demo.console.command.CommandRegistry;
@@ -38,6 +40,8 @@ import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,16 +111,33 @@ public class App {
           new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
       LlmProviderAvailability providerAvailability =
           new LlmProviderAvailability(config, environment::get);
-      return runServer(config, providerAvailability);
+      ObjectMapper objectMapper = new ObjectMapper();
+      HttpClient httpClient = createHttpClient();
+      LlmClientFactory clientFactory =
+          new LlmClientFactory(new JdkHttpTransport(httpClient), objectMapper, environment::get);
+      ChatServiceResolver chatServiceResolver =
+          createChatServiceResolver(config, clientFactory, objectMapper);
+      return runServer(config, providerAvailability, chatServiceResolver, objectMapper, httpClient);
     } catch (ConfigurationException e) {
       log.error("Configuration error: {}", e.getMessage(), e);
       return 1;
     }
   }
 
-  private int runServer(AppConfig config, LlmProviderAvailability providerAvailability) {
-    try (ApiServer server =
-        new ApiServer(config.server().port(), providerAvailability, new ObjectMapper())) {
+  private int runServer(
+      AppConfig config,
+      LlmProviderAvailability providerAvailability,
+      ChatServiceResolver chatServiceResolver,
+      ObjectMapper objectMapper,
+      HttpClient httpClient) {
+    try (httpClient;
+        ApiServer server =
+            new ApiServer(
+                config.server().port(),
+                providerAvailability,
+                chatServiceResolver,
+                config.provider(),
+                objectMapper)) {
       server.start();
       Runtime.getRuntime().addShutdownHook(new Thread(server::close));
       log.info("HTTP server started on port {}", server.port());
@@ -126,6 +147,20 @@ public class App {
       log.error("HTTP server error: {}", e.getMessage(), e);
       return 3;
     }
+  }
+
+  private ChatServiceResolver createChatServiceResolver(
+      AppConfig config, LlmClientFactory clientFactory, ObjectMapper objectMapper) {
+    ConcurrentMap<LlmProvider, ChatService> services = new ConcurrentHashMap<>();
+    PromptComposer promptComposer = createAgentPromptComposer(config);
+    return provider ->
+        services.computeIfAbsent(
+            provider,
+            selectedProvider -> {
+              LlmClient client =
+                  new LoggingLlmClient(clientFactory.create(config, selectedProvider));
+              return new ChatService(createAgent(client, promptComposer, objectMapper));
+            });
   }
 
   private AppConfig loadConfig() throws IOException {

@@ -1,0 +1,42 @@
+meta {
+  name: Create Chat Response
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "provider": "{{llmProvider}}",
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is Spring Framework?"
+      }
+    ]
+  }
+}
+
+tests {
+  test("returns HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("returns a provider-independent chat response", function () {
+    const body = res.getBody();
+
+    expect(body.answer).to.be.a("string").and.not.empty;
+    expect(body.model).to.be.a("string").and.not.empty;
+    expect(body.tokenUsage).to.have.all.keys(
+      "promptTokens",
+      "completionTokens",
+      "totalTokens"
+    );
+    expect(body.durationMs).to.be.a("number").and.at.least(0);
+  });
+}

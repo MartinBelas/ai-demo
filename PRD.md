@@ -115,6 +115,7 @@ The MVP API includes at least:
 ```text
 GET    /api/health
 GET    /api/llm/providers
+POST   /api/chat
 POST   /api/chat/stream
 GET    /api/rag/documents
 POST   /api/rag/documents

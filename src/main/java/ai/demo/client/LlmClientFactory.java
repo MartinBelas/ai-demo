@@ -65,16 +65,25 @@ public final class LlmClientFactory {
   }
 
   private LlmClient createGroq(AppConfig config) {
+    if (config.groq() == null) {
+      throw new ConfigurationException("Provider GROQ is not configured");
+    }
     String apiKey = requiredApiKey(config.groq().apiKeyEnvironmentVariable(), "GROQ");
     return new GroqClient(config, apiKey, transport, objectMapper);
   }
 
   private LlmClient createGemini(AppConfig config) {
+    if (config.gemini() == null) {
+      throw new ConfigurationException("Provider GEMINI is not configured");
+    }
     String apiKey = requiredApiKey(config.gemini().apiKeyEnvironmentVariable(), "GEMINI");
     return new GeminiClient(config, apiKey, transport, objectMapper);
   }
 
   private LlmClient createOpenAi(AppConfig config) {
+    if (config.openAi() == null) {
+      throw new ConfigurationException("Provider OPENAI is not configured");
+    }
     String variable = config.openAi().apiKeyEnvironmentVariable();
     String apiKey = requiredApiKey(variable, "OPENAI");
     return new OpenAiClient(config, apiKey, transport, objectMapper);

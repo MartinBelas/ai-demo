@@ -34,5 +34,11 @@ class OpenApiSpecificationTest {
     assertEquals(List.of("LLM Providers"), operation.getTags());
     assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("LlmProvidersResponse"));
     assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("LlmProvider"));
+    var chatOperation = result.getOpenAPI().getPaths().get("/api/chat").getPost();
+    assertNotNull(chatOperation);
+    assertEquals("createChatResponse", chatOperation.getOperationId());
+    assertEquals(List.of("Chat"), chatOperation.getTags());
+    assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("ChatRequest"));
+    assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("ChatResponse"));
   }
 }

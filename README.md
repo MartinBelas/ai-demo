@@ -195,11 +195,17 @@ HTTP mode currently exposes:
 ```text
 GET /api/health
 GET /api/llm/providers
+POST /api/chat
 GET /openapi.yaml
 ```
 
 The OpenAPI-first contract is maintained in `src/main/resources/openapi.yaml`. The application
 serves the same document through `/openapi.yaml`, and automated tests validate its structure.
+
+`POST /api/chat` is stateless. Its request contains the complete conversation as `USER` and
+`ASSISTANT` messages, ending with a `USER` message. The optional `provider` field selects an
+available LLM provider; when omitted, the configured `llm.provider` is used. The server does not
+save HTTP conversation history.
 
 ### Bruno collection
 
@@ -213,8 +219,8 @@ The collection can also be executed with the Bruno CLI:
 bru run bruno --env Local
 ```
 
-The local environment uses `http://localhost:8080` by default. Change `baseUrl` in
-`bruno/environments/Local.bru` when the server runs on another port.
+The local environment uses `http://localhost:8080` and `OLLAMA` by default. Change `baseUrl` or
+`llmProvider` in `bruno/environments/Local.bru` when using another port or provider.
 
 All configured Ollama generation options are forwarded inside the provider's `options` object.
 
@@ -374,7 +380,7 @@ MVP – Public demo target (two weeks)
 ✓ Add configurable Ollama availability
 ✓ Add OpenAPI specification foundation
 ✓ Add LLM provider availability endpoint
-→ Add stateless chat REST API
+✓ Add stateless chat REST API
 → Add SSE chat streaming and REST tests
 ✓ Add Bruno API collection foundation
 → Add simple web chat with browser-local history
