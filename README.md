@@ -379,7 +379,8 @@ Covered areas include:
 - A tool request requires two LLM calls.
 - The agent supports a single tool execution before the final response.
 - There is no retry or timeout recovery strategy beyond HTTP error handling.
-- The application currently exposes only a console interface.
+- The application exposes console and HTTP interfaces; the Preact web client currently runs through
+  the Vite development server.
 - Conversation history is stored in a local JSON file.
 
 ## Roadmap
@@ -394,7 +395,8 @@ MVP – Public demo target (two weeks)
 ✓ Add stateless chat REST API
 ✓ Add SSE chat streaming and REST tests
 ✓ Add Bruno API collection foundation
-→ Add simple web chat with browser-local history
+✓ Add simple web chat with browser-local history
+→ Serve the production frontend build from the HTTP application
 → Add provider-independent embedding and vector store abstractions
 → Add TXT and Markdown ingestion, chunking, and retrieval
 → Add RAG context assembly and source attribution
