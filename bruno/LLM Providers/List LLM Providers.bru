@@ -1,0 +1,29 @@
+meta {
+  name: List LLM Providers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/llm/providers
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("returns the available LLM providers", function () {
+    const body = res.getBody();
+
+    expect(res.getHeader("content-type")).to.contain("application/json");
+    expect(body).to.have.property("providers").that.is.an("array");
+    body.providers.forEach(function (provider) {
+      expect(provider).to.have.all.keys("id", "model");
+      expect(provider.id).to.be.a("string").and.not.empty;
+      expect(provider.model).to.be.a("string").and.not.empty;
+    });
+  });
+}

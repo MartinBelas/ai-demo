@@ -201,6 +201,21 @@ GET /openapi.yaml
 The OpenAPI-first contract is maintained in `src/main/resources/openapi.yaml`. The application
 serves the same document through `/openapi.yaml`, and automated tests validate its structure.
 
+### Bruno collection
+
+The `bruno` directory contains requests and tests for the currently implemented HTTP API. Open
+this directory as a collection in Bruno and select the `Local` environment. Start the application
+in HTTP mode before sending the requests.
+
+The collection can also be executed with the Bruno CLI:
+
+```shell
+bru run bruno --env Local
+```
+
+The local environment uses `http://localhost:8080` by default. Change `baseUrl` in
+`bruno/environments/Local.bru` when the server runs on another port.
+
 All configured Ollama generation options are forwarded inside the provider's `options` object.
 
 `ollama.enabled` controls whether Ollama is available in the current deployment. The
@@ -361,7 +376,7 @@ MVP – Public demo target (two weeks)
 ✓ Add LLM provider availability endpoint
 → Add stateless chat REST API
 → Add SSE chat streaming and REST tests
-→ Add Bruno API collection
+✓ Add Bruno API collection foundation
 → Add simple web chat with browser-local history
 → Add provider-independent embedding and vector store abstractions
 → Add TXT and Markdown ingestion, chunking, and retrieval
