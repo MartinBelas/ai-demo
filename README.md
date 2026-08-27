@@ -327,6 +327,9 @@ running on port `8080`):
 On its first run, the script installs the frontend dependencies. Vite is normally available at
 `http://localhost:5173` and proxies API calls to the backend.
 
+IntelliJ IDEA also discovers the shared `AI Demo Frontend` run configuration from the `.run`
+directory. It starts Vite through `npm run dev` after the frontend dependencies have been installed.
+
 Compile the project:
 
 ```bash

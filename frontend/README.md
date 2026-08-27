@@ -20,6 +20,9 @@ npm install
 npm run dev
 ```
 
+In IntelliJ IDEA, select the shared `AI Demo Frontend` run configuration and start it with the Run
+button. It executes the same `npm run dev` command; dependencies must already be installed.
+
 Vite proxies `/api` and `/openapi.yaml` to `http://localhost:8080`. Open the URL printed by Vite
 (normally `http://localhost:5173`).
 
