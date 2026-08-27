@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { streamChat } from "../api";
-import { HISTORY_KEY, readHistory } from "../history";
+import { HISTORY_KEY, readHistory, removeIncompleteTurn } from "../history";
 import type { ChatMessage, Completion, StreamEvent, ToolActivity } from "../types";
 
 export type StreamState = "idle" | "connecting" | "thinking" | "tooling" | "answering" | "complete" | "error";
@@ -27,7 +27,15 @@ export function useConversation(providerId: string) {
     resetResponse(setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState);
   }, []);
 
-  const stop = useCallback(() => controller.current?.abort(), []);
+  const stop = useCallback(() => {
+    requestSequence.current += 1;
+    controller.current?.abort();
+    controller.current = null;
+    setMessages((value) => removeIncompleteTurn(value));
+    resetResponse(setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState);
+    setError("Response stopped.");
+    setStreamState("error");
+  }, []);
 
   const submit = useCallback(async (content: string) => {
     if (!content || isStreaming(streamState) || !providerId) return;

@@ -19,8 +19,16 @@ export function validateHistory(value: unknown): ChatMessage[] {
 export function readHistory(storage: Pick<Storage, "getItem">): ChatMessage[] {
   try {
     const stored = storage.getItem(HISTORY_KEY);
-    return stored === null ? [] : validateHistory(JSON.parse(stored));
+    return stored === null ? [] : removeIncompleteTurn(validateHistory(JSON.parse(stored)));
   } catch {
     return [];
   }
+}
+
+export function removeIncompleteTurn(messages: ChatMessage[]): ChatMessage[] {
+  let completeMessageCount = messages.length;
+  while (completeMessageCount > 0 && messages[completeMessageCount - 1].role === "USER") {
+    completeMessageCount -= 1;
+  }
+  return messages.slice(0, completeMessageCount);
 }

@@ -108,6 +108,8 @@ Local execution may enable Ollama in either console or HTTP mode. The Cloud Run 
 - The backend does not assign persistent user identities.
 - Refreshing or clearing browser storage must not affect other users.
 - The browser sends at most the configured maximum number of history messages.
+- Stopping a web stream discards its incomplete user turn so a later request receives only completed conversation context.
+- Browser history loaded after an interrupted stream ignores trailing user messages without an assistant response.
 
 ### REST API
 
