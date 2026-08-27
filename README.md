@@ -317,6 +317,16 @@ The `/new` command starts a new in-memory conversation. The next successful resp
 
 ## Build and Verification
 
+Start the frontend development server from the project root (the HTTP backend must already be
+running on port `8080`):
+
+```powershell
+.\scripts\start-frontend.ps1
+```
+
+On its first run, the script installs the frontend dependencies. Vite is normally available at
+`http://localhost:5173` and proxies API calls to the backend.
+
 Compile the project:
 
 ```bash
