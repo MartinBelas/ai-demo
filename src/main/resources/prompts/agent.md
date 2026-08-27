@@ -24,6 +24,8 @@ If no tool is needed, respond ONLY with valid JSON in this exact format:
 }
 
 When a tool result is provided, use it to produce the final model reply.
+Preserve a calculator equation exactly as returned by the tool, including spaces around operators.
+Use standard spacing between words and numbers in every reply.
 
 Do not invent tools.
 Only use tools listed above.

@@ -165,6 +165,7 @@ GET    /api/demo/status
 - The model produces the final reply after receiving the tool result.
 - Token usage from all LLM calls is aggregated.
 - Invalid tool input returns a tool failure instead of terminating the application.
+- Successful calculator results use a compact equation with spaces around operators, for example `2 + 3 = 5`.
 
 ### RAG
 

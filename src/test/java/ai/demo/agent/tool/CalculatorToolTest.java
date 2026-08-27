@@ -25,13 +25,13 @@ class CalculatorToolTest {
 
   @ParameterizedTest
   @CsvSource({
-    "'2 + 2', '4'",
-    "'10 - 3', '7'",
-    "'125 * 37', '4625'",
-    "'20 / 4', '5'",
-    "'2.5 * 4', '10'",
-    "'2 + 3 * 4', '14'",
-    "'(2 + 3) * 4', '20'"
+    "'2+2', '2 + 2 = 4'",
+    "'10 - 3', '10 - 3 = 7'",
+    "'125*37', '125 * 37 = 4625'",
+    "'20 / 4', '20 / 4 = 5'",
+    "'2.5*4', '2.5 * 4 = 10'",
+    "'2+3*4', '2 + 3 * 4 = 14'",
+    "'(2+3)*4', '(2 + 3) * 4 = 20'"
   })
   void shouldCalculateExpression(String expression, String expected) {
     ToolResult result = calculator.execute(expression);

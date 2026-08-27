@@ -2,8 +2,11 @@ package ai.demo.agent.tool;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.regex.Pattern;
 
 public class CalculatorTool implements Tool {
+
+  private static final Pattern OPERATOR = Pattern.compile("\\s*([+\\-*/])\\s*");
 
   @Override
   public String name() {
@@ -25,7 +28,7 @@ public class CalculatorTool implements Tool {
     try {
       BigDecimal result = new Parser(input).parse();
 
-      return ToolResult.success(format(result));
+      return ToolResult.success(formatExpression(input) + " = " + format(result));
 
     } catch (IllegalArgumentException | ArithmeticException e) {
       return ToolResult.failure(e.getMessage());
@@ -34,6 +37,10 @@ public class CalculatorTool implements Tool {
 
   private String format(BigDecimal value) {
     return value.stripTrailingZeros().toPlainString();
+  }
+
+  private String formatExpression(String expression) {
+    return OPERATOR.matcher(expression.strip()).replaceAll(" $1 ");
   }
 
   private static class Parser {
