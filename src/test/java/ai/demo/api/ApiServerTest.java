@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import ai.demo.agent.AgentEvent;
 import ai.demo.agent.ContentEvent;
 import ai.demo.agent.ThinkingEvent;
+import ai.demo.agent.ToolCallEvent;
+import ai.demo.agent.ToolResultEvent;
 import ai.demo.client.TokenUsage;
 import ai.demo.config.AppConfig;
 import ai.demo.config.GenerationConfig;
@@ -250,6 +252,8 @@ class ApiServerTest {
             invocation -> {
               Consumer<AgentEvent> eventConsumer = invocation.getArgument(1);
               eventConsumer.accept(new ThinkingEvent("Checking"));
+              eventConsumer.accept(new ToolCallEvent("calculator", "3+5"));
+              eventConsumer.accept(new ToolResultEvent("calculator", "8"));
               eventConsumer.accept(new ContentEvent("Hello!"));
               return new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25);
             });
@@ -270,10 +274,16 @@ class ApiServerTest {
           response.headers().firstValue(CONTENT_TYPE).orElseThrow().startsWith(EVENT_STREAM));
       String body = response.body();
       int thinking = body.indexOf("event: thinking\ndata: {\"content\":\"Checking\"}");
+      int toolStarted =
+          body.indexOf("event: tool\ndata: {\"name\":\"calculator\",\"status\":\"RUNNING\"}");
+      int toolCompleted =
+          body.indexOf("event: tool\ndata: {\"name\":\"calculator\",\"status\":\"COMPLETED\"}");
       int content = body.indexOf("event: content\ndata: {\"content\":\"Hello!\"}");
       int completion = body.indexOf("event: completion\ndata: {\"model\":\"" + OLLAMA_MODEL + "\"");
       assertTrue(thinking >= 0);
-      assertTrue(content > thinking);
+      assertTrue(toolStarted > thinking);
+      assertTrue(toolCompleted > toolStarted);
+      assertTrue(content > toolCompleted);
       assertTrue(completion > content);
     }
   }

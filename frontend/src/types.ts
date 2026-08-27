@@ -22,7 +22,15 @@ export interface Completion {
   durationMs: number;
 }
 
+export type ToolStatus = "RUNNING" | "COMPLETED";
+
+export interface ToolActivity {
+  name: string;
+  status: ToolStatus;
+}
+
 export type StreamEvent =
   | { type: "thinking" | "content"; content: string }
+  | { type: "tool"; tool: ToolActivity }
   | { type: "completion"; completion: Completion }
   | { type: "error"; message: string };

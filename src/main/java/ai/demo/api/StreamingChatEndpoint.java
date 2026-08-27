@@ -3,6 +3,8 @@ package ai.demo.api;
 import ai.demo.agent.AgentEvent;
 import ai.demo.agent.ContentEvent;
 import ai.demo.agent.ThinkingEvent;
+import ai.demo.agent.ToolCallEvent;
+import ai.demo.agent.ToolResultEvent;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
@@ -85,6 +87,10 @@ final class StreamingChatEndpoint {
       writer.send("thinking", new SseTextEvent(content));
     } else if (event instanceof ContentEvent(String content)) {
       writer.send("content", new SseTextEvent(content));
+    } else if (event instanceof ToolCallEvent(String toolName, String ignored)) {
+      writer.send("tool", SseToolEvent.running(toolName));
+    } else if (event instanceof ToolResultEvent(String toolName, String ignored)) {
+      writer.send("tool", SseToolEvent.completed(toolName));
     }
   }
 

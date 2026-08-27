@@ -94,7 +94,8 @@ paths:
         - Chat
       summary: Stream a stateless chat response
       description: |
-        Returns Server-Sent Events named `thinking`, `content`, `completion`, and `error`.
+        Returns Server-Sent Events named `thinking`, `tool`, `content`, `completion`, and `error`.
+        Tool events expose only the tool name and lifecycle status, not tool input or output.
         The client supplies the complete bounded conversation context in the request body.
       operationId: streamChatResponse
       requestBody:
@@ -114,6 +115,12 @@ paths:
                 completed:
                   summary: Successful stream
                   value: |-
+                    event: tool
+                    data: {"name":"calculator","status":"RUNNING"}
+
+                    event: tool
+                    data: {"name":"calculator","status":"COMPLETED"}
+
                     event: content
                     data: {"content":"Hello!"}
 
@@ -246,6 +253,22 @@ components:
       properties:
         content:
           type: string
+    SseToolEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: calculator
+        status:
+          type: string
+          enum:
+            - RUNNING
+            - COMPLETED
     SseCompletionEvent:
       type: object
       additionalProperties: false

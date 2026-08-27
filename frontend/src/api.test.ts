@@ -27,6 +27,30 @@ describe("SSE parser", () => {
     expect(events).toEqual([{ type: "completion", completion: payload }]);
   });
 
+  it("parses running and completed tool activity", async () => {
+    const stream = new Blob([
+      "event: tool\ndata: {\"name\":\"calculator\",\"status\":\"RUNNING\"}\n\n"
+        + "event: tool\ndata: {\"name\":\"calculator\",\"status\":\"COMPLETED\"}\n\n",
+    ]).stream();
+    const events: unknown[] = [];
+    await parseSse(stream, (event) => events.push(event));
+    expect(events).toEqual([
+      { type: "tool", tool: { name: "calculator", status: "RUNNING" } },
+      { type: "tool", tool: { name: "calculator", status: "COMPLETED" } },
+    ]);
+  });
+
+  it("ignores malformed tool events", async () => {
+    const stream = new Blob([
+      "event: tool\ndata: {\"name\":\"\",\"status\":\"RUNNING\"}\n\n"
+        + "event: tool\ndata: {\"name\":\"calculator\",\"status\":\"FAILED\"}\n\n"
+        + "event: tool\ndata: {\"name\":42,\"status\":\"COMPLETED\"}\n\n",
+    ]).stream();
+    const events: unknown[] = [];
+    await parseSse(stream, (event) => events.push(event));
+    expect(events).toEqual([]);
+  });
+
   it("ignores malformed typed events", async () => {
     const stream = new Blob([
       "event: content\ndata: {\"content\":42}\n\n"

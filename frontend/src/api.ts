@@ -1,4 +1,4 @@
-import type { ChatMessage, Completion, LlmProvider, StreamEvent, TokenUsage } from "./types";
+import type { ChatMessage, Completion, LlmProvider, StreamEvent, TokenUsage, ToolActivity } from "./types";
 
 export async function fetchProviders(): Promise<LlmProvider[]> {
   const response = await fetch("/api/llm/providers");
@@ -57,12 +57,20 @@ function toStreamEvent(eventName: string, value: unknown): StreamEvent | null {
   if (eventName === "thinking" || eventName === "content") {
     return isRecord(value) && typeof value.content === "string" ? { type: eventName, content: value.content } : null;
   }
+  if (eventName === "tool") return isToolActivity(value) ? { type: "tool", tool: value } : null;
   if (eventName === "completion") return isCompletion(value) ? { type: "completion", completion: value } : null;
   if (eventName === "error") {
     const message = isRecord(value) && typeof value.message === "string" ? value.message : "The response failed.";
     return { type: "error", message };
   }
   return null;
+}
+
+function isToolActivity(value: unknown): value is ToolActivity {
+  return isRecord(value)
+    && typeof value.name === "string"
+    && value.name.trim().length > 0
+    && (value.status === "RUNNING" || value.status === "COMPLETED");
 }
 
 function isProviderResponse(value: unknown): value is { providers: LlmProvider[] } {

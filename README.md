@@ -209,7 +209,8 @@ available LLM provider; when omitted, the configured `llm.provider` is used. The
 save HTTP conversation history.
 
 `POST /api/chat/stream` accepts the same request and returns `text/event-stream`. It emits typed
-`thinking`, `content`, `completion`, and terminal `error` events. Because the request uses POST,
+`thinking`, `tool`, `content`, `completion`, and terminal `error` events. Tool events contain only a
+safe tool name and lifecycle status, without the tool input or output. Because the request uses POST,
 browser clients consume it with `fetch()` and a `ReadableStream` rather than `EventSource`.
 Thinking can arrive incrementally; the current structured agent emits final answer content after
 its decision has been validated.

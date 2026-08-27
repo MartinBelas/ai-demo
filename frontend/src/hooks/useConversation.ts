@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { streamChat } from "../api";
 import { HISTORY_KEY, readHistory } from "../history";
-import type { ChatMessage, Completion, StreamEvent } from "../types";
+import type { ChatMessage, Completion, StreamEvent, ToolActivity } from "../types";
 
-export type StreamState = "idle" | "connecting" | "thinking" | "answering" | "complete" | "error";
+export type StreamState = "idle" | "connecting" | "thinking" | "tooling" | "answering" | "complete" | "error";
 
 export function useConversation(providerId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialHistory);
   const [thinking, setThinking] = useState("");
   const [partial, setPartial] = useState("");
   const [completion, setCompletion] = useState<Completion | null>(null);
+  const [toolActivity, setToolActivity] = useState<ToolActivity | null>(null);
   const [streamState, setStreamState] = useState<StreamState>("idle");
   const [error, setError] = useState("");
   const controller = useRef<AbortController | null>(null);
@@ -23,7 +24,7 @@ export function useConversation(providerId: string) {
     controller.current?.abort();
     controller.current = null;
     setMessages([]);
-    resetResponse(setThinking, setPartial, setCompletion, setError, setStreamState);
+    resetResponse(setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState);
   }, []);
 
   const stop = useCallback(() => controller.current?.abort(), []);
@@ -35,7 +36,7 @@ export function useConversation(providerId: string) {
     const abortController = new AbortController();
     controller.current = abortController;
     setMessages(requestMessages);
-    resetResponse(setThinking, setPartial, setCompletion, setError, setStreamState);
+    resetResponse(setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState);
     setStreamState("connecting");
     await runStream(providerId, requestMessages, requestId, abortController);
   }, [messages, providerId, streamState]);
@@ -51,7 +52,7 @@ export function useConversation(providerId: string) {
     const current = () => requestSequence.current === requestId;
     const handleEvent = (event: StreamEvent) => {
       if (!current()) return;
-      const result = applyStreamEvent(event, answer, setThinking, setPartial, setCompletion, setError, setStreamState);
+      const result = applyStreamEvent(event, answer, { setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState });
       answer = result.answer;
       completed = result.completed || completed;
       if (result.completed && answer.trim()) {
@@ -71,40 +72,49 @@ export function useConversation(providerId: string) {
     }
   }
 
-  return { messages, thinking, partial, completion, streamState, error, streaming, submit, clear, stop };
+  return { messages, thinking, partial, completion, toolActivity, streamState, error, streaming, submit, clear, stop };
 }
 
 type TextSetter = (value: string | ((current: string) => string)) => void;
 type StateSetter<T> = (value: T) => void;
 
+interface ResponseSetters {
+  setThinking: TextSetter;
+  setPartial: TextSetter;
+  setCompletion: StateSetter<Completion | null>;
+  setToolActivity: StateSetter<ToolActivity | null>;
+  setError: TextSetter;
+  setStreamState: StateSetter<StreamState>;
+}
+
 function applyStreamEvent(
   event: StreamEvent,
   answer: string,
-  setThinking: TextSetter,
-  setPartial: TextSetter,
-  setCompletion: StateSetter<Completion | null>,
-  setError: TextSetter,
-  setStreamState: StateSetter<StreamState>,
+  setters: ResponseSetters,
 ): { answer: string; completed: boolean } {
   switch (event.type) {
     case "thinking":
-      setStreamState("thinking");
-      setThinking((value) => value + event.content);
+      setters.setStreamState("thinking");
+      setters.setThinking((value) => value + event.content);
+      return { answer, completed: false };
+    case "tool":
+      setters.setToolActivity(event.tool);
+      setters.setStreamState("tooling");
       return { answer, completed: false };
     case "content": {
       const nextAnswer = answer + event.content;
-      setStreamState("answering");
-      setPartial(nextAnswer);
+      setters.setStreamState("answering");
+      setters.setPartial(nextAnswer);
       return { answer: nextAnswer, completed: false };
     }
     case "completion":
-      setCompletion(event.completion);
-      setStreamState("complete");
-      setPartial("");
+      setters.setCompletion(event.completion);
+      setters.setStreamState("complete");
+      setters.setPartial("");
       return { answer, completed: true };
     case "error":
-      setError(event.message);
-      setStreamState("error");
+      setters.setError(event.message);
+      setters.setStreamState("error");
       return { answer, completed: false };
   }
 }
@@ -113,12 +123,14 @@ function resetResponse(
   setThinking: TextSetter,
   setPartial: TextSetter,
   setCompletion: StateSetter<Completion | null>,
+  setToolActivity: StateSetter<ToolActivity | null>,
   setError: TextSetter,
   setStreamState: StateSetter<StreamState>,
 ): void {
   setThinking("");
   setPartial("");
   setCompletion(null);
+  setToolActivity(null);
   setError("");
   setStreamState("idle");
 }
@@ -137,7 +149,7 @@ function handleStreamFailure(
 }
 
 function isStreaming(state: StreamState): boolean {
-  return state === "connecting" || state === "thinking" || state === "answering";
+  return state === "connecting" || state === "thinking" || state === "tooling" || state === "answering";
 }
 
 function initialHistory(): ChatMessage[] {
