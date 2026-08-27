@@ -2,11 +2,16 @@ package ai.demo.agent.tool;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 public class CalculatorTool implements Tool {
 
   private static final Pattern OPERATOR = Pattern.compile("\\s*([+\\-*/])\\s*");
+  private static final Pattern NUMERIC_EXPRESSION = Pattern.compile("[0-9.()+\\-*/\\s]+");
+
+  private final LocalizedArithmeticExpressionResolver localizedResolver =
+      new LocalizedArithmeticExpressionResolver();
 
   @Override
   public String name() {
@@ -16,6 +21,25 @@ public class CalculatorTool implements Tool {
   @Override
   public String description() {
     return "Calculates mathematical expressions.";
+  }
+
+  @Override
+  public Optional<String> resolveInput(String request) {
+    if (request == null || request.isBlank()) {
+      return Optional.empty();
+    }
+
+    String candidate = request.strip();
+    if (NUMERIC_EXPRESSION.matcher(candidate).matches()) {
+      return Optional.of(candidate);
+    }
+
+    return localizedResolver.resolve(candidate);
+  }
+
+  @Override
+  public boolean resultIsFinal() {
+    return true;
   }
 
   @Override

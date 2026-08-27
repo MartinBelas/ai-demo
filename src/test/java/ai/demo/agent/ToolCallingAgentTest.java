@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ai.demo.agent.tool.Tool;
@@ -21,13 +22,44 @@ import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
-import ai.demo.model.chat.Role;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class ToolCallingAgentTest {
+
+  @Test
+  void shouldUseResolvedToolWithoutCallingLlm() {
+    AgentLlmGateway llmGateway = mock(AgentLlmGateway.class);
+    ToolDescriptionFormatter toolDescriptionFormatter = mock(ToolDescriptionFormatter.class);
+    Tool calculator = mock(Tool.class);
+    Conversation conversation = new Conversation();
+    conversation.add(ChatMessage.user("3+3"));
+    when(calculator.resolveInput("3+3")).thenReturn(Optional.of("3+3"));
+    when(calculator.name()).thenReturn("calculator");
+    when(calculator.execute("3+3")).thenReturn(ToolResult.success("3 + 3 = 6"));
+    ArrayList<AgentEvent> events = new ArrayList<>();
+
+    Agent agent =
+        new ToolCallingAgent(
+            llmGateway, toolDescriptionFormatter, List.of(calculator), new ObjectMapper());
+
+    AgentResult result = agent.execute(conversation, events::add);
+
+    assertEquals("3 + 3 = 6", result.answer());
+    assertEquals("calculator", result.model());
+    assertEquals(new TokenUsage(0, 0), result.tokenUsage());
+    assertEquals(
+        List.of(
+            new ToolCallEvent("calculator", "3+3"),
+            new ToolResultEvent("calculator", "3 + 3 = 6"),
+            new ContentEvent("3 + 3 = 6")),
+        events);
+    verifyNoInteractions(llmGateway, toolDescriptionFormatter);
+  }
 
   @Test
   void shouldReturnDirectAnswerWhenNoToolIsNeeded() {
@@ -67,7 +99,7 @@ class ToolCallingAgentTest {
   }
 
   @Test
-  void shouldUseToolAndReturnFinalAnswer() {
+  void shouldReturnFinalToolResultWithoutAnotherLlmCall() {
 
     AgentLlmGateway llmGateway = mock(AgentLlmGateway.class);
     ToolDescriptionFormatter toolDescriptionFormatter = mock(ToolDescriptionFormatter.class);
@@ -77,6 +109,7 @@ class ToolCallingAgentTest {
     conversation.add(ChatMessage.user("How much is 125 * 37?"));
 
     when(calculator.name()).thenReturn("calculator");
+    when(calculator.resultIsFinal()).thenReturn(true);
 
     when(toolDescriptionFormatter.format(List.of(calculator)))
         .thenReturn("calculator: Calculates mathematical expressions.");
@@ -85,42 +118,19 @@ class ToolCallingAgentTest {
         Map.of("tools", "calculator: Calculates mathematical expressions.");
 
     doAnswer(
-        new org.mockito.stubbing.Answer<StreamingResult>() {
-          private int call;
-
-          @Override
-          public StreamingResult answer(org.mockito.invocation.InvocationOnMock invocation) {
-            java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
-            if (call++ == 0) {
-              consumer.accept(
-                  new ChatChunk(
-                      "{\"type\":\"tool_call\",\"toolName\":\"calculator\",\"input\":\"125 * 37\"}",
-                      ChatChunkType.CONTENT,
-                      true));
-              return new StreamingResult("test-model", new TokenUsage(10, 10));
-            }
-
-            assertEquals(3, conversation.size());
-            assertEquals(Role.ASSISTANT, conversation.messages().get(1).role());
-            assertEquals(
-                "{\"type\":\"tool_call\",\"toolName\":\"calculator\",\"input\":\"125 * 37\"}",
-                conversation.messages().get(1).content());
-            assertEquals(Role.TOOL, conversation.messages().get(2).role());
-            assertEquals("calculator", conversation.messages().get(2).toolName());
-            assertEquals("4625", conversation.messages().get(2).content());
-
-            consumer.accept(
-                new ChatChunk(
-                    "{\"type\":\"model_reply\",\"content\":\"125 × 37 = 4625.\"}",
-                    ChatChunkType.CONTENT,
-                    true));
-            return new StreamingResult("test-model", new TokenUsage(20, 10));
-          }
+        invocation -> {
+          java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
+          consumer.accept(
+              new ChatChunk(
+                  "{\"type\":\"tool_call\",\"toolName\":\"calculator\",\"input\":\"125 * 37\"}",
+                  ChatChunkType.CONTENT,
+                  true));
+          return new StreamingResult("test-model", new TokenUsage(10, 10));
         })
         .when(llmGateway)
         .stream(eq(conversation), eq(variables), any());
 
-    when(calculator.execute("125 * 37")).thenReturn(ToolResult.success("4625"));
+    when(calculator.execute("125 * 37")).thenReturn(ToolResult.success("125 * 37 = 4625"));
 
     Agent agent =
         new ToolCallingAgent(
@@ -128,12 +138,12 @@ class ToolCallingAgentTest {
 
     AgentResult result = agent.execute(conversation);
 
-    assertEquals("125 × 37 = 4625.", result.answer());
-
-    assertEquals(3, conversation.size());
+    assertEquals("125 * 37 = 4625", result.answer());
+    assertEquals(new TokenUsage(10, 10), result.tokenUsage());
+    assertEquals(1, conversation.size());
 
     verify(calculator).execute("125 * 37");
-    verify(llmGateway, times(2)).stream(eq(conversation), eq(variables), any());
+    verify(llmGateway).stream(eq(conversation), eq(variables), any());
   }
 
   @Test
@@ -222,5 +232,44 @@ class ToolCallingAgentTest {
         "The model returned no response content. It may have exhausted the output token limit"
             + " while reasoning.",
         exception.getMessage());
+    verify(llmGateway, times(2)).stream(any(), any(), any());
+  }
+
+  @Test
+  void shouldRetryWhenFirstStreamContainsOnlyThinking() {
+    AgentLlmGateway llmGateway = mock(AgentLlmGateway.class);
+    ToolDescriptionFormatter toolDescriptionFormatter = mock(ToolDescriptionFormatter.class);
+    Conversation conversation = new Conversation();
+    conversation.add(ChatMessage.user("dva plus sedm"));
+
+    when(toolDescriptionFormatter.format(List.of())).thenReturn("No tools available.");
+    doAnswer(
+        new org.mockito.stubbing.Answer<StreamingResult>() {
+          private int call;
+
+          @Override
+          public StreamingResult answer(org.mockito.invocation.InvocationOnMock invocation) {
+            java.util.function.Consumer<ChatChunk> consumer = invocation.getArgument(2);
+            if (call++ == 0) {
+              consumer.accept(new ChatChunk("Still deciding", ChatChunkType.THINKING, false));
+              return new StreamingResult("test-model", new TokenUsage(10, 5));
+            }
+            consumer.accept(
+                new ChatChunk(
+                    "{\"type\":\"model_reply\",\"content\":\"9\"}", ChatChunkType.CONTENT, true));
+            return new StreamingResult("test-model", new TokenUsage(12, 4));
+          }
+        })
+        .when(llmGateway)
+        .stream(any(), any(), any());
+
+    Agent agent =
+        new ToolCallingAgent(llmGateway, toolDescriptionFormatter, List.of(), new ObjectMapper());
+
+    AgentResult result = agent.execute(conversation);
+
+    assertEquals("9", result.answer());
+    assertEquals(new TokenUsage(22, 9), result.tokenUsage());
+    verify(llmGateway, times(2)).stream(any(), any(), any());
   }
 }

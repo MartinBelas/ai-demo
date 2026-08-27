@@ -157,15 +157,20 @@ GET    /api/demo/status
 
 ### Tool calling
 
-- The model returns a structured direct-reply or tool-call decision.
+- The model returns a structured direct-reply or tool-call decision when no registered tool can safely resolve the request deterministically.
+- Unambiguous numeric expressions and localized number-word expressions use the calculator without an LLM routing call. The deterministic localized set covers Czech, English, German, Slovak, and Polish; additional languages are routed by the LLM without requiring language-specific application code.
+- A single-character typo in a one-word localized operator is accepted only when both surrounding operands parse completely as localized numbers. Ordinary text and ambiguous expressions continue to the LLM.
+- Common additive conjunctions are accepted only in the unambiguous number–conjunction–number form, for example `dva a dva` and `two and two`.
+- When the LLM recognizes arithmetic in another language or despite a spelling mistake, it normalizes the expression and calls the calculator immediately without discussing the language or performing the calculation itself.
 - JSON wrapped in a Markdown code block is accepted.
 - An invalid decision triggers at most one repair request.
 - Only registered tools can be executed.
 - The assistant tool decision and tool result are preserved in conversation order.
-- The model produces the final reply after receiving the tool result.
+- Tools may declare their result final. Calculator requests return the formatted tool result directly after either deterministic or model-based routing, avoiding an unnecessary second LLM call.
 - Token usage from all LLM calls is aggregated.
 - Invalid tool input returns a tool failure instead of terminating the application.
 - Successful calculator results use a compact equation with spaces around operators, for example `2 + 3 = 5`.
+- If a decision stream exhausts its output on reasoning before producing content, the agent retries once with an explicit decision-only instruction.
 
 ### RAG
 
@@ -302,6 +307,7 @@ Content-Type: application/json
 - Tool-based answers require multiple LLM calls and normally use more time and tokens.
 - The agent supports one tool execution before the final response.
 - Small local models may return invalid structured output.
+- Localized calculator routing depends on ICU spell-out rules, which do not cover every language or every regional phrasing.
 - Provider-specific generation settings differ and unsupported settings are not forwarded.
 - Anonymous IP-based rate limiting is an abuse deterrent, not a reliable user identity system.
 - A provider may report quota exhaustion after an SSE stream has already begun; this is represented as a terminal SSE error rather than a changed HTTP status.

@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public class ToolCallingAgent implements Agent {
@@ -48,6 +49,11 @@ public class ToolCallingAgent implements Agent {
     Objects.requireNonNull(conversation);
     Objects.requireNonNull(eventConsumer);
 
+    ResolvedToolCall resolvedToolCall = resolveToolCall(conversation);
+    if (resolvedToolCall != null) {
+      return executeResolvedToolCall(resolvedToolCall, eventConsumer);
+    }
+
     AgentStep firstStep = requestDecision(conversation, eventConsumer);
 
     if (firstStep.decision() instanceof ModelReply(String content)) {
@@ -67,6 +73,28 @@ public class ToolCallingAgent implements Agent {
         "Unsupported agent decision: " + firstStep.decision().getClass().getSimpleName());
   }
 
+  private ResolvedToolCall resolveToolCall(Conversation conversation) {
+    String request = conversation.messages().getLast().content();
+    for (Tool tool : tools) {
+      Optional<String> input = tool.resolveInput(request);
+      if (input.isPresent()) {
+        return new ResolvedToolCall(tool, input.orElseThrow());
+      }
+    }
+    return null;
+  }
+
+  private AgentResult executeResolvedToolCall(
+      ResolvedToolCall resolvedToolCall, Consumer<AgentEvent> eventConsumer) {
+    Tool tool = resolvedToolCall.tool();
+    String input = resolvedToolCall.input();
+    eventConsumer.accept(new ToolCallEvent(tool.name(), input));
+    ToolResult result = tool.execute(input);
+    eventConsumer.accept(new ToolResultEvent(tool.name(), result.content()));
+    eventConsumer.accept(new ContentEvent(result.content()));
+    return new AgentResult(result.content(), tool.name(), new TokenUsage(0, 0));
+  }
+
   private AgentResult executeToolCall(
       ToolCallDecision toolCall,
       Conversation conversation,
@@ -80,6 +108,12 @@ public class ToolCallingAgent implements Agent {
     ToolResult toolResult = tool.execute(toolCall.input());
 
     eventConsumer.accept(new ToolResultEvent(tool.name(), toolResult.content()));
+
+    if (tool.resultIsFinal()) {
+      eventConsumer.accept(new ContentEvent(toolResult.content()));
+      return new AgentResult(
+          toolResult.content(), firstResponse.model(), firstResponse.tokenUsage());
+    }
 
     conversation.add(ChatMessage.assistant(firstResponse.text()));
     conversation.add(ChatMessage.tool(tool.name(), toolResult.content()));
@@ -120,6 +154,30 @@ public class ToolCallingAgent implements Agent {
   private LlmResponse requestResponse(
       Conversation conversation, Consumer<AgentEvent> eventConsumer) {
 
+    RawAgentResponse firstResponse = requestRawResponse(conversation, eventConsumer);
+
+    if (!firstResponse.text().isBlank()) {
+      return firstResponse.toLlmResponse();
+    }
+
+    Conversation retryConversation = createEmptyResponseRetryConversation(conversation);
+    RawAgentResponse retryResponse = requestRawResponse(retryConversation, eventConsumer);
+
+    if (retryResponse.text().isBlank()) {
+      throw new LlmCommunicationException(
+          "The model returned no response content. It may have exhausted the output token limit"
+              + " while reasoning.");
+    }
+
+    return new LlmResponse(
+        retryResponse.text(),
+        retryResponse.model(),
+        addTokenUsage(firstResponse.tokenUsage(), retryResponse.tokenUsage()));
+  }
+
+  private RawAgentResponse requestRawResponse(
+      Conversation conversation, Consumer<AgentEvent> eventConsumer) {
+
     String toolsDescription = toolDescriptionFormatter.format(tools);
 
     Map<String, String> variables = Map.of("tools", toolsDescription);
@@ -130,15 +188,17 @@ public class ToolCallingAgent implements Agent {
         llmGateway.stream(
             conversation, variables, chunk -> handleChunk(chunk, responseContent, eventConsumer));
 
-    String responseText = responseContent.toString();
+    return new RawAgentResponse(
+        responseContent.toString(), streamingResult.model(), streamingResult.tokenUsage());
+  }
 
-    if (responseText.isBlank()) {
-      throw new LlmCommunicationException(
-          "The model returned no response content. It may have exhausted the output token limit"
-              + " while reasoning.");
-    }
-
-    return new LlmResponse(responseText, streamingResult.model(), streamingResult.tokenUsage());
+  private Conversation createEmptyResponseRetryConversation(Conversation conversation) {
+    Conversation retryConversation = new Conversation(conversation.messages());
+    retryConversation.add(
+        ChatMessage.user(
+            "Retry the decision for the preceding user request. Return the required decision JSON"
+                + " immediately. Do not include reasoning or any other text."));
+    return retryConversation;
   }
 
   private Conversation createRepairConversation(
@@ -186,4 +246,13 @@ public class ToolCallingAgent implements Agent {
         .findFirst()
         .orElseThrow(() -> new IllegalStateException("Unknown tool: " + toolName));
   }
+
+  private record RawAgentResponse(String text, String model, TokenUsage tokenUsage) {
+
+    private LlmResponse toLlmResponse() {
+      return new LlmResponse(text, model, tokenUsage);
+    }
+  }
+
+  private record ResolvedToolCall(Tool tool, String input) {}
 }
