@@ -49,7 +49,8 @@ final class StreamingChatEndpoint {
     }
 
     prepareStream(context);
-    SseEventWriter writer = new SseEventWriter(context.outputStream(), objectMapper);
+    SseEventWriter writer =
+        new SseEventWriter(context.res(), context.outputStream(), objectMapper);
     stream(chatService, request, writer);
   }
 

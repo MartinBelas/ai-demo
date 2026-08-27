@@ -26,13 +26,19 @@ import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
@@ -285,6 +291,50 @@ class ApiServerTest {
       assertTrue(toolCompleted > toolStarted);
       assertTrue(content > toolCompleted);
       assertTrue(completion > content);
+    }
+  }
+
+  @Test
+  void shouldDeliverThinkingBeforeChatCompletes() throws Exception {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    CountDownLatch thinkingSent = new CountDownLatch(1);
+    CountDownLatch allowCompletion = new CountDownLatch(1);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenAnswer(
+            invocation -> {
+              Consumer<AgentEvent> eventConsumer = invocation.getArgument(1);
+              eventConsumer.accept(new ThinkingEvent("Checking"));
+              thinkingSent.countDown();
+              assertTrue(allowCompletion.await(5, TimeUnit.SECONDS));
+              eventConsumer.accept(new ContentEvent("Hello!"));
+              return new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25);
+            });
+
+    try (ApiServer server =
+            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      CompletableFuture<HttpResponse<InputStream>> responseFuture =
+          client.sendAsync(
+              streamingChatRequest(
+                  server, "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}"),
+              HttpResponse.BodyHandlers.ofInputStream());
+
+      assertTrue(thinkingSent.await(2, TimeUnit.SECONDS));
+      HttpResponse<InputStream> response = responseFuture.orTimeout(2, TimeUnit.SECONDS).join();
+      BufferedReader reader =
+          new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8));
+
+      assertEquals("event: thinking", reader.readLine());
+      assertEquals("data: {\"content\":\"Checking\"}", reader.readLine());
+      assertEquals("", reader.readLine());
+      allowCompletion.countDown();
+      assertTrue(responseFuture.orTimeout(2, TimeUnit.SECONDS).isDone());
+    } finally {
+      allowCompletion.countDown();
     }
   }
 

@@ -2,11 +2,9 @@ interface Props {
   loading: boolean;
   providerError: string;
   providerCount: number;
-  canClear: boolean;
-  onClear: () => void;
 }
 
-export function Masthead({ loading, providerError, providerCount, canClear, onClear }: Props) {
+export function Masthead({ loading, providerError, providerCount }: Props) {
   const status = providerStatus(loading, providerError, providerCount);
   return <header class="masthead">
     <a class="brand" href="/#main"><strong>AI Demo</strong><span>LLM workbench</span></a>
@@ -17,7 +15,6 @@ export function Masthead({ loading, providerError, providerCount, canClear, onCl
     </nav>
     <div class="masthead-actions">
       <span class={`backend-status ${status.className}`}><i />{status.label}</span>
-      <button class="text-button" type="button" onClick={onClear} disabled={!canClear}>Clear chat</button>
     </div>
   </header>;
 }

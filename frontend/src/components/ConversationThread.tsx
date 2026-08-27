@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { StreamState } from "../hooks/useConversation";
 import type { ChatMessage, Completion, ToolActivity } from "../types";
 
@@ -11,29 +11,50 @@ interface Props {
   streamState: StreamState;
   error: string;
   streaming: boolean;
+  canClear: boolean;
+  onClear: () => void;
   onSuggestion: (prompt: string) => void;
 }
 
 export function ConversationThread(props: Props) {
   const threadEnd = useRef<HTMLDivElement>(null);
+  const [thinkingExpanded, setThinkingExpanded] = useState(true);
   useEffect(() => {
     threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [props.messages, props.partial, props.thinking, props.toolActivity]);
+  useEffect(() => {
+    if (!props.thinking) setThinkingExpanded(true);
+  }, [props.thinking]);
 
-  const showEmpty = props.messages.length === 0 && !props.partial;
   const showLive = props.streaming || Boolean(props.partial) || Boolean(props.error);
-  return <div class="thread" aria-live="polite">
-    {showEmpty && <EmptyState onSuggestion={props.onSuggestion} />}
-    {!showEmpty && props.messages.map((message, index) => <Message key={`${index}-${message.content.slice(0, 12)}`} message={message} />)}
-    {showLive && <LiveResponse {...props} />}
-    {props.completion && props.toolActivity && <ToolTrace activity={props.toolActivity} />}
+  const showCompletedActivity = Boolean(props.completion) && hasActivity(props.thinking, props.toolActivity);
+  return <div class="thread">
+    <span class="visually-hidden" role="status" aria-live="polite">{streamStatusMessage(props.streamState)}</span>
+    <ConversationHeader canClear={props.canClear} onClear={props.onClear} onSuggestion={props.onSuggestion} />
+    <div class="message-list">
+      {props.messages.map((message, index) => <Message key={`${index}-${message.content.slice(0, 12)}`} message={message} />)}
+    {showLive && <LiveResponse {...props} thinkingExpanded={thinkingExpanded} onThinkingToggle={setThinkingExpanded} />}
+    {showCompletedActivity && <ActivityTrace thinking={props.thinking} toolActivity={props.toolActivity} thinkingExpanded={thinkingExpanded} onThinkingToggle={setThinkingExpanded} />}
     {props.completion && <CompletionMeta value={props.completion} />}
-    <div ref={threadEnd} />
+      <div class="thread-end" ref={threadEnd} />
+    </div>
   </div>;
 }
 
-function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }) {
-  return <div class="empty-state"><p class="eyebrow">02 / Conversation</p><h1>Ask something worth examining.</h1><p>Compare an explanation, explore a technical idea, or see how the model reasons in real time.</p><button type="button" onClick={() => onSuggestion("Explain retrieval-augmented generation in plain English.")}>Try a starting prompt <span>→</span></button></div>;
+interface ConversationHeaderProps {
+  canClear: boolean;
+  onClear: () => void;
+  onSuggestion: (prompt: string) => void;
+}
+
+function ConversationHeader({ canClear, onClear, onSuggestion }: ConversationHeaderProps) {
+  return <header class="conversation-header">
+    <div><p class="eyebrow">02 / Conversation</p><h1>Ask something worth examining.</h1><p>Compare an explanation, explore a technical idea, or see how the model reasons in real time.</p></div>
+    <div class="conversation-actions">
+      <button class="starting-prompt" type="button" onClick={() => onSuggestion("Explain retrieval-augmented generation in plain English.")}>Try a starting prompt <span>→</span></button>
+      <button class="new-chat" type="button" onClick={onClear} disabled={!canClear}>New chat</button>
+    </div>
+  </header>;
 }
 
 function Message({ message }: { message: ChatMessage }) {
@@ -41,18 +62,36 @@ function Message({ message }: { message: ChatMessage }) {
   return <article class={`message message-${message.role.toLowerCase()}`}><p class="role-label">{role}</p><p>{message.content}</p></article>;
 }
 
-function LiveResponse({ streamState, thinking, partial, toolActivity, error }: Props) {
+interface ThinkingToggleProps {
+  thinkingExpanded: boolean;
+  onThinkingToggle: (expanded: boolean) => void;
+}
+
+function LiveResponse({ streamState, thinking, partial, toolActivity, error, thinkingExpanded, onThinkingToggle }: Props & ThinkingToggleProps) {
   return <article class="live-response">
     <div class={`signal-rail signal-${streamState}`} aria-hidden="true"><i /></div>
     <div class="live-body">
       <p class="role-label">Assistant <span>{streamState}</span></p>
-      {thinking && <details class="thinking" open={streamState === "thinking"}><summary>Model thinking</summary><p>{thinking}</p></details>}
-      {toolActivity && <ToolTrace activity={toolActivity} />}
+      <ActivityTrace thinking={thinking} toolActivity={toolActivity} thinkingExpanded={thinkingExpanded} onThinkingToggle={onThinkingToggle} />
       {partial && <p class="answer-text">{partial}</p>}
       {!partial && isWaiting(streamState) && <p class="waiting">{waitingMessage(streamState)}</p>}
       {error && <p class="stream-error" role="alert">{error}</p>}
     </div>
   </article>;
+}
+
+type ActivityTraceProps = Pick<Props, "thinking" | "toolActivity"> & ThinkingToggleProps;
+
+function ActivityTrace({ thinking, toolActivity, thinkingExpanded, onThinkingToggle }: ActivityTraceProps) {
+  if (!hasActivity(thinking, toolActivity)) return null;
+  return <div class="activity-trace">
+    {thinking && <details class="thinking" open={thinkingExpanded} onToggle={(event) => onThinkingToggle(event.currentTarget.open)}><summary>Model thinking</summary><p>{thinking}</p></details>}
+    {toolActivity && <ToolTrace activity={toolActivity} />}
+  </div>;
+}
+
+function hasActivity(thinking: string, toolActivity: ToolActivity | null): boolean {
+  return Boolean(thinking) || Boolean(toolActivity);
 }
 
 function ToolTrace({ activity }: { activity: ToolActivity }) {
@@ -77,7 +116,19 @@ function isWaiting(state: StreamState): boolean {
 }
 
 function waitingMessage(state: StreamState): string {
-  return state === "thinking" ? "Working through the prompt…" : "Establishing a live stream…";
+  return state === "thinking" ? "Working through the prompt…" : "Analyzing the request…";
+}
+
+function streamStatusMessage(state: StreamState): string {
+  switch (state) {
+    case "connecting": return "Analyzing the request.";
+    case "thinking": return "Model thinking received.";
+    case "tooling": return "A tool is running.";
+    case "answering": return "Assistant response started.";
+    case "complete": return "Assistant response complete.";
+    case "error": return "Assistant response failed.";
+    case "idle": return "";
+  }
 }
 
 function CompletionMeta({ value }: { value: Completion }) {

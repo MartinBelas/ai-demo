@@ -14,12 +14,12 @@ export function App() {
   const canClear = conversation.messages.length > 0 || Boolean(conversation.partial);
 
   return <div class="app-shell">
-    <Masthead loading={providerState.loading} providerError={providerState.error} providerCount={providerState.providers.length} canClear={canClear} onClear={conversation.clear} />
+    <Masthead loading={providerState.loading} providerError={providerState.error} providerCount={providerState.providers.length} />
     <ProjectIntroduction />
     <main id="main" class="workbench">
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />
       <section class="conversation" aria-label="Conversation">
-        <ConversationThread {...conversation} onSuggestion={setSuggestion} />
+        <ConversationThread {...conversation} canClear={canClear} onClear={conversation.clear} onSuggestion={setSuggestion} />
         <Composer providerAvailable={Boolean(providerState.providerId)} streaming={conversation.streaming} suggestion={suggestion} onSuggestionUsed={() => setSuggestion("")} onSubmit={conversation.submit} onStop={conversation.stop} />
       </section>
     </main>
