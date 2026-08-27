@@ -11,8 +11,6 @@ interface Props {
   streamState: StreamState;
   error: string;
   streaming: boolean;
-  canClear: boolean;
-  onClear: () => void;
   onSuggestion: (prompt: string) => void;
 }
 
@@ -23,14 +21,19 @@ export function ConversationThread(props: Props) {
     threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [props.messages, props.partial, props.thinking, props.toolActivity]);
   useEffect(() => {
-    if (!props.thinking) setThinkingExpanded(true);
-  }, [props.thinking]);
+    if (props.streaming && props.thinking) setThinkingExpanded(true);
+  }, [props.streaming, props.thinking]);
+  useEffect(() => {
+    if (props.streaming || !props.completion || !props.thinking) return;
+    const collapseTimer = window.setTimeout(() => setThinkingExpanded(false), 300);
+    return () => window.clearTimeout(collapseTimer);
+  }, [props.streaming, props.completion, props.thinking]);
 
   const showLive = props.streaming || Boolean(props.partial) || Boolean(props.error);
   const showCompletedActivity = Boolean(props.completion) && hasActivity(props.thinking, props.toolActivity);
   return <div class="thread">
     <span class="visually-hidden" role="status" aria-live="polite">{streamStatusMessage(props.streamState)}</span>
-    <ConversationHeader canClear={props.canClear} onClear={props.onClear} onSuggestion={props.onSuggestion} />
+    <ConversationHeader onSuggestion={props.onSuggestion} />
     <div class="message-list">
       {props.messages.map((message, index) => <Message key={`${index}-${message.content.slice(0, 12)}`} message={message} />)}
     {showLive && <LiveResponse {...props} thinkingExpanded={thinkingExpanded} onThinkingToggle={setThinkingExpanded} />}
@@ -42,18 +45,13 @@ export function ConversationThread(props: Props) {
 }
 
 interface ConversationHeaderProps {
-  canClear: boolean;
-  onClear: () => void;
   onSuggestion: (prompt: string) => void;
 }
 
-function ConversationHeader({ canClear, onClear, onSuggestion }: ConversationHeaderProps) {
+function ConversationHeader({ onSuggestion }: ConversationHeaderProps) {
   return <header class="conversation-header">
     <div><p class="eyebrow">02 / Conversation</p><h1>Ask something worth examining.</h1><p>Compare an explanation, explore a technical idea, or see how the model reasons in real time.</p></div>
-    <div class="conversation-actions">
-      <button class="starting-prompt" type="button" onClick={() => onSuggestion("Explain retrieval-augmented generation in plain English.")}>Try a starting prompt <span>→</span></button>
-      <button class="new-chat" type="button" onClick={onClear} disabled={!canClear}>New chat</button>
-    </div>
+    <button class="starting-prompt" type="button" onClick={() => onSuggestion("Explain retrieval-augmented generation in plain English.")}>Try a starting prompt <span>→</span></button>
   </header>;
 }
 
@@ -69,7 +67,7 @@ interface ThinkingToggleProps {
 
 function LiveResponse({ streamState, thinking, partial, toolActivity, error, thinkingExpanded, onThinkingToggle }: Props & ThinkingToggleProps) {
   return <article class="live-response">
-    <div class={`signal-rail signal-${streamState}`} aria-hidden="true"><i /></div>
+    <div class={`signal-rail signal-${streamState}`} aria-hidden="true" />
     <div class="live-body">
       <p class="role-label">Assistant <span>{streamState}</span></p>
       <ActivityTrace thinking={thinking} toolActivity={toolActivity} thinkingExpanded={thinkingExpanded} onThinkingToggle={onThinkingToggle} />

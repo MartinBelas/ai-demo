@@ -19,8 +19,8 @@ export function App() {
     <main id="main" class="workbench">
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />
       <section class="conversation" aria-label="Conversation">
-        <ConversationThread {...conversation} canClear={canClear} onClear={conversation.clear} onSuggestion={setSuggestion} />
-        <Composer providerAvailable={Boolean(providerState.providerId)} streaming={conversation.streaming} suggestion={suggestion} onSuggestionUsed={() => setSuggestion("")} onSubmit={conversation.submit} onStop={conversation.stop} />
+        <ConversationThread {...conversation} onSuggestion={setSuggestion} />
+        <Composer providerAvailable={Boolean(providerState.providerId)} streaming={conversation.streaming} suggestion={suggestion} canClear={canClear} onSuggestionUsed={() => setSuggestion("")} onSubmit={conversation.submit} onStop={conversation.stop} onClear={conversation.clear} />
       </section>
     </main>
   </div>;
