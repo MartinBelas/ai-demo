@@ -31,7 +31,7 @@ export function ConversationThread(props: Props) {
 }
 
 function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }) {
-  return <div class="empty-state"><p class="eyebrow">02 / Conversation</p><h2>Ask something worth examining.</h2><p>Compare an explanation, explore a technical idea, or see how the model reasons in real time.</p><button type="button" onClick={() => onSuggestion("Explain retrieval-augmented generation in plain English.")}>Try a starting prompt <span>→</span></button></div>;
+  return <div class="empty-state"><p class="eyebrow">02 / Conversation</p><h1>Ask something worth examining.</h1><p>Compare an explanation, explore a technical idea, or see how the model reasons in real time.</p><button type="button" onClick={() => onSuggestion("Explain retrieval-augmented generation in plain English.")}>Try a starting prompt <span>→</span></button></div>;
 }
 
 function Message({ message }: { message: ChatMessage }) {

@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import { Composer } from "./components/Composer";
 import { ConversationThread } from "./components/ConversationThread";
 import { Masthead } from "./components/Masthead";
+import { ProjectIntroduction } from "./components/ProjectIntroduction";
 import { ProviderPanel } from "./components/ProviderPanel";
 import { useConversation } from "./hooks/useConversation";
 import { useProviders } from "./hooks/useProviders";
@@ -14,6 +15,7 @@ export function App() {
 
   return <div class="app-shell">
     <Masthead loading={providerState.loading} providerError={providerState.error} providerCount={providerState.providers.length} canClear={canClear} onClear={conversation.clear} />
+    <ProjectIntroduction />
     <main id="main" class="workbench">
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />
       <section class="conversation" aria-label="Conversation">

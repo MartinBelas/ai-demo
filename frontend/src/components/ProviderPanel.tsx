@@ -14,7 +14,7 @@ interface Props {
 export function ProviderPanel(props: Props) {
   return <aside class="context-panel" aria-label="Model context">
     <p class="eyebrow">01 / Model</p>
-    <h1>Choose the voice behind the response.</h1>
+    <h2>Choose the voice behind the response.</h2>
     <ProviderControl {...props} />
     {props.activeProvider && <ModelFacts provider={props.activeProvider} />}
     <p class="privacy-note"><span aria-hidden="true">↳</span>Your conversation stays in this browser. Only the latest 10 messages are sent with each request.</p>
