@@ -12,7 +12,8 @@ public record AppConfig(
     GeminiConfig gemini,
     Path conversationFile,
     AppInterface appInterface,
-    ServerConfig server) {
+    ServerConfig server,
+    DemoLimitsConfig demoLimits) {
 
   public AppConfig(
       LlmProvider provider,
@@ -31,7 +32,8 @@ public record AppConfig(
         gemini,
         conversationFile,
         AppInterface.CONSOLE,
-        new ServerConfig(8080));
+        new ServerConfig(8080),
+        DemoLimitsConfig.disabled());
   }
 
   public AppConfig(
@@ -44,33 +46,14 @@ public record AppConfig(
   }
 
   public AppConfig {
-
-    if (provider == null) throw new IllegalArgumentException("provider must not be null");
-    if (generation == null) throw new IllegalArgumentException("generation must not be null");
-    if (provider == LlmProvider.OLLAMA && ollama == null) {
-      throw new IllegalArgumentException("ollama configuration is required for provider OLLAMA");
-    }
-    if (provider == LlmProvider.OLLAMA && !ollama.enabled()) {
-      throw new IllegalArgumentException("provider OLLAMA must be enabled when selected");
-    }
-    if (provider == LlmProvider.OPENAI && openAi == null) {
-      throw new IllegalArgumentException("openAi configuration is required for provider OPENAI");
-    }
-    if (provider == LlmProvider.GROQ && groq == null) {
-      throw new IllegalArgumentException("groq configuration is required for provider GROQ");
-    }
-    if (provider == LlmProvider.GEMINI && gemini == null) {
-      throw new IllegalArgumentException("gemini configuration is required for provider GEMINI");
-    }
-    if (conversationFile == null) {
-      throw new IllegalArgumentException("conversationFile must not be null");
-    }
-    if (appInterface == null) {
-      throw new IllegalArgumentException("appInterface must not be null");
-    }
-    if (server == null) {
-      throw new IllegalArgumentException("server must not be null");
-    }
+    requireNonNull(provider, "provider");
+    requireNonNull(generation, "generation");
+    requireNonNull(conversationFile, "conversationFile");
+    requireNonNull(appInterface, "appInterface");
+    requireNonNull(server, "server");
+    requireNonNull(demoLimits, "demoLimits");
+    validateProviderConfiguration(provider, ollama, openAi, groq, gemini);
+    validateOutputLimit(generation, demoLimits);
   }
 
   public String model() {
@@ -84,5 +67,39 @@ public record AppConfig(
       case GROQ -> groq.model();
       case GEMINI -> gemini.model();
     };
+  }
+
+  private static void requireNonNull(Object value, String name) {
+    if (value == null) throw new IllegalArgumentException(name + " must not be null");
+  }
+
+  private static void validateProviderConfiguration(
+      LlmProvider provider,
+      OllamaConfig ollama,
+      OpenAiConfig openAi,
+      GroqConfig groq,
+      GeminiConfig gemini) {
+    switch (provider) {
+      case OLLAMA -> validateOllama(ollama);
+      case OPENAI -> requireNonNull(openAi, "openAi configuration");
+      case GROQ -> requireNonNull(groq, "groq configuration");
+      case GEMINI -> requireNonNull(gemini, "gemini configuration");
+    }
+  }
+
+  private static void validateOllama(OllamaConfig ollama) {
+    requireNonNull(ollama, "ollama configuration");
+    if (!ollama.enabled()) {
+      throw new IllegalArgumentException("provider OLLAMA must be enabled when selected");
+    }
+  }
+
+  private static void validateOutputLimit(
+      GenerationConfig generation, DemoLimitsConfig demoLimits) {
+    if (demoLimits.enabled()
+        && generation.maxOutputTokens() > demoLimits.maxOutputTokensPerCall()) {
+      throw new IllegalArgumentException(
+          "maxOutputTokens must not exceed the public demo per-call limit");
+    }
   }
 }

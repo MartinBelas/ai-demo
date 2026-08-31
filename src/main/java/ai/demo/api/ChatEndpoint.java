@@ -4,6 +4,8 @@ import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
 import ai.demo.model.chat.ChatResponse;
+import ai.demo.persistence.DemoQuotaStore;
+import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
 import org.slf4j.Logger;
@@ -15,21 +17,28 @@ final class ChatEndpoint {
   private final ChatServiceResolver serviceResolver;
   private final ChatRequestParser requestParser;
   private final ObjectMapper objectMapper;
+  private final DemoRequestGate requestGate;
 
   ChatEndpoint(
       ChatServiceResolver serviceResolver,
       ChatRequestParser requestParser,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      DemoRequestGate requestGate) {
     this.serviceResolver = serviceResolver;
     this.requestParser = requestParser;
     this.objectMapper = objectMapper;
+    this.requestGate = requestGate;
   }
 
   void handle(Context context) {
+    DemoQuotaStore.Reservation reservation = null;
     try {
       ResolvedChatRequest request = requestParser.parse(context.body());
-      ChatResponse response =
-          serviceResolver.resolve(request.provider()).ask(request.conversation());
+      requestGate.validate(request.conversation());
+      ChatService chatService = serviceResolver.resolve(request.provider());
+      reservation = requestGate.reserve(context, false);
+      ChatResponse response = chatService.ask(request.conversation());
+      requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       ApiResponseWriter.write(context, 200, ApiChatResponse.from(response), objectMapper);
     } catch (ApiRequestException e) {
       writeValidationError(context, e);
@@ -40,9 +49,27 @@ final class ChatEndpoint {
       log.warn("LLM request failed", e);
       writeError(
           context, 502, "LLM_COMMUNICATION_ERROR", "Unable to communicate with the AI model.");
+    } catch (ai.demo.exception.DemoLimitException e) {
+      writeDemoLimitError(context, e);
     } catch (RuntimeException e) {
       log.error("Unexpected chat API error", e);
       writeError(context, 500, "INTERNAL_ERROR", "An unexpected error occurred.");
+    } finally {
+      requestGate.release(reservation);
+    }
+  }
+
+  private void writeDemoLimitError(
+      Context context, ai.demo.exception.DemoLimitException exception) {
+    if (exception.unavailable()) {
+      writeError(
+          context, 503, "DEMO_LIMIT_UNAVAILABLE", "The public demo is temporarily unavailable.");
+    } else {
+      writeError(
+          context,
+          429,
+          "DEMO_LIMIT_EXCEEDED",
+          "A usage limit for this demo application has been reached. Please try again later.");
     }
   }
 

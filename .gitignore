@@ -45,4 +45,5 @@ conversation.json
 .env
 frontend/node_modules/
 frontend/dist/
+deploy/cloudrun.env.yaml
 

@@ -16,6 +16,7 @@ import ai.demo.agent.ToolCallEvent;
 import ai.demo.agent.ToolResultEvent;
 import ai.demo.client.TokenUsage;
 import ai.demo.config.AppConfig;
+import ai.demo.config.DemoLimitsConfig;
 import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.LlmProviderAvailability;
@@ -24,6 +25,7 @@ import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
+import ai.demo.persistence.InMemoryDemoQuotaStore;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -70,6 +72,23 @@ class ApiServerTest {
 
       server.close();
       server.awaitShutdown();
+    }
+  }
+
+  @Test
+  void shouldServeProductionFrontend() throws IOException, InterruptedException {
+    try (ApiServer server = new ApiServer(0);
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(
+              HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/")).GET().build(),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(200, response.statusCode());
+      assertTrue(response.body().contains("<div id=\"app\"></div>"));
+      assertTrue(response.body().contains("/assets/"));
     }
   }
 
@@ -333,6 +352,10 @@ class ApiServerTest {
       assertEquals("", reader.readLine());
       allowCompletion.countDown();
       assertTrue(responseFuture.orTimeout(2, TimeUnit.SECONDS).isDone());
+      while (reader.readLine() != null) {
+        // Drain the completed SSE response so the HTTP client can close deterministically.
+      }
+      reader.close();
     } finally {
       allowCompletion.countDown();
     }
@@ -362,6 +385,41 @@ class ApiServerTest {
       assertTrue(response.body().contains("\"code\":\"LLM_COMMUNICATION_ERROR\""));
       assertTrue(response.body().contains(SAFE_LLM_ERROR));
       assertFalse(response.body().contains(PROVIDER_FAILURE_DETAILS));
+    }
+  }
+
+  @Test
+  void shouldRejectRequestsAfterPublicDemoQuotaIsReached()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class)))
+        .thenReturn(new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(3, 2), 10));
+    DemoLimitsConfig limits =
+        new DemoLimitsConfig(
+            true, false, "", "(default)", "DEMO_IP_HASH_SALT", 1, 1, 1, 100, 10, 5, 1000);
+
+    try (ApiServer server =
+            new ApiServer(
+                0,
+                null,
+                resolver,
+                LlmProvider.OLLAMA,
+                new ObjectMapper(),
+                new DemoProtection(limits, new InMemoryDemoQuotaStore(limits), "test-salt"));
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+      String body = "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}";
+
+      HttpResponse<String> first =
+          client.send(chatRequest(server, body), HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> second =
+          client.send(chatRequest(server, body), HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(200, first.statusCode());
+      assertEquals(429, second.statusCode());
+      assertTrue(second.body().contains("DEMO_LIMIT_EXCEEDED"));
     }
   }
 

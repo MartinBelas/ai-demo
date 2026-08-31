@@ -1,6 +1,6 @@
 # AI Demo
 
-AI Demo is a Java 21 console application demonstrating provider-independent LLM integration, streaming responses, conversation persistence, reasoning output, and tool calling.
+AI Demo is a Java 21 application demonstrating provider-independent LLM integration through console, REST, SSE, and a responsive web interface.
 
 The supported providers are local Ollama, OpenAI, GroqCloud, and Gemini API. Application and service layers depend on abstractions, so providers can be selected without changing business logic.
 
@@ -23,6 +23,10 @@ The supported providers are local Ollama, OpenAI, GroqCloud, and Gemini API. App
 - SLF4J and Logback logging
 - JUnit 6 and Mockito tests
 - Google Java Format through Spotless
+- Production Preact frontend served by the Java application
+- Multi-stage Docker image for Google Cloud Run
+- Configurable public-demo request, input, history, output-token, and stream limits
+- Transactional Firestore request and aggregate token counters
 
 ## Architecture
 
@@ -188,6 +192,36 @@ Invalid or missing configuration results in a `ConfigurationException`.
 `server.port` locally. The `APP_INTERFACE` and `PORT` environment variables override these values,
 which allows the same configuration and artifact to run on Cloud Run.
 
+`LLM_PROVIDER`, `APP_INTERFACE`, `PORT`, and `OLLAMA_ENABLED` override their corresponding
+properties. Cloud deployments should select `OPENAI`, `GROQ`, or `GEMINI`; API keys are read only
+from the provider's configured environment variable. Do not put API keys into properties, images,
+deployment environment files, or source control.
+
+### Public demo limits
+
+Public limits are disabled for local development by default. Cloud Run must enable both limit and
+Firestore enforcement. Supported environment overrides are:
+
+```text
+DEMO_LIMITS_ENABLED=true
+DEMO_LIMITS_FIRESTORE_ENABLED=true
+DEMO_LIMITS_DAILY_REQUESTS=200
+DEMO_LIMITS_HOURLY_REQUESTS_PER_IP=20
+DEMO_LIMITS_CONCURRENT_STREAMS=5
+DEMO_LIMITS_MAX_INPUT_CHARACTERS=20000
+DEMO_LIMITS_MAX_HISTORY_MESSAGES=10
+DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL=1000
+GOOGLE_CLOUD_PROJECT=your-project-id
+FIRESTORE_DATABASE_ID=(default)
+```
+
+Client addresses are salted and SHA-256 hashed before being used as Firestore document keys. Set
+`DEMO_IP_HASH_SALT` from Secret Manager. Raw addresses, prompts, responses, and conversation
+history are not stored. Firestore transactions reserve daily and hourly request quota before an LLM
+call and reconcile aggregate token usage afterward. Because the deployment is bounded to one Cloud
+Run instance, active SSE concurrency is enforced in that process. If Firestore is unavailable,
+requests fail closed with HTTP `503`.
+
 ## HTTP API
 
 HTTP mode currently exposes:
@@ -318,7 +352,7 @@ The `/new` command starts a new in-memory conversation. The next successful resp
 
 ## Build and Verification
 
-Start the frontend development server from the project root (the HTTP backend must already be
+For frontend development, start the Vite server from the project root (the HTTP backend must already be
 running on port `8080`):
 
 ```powershell
@@ -336,6 +370,18 @@ Compile the project:
 ```bash
 mvn compile
 ```
+
+Build the production frontend before packaging locally:
+
+```powershell
+npm ci --prefix frontend
+npm test --prefix frontend
+npm run build --prefix frontend
+mvn verify
+```
+
+Maven copies `frontend/dist` into the application classpath. The executable JAR then serves the web
+client from `/` and the API from `/api`, so production needs only one process and one origin.
 
 Create and verify the JAR:
 
@@ -393,9 +439,53 @@ Covered areas include:
 - A tool request requires two LLM calls.
 - The agent supports a single tool execution before the final response.
 - There is no retry or timeout recovery strategy beyond HTTP error handling.
-- The application exposes console and HTTP interfaces; the Preact web client currently runs through
-  the Vite development server.
+- Uploaded RAG documents, the public status page, and persistent RAG storage are not implemented.
 - Conversation history is stored in a local JSON file.
+
+## Docker and Google Cloud Run
+
+The multi-stage `Dockerfile` builds the Preact client, packages it into a shaded Java JAR, and runs
+the result as a non-root user on the `PORT` supplied by Cloud Run.
+
+Build and test the image locally:
+
+```powershell
+docker build -t ai-demo:local .
+docker run --rm -p 8080:8080 `
+  -e LLM_PROVIDER=OPENAI `
+  -e OPENAI_API_KEY=$env:OPENAI_API_KEY `
+  ai-demo:local
+```
+
+For Cloud Run:
+
+1. Create a Firestore Native-mode database in the same European region as Cloud Run.
+2. Grant the Cloud Run service account `roles/datastore.user` and Secret Manager access only to
+   the selected provider key and `demo-ip-hash-salt`.
+3. Create a provider-key secret and a long random `demo-ip-hash-salt` secret in Secret Manager.
+4. Copy `deploy/cloudrun.env.yaml.example` to the ignored `deploy/cloudrun.env.yaml` file.
+5. Authenticate `gcloud`, then run:
+
+```powershell
+.\deploy\deploy-cloud-run.ps1 `
+  -ProjectId YOUR_PROJECT_ID `
+  -Region europe-west1 `
+  -Provider OPENAI `
+  -ApiKeySecret openai-api-key
+```
+
+The deployment uses request-based billing, zero minimum instances, one maximum instance, bounded
+concurrency, and Secret Manager environment mounts. The script runs read-only smoke checks against
+the deployed health endpoint, provider list, frontend, and OpenAPI document. It deliberately does
+not send a paid chat request. Run the smoke checks independently with:
+
+```powershell
+.\deploy\smoke-test.ps1 -BaseUrl https://YOUR_SERVICE_URL
+```
+
+After verifying the generated `run.app` URL, point an `ai-demo` subdomain at Cloud Run through the
+recommended Google Cloud external Application Load Balancer. The separate portfolio root domain
+can continue to use GitHub Pages or any other hosting.
 
 ## Roadmap
 
@@ -410,14 +500,15 @@ MVP – Public demo target (two weeks)
 ✓ Add SSE chat streaming and REST tests
 ✓ Add Bruno API collection foundation
 ✓ Add simple web chat with browser-local history
-→ Serve the production frontend build from the HTTP application
+✓ Serve the production frontend build from the HTTP application
 → Add provider-independent embedding and vector store abstractions
 → Add TXT and Markdown ingestion, chunking, and retrieval
 → Add RAG context assembly and source attribution
-→ Add Firestore-backed demo quotas and LLM limits
+✓ Add Firestore-backed demo request quotas and LLM limits
 → Add public aggregate metrics endpoint and status page
-→ Add Dockerfile and Docker Compose with optional Ollama
-→ Add end-to-end and deployment smoke tests
+✓ Add production Dockerfile
+→ Add Docker Compose with optional Ollama
+✓ Add deployment smoke tests
 → Deploy the Docker image to Google Cloud Run
 → Complete MVP documentation and release verification
 

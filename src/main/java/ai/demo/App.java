@@ -8,6 +8,7 @@ import ai.demo.agent.tool.CalculatorTool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.api.ApiServer;
 import ai.demo.api.ChatServiceResolver;
+import ai.demo.api.DemoProtection;
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmClientFactory;
 import ai.demo.client.LoggingLlmClient;
@@ -117,7 +118,19 @@ public class App {
           new LlmClientFactory(new JdkHttpTransport(httpClient), objectMapper, environment::get);
       ChatServiceResolver chatServiceResolver =
           createChatServiceResolver(config, clientFactory, objectMapper);
-      return runServer(config, providerAvailability, chatServiceResolver, objectMapper, httpClient);
+      String ipHashSalt = environment.get(config.demoLimits().ipHashSaltEnvironmentVariable());
+      if (config.demoLimits().enabled() && (ipHashSalt == null || ipHashSalt.isBlank())) {
+        throw new ConfigurationException(
+            "Demo IP hash salt is required when public limits are enabled");
+      }
+      DemoProtection demoProtection = DemoProtection.configured(config.demoLimits(), ipHashSalt);
+      return runServer(
+          config,
+          providerAvailability,
+          chatServiceResolver,
+          objectMapper,
+          httpClient,
+          demoProtection);
     } catch (ConfigurationException e) {
       log.error("Configuration error: {}", e.getMessage(), e);
       return 1;
@@ -129,7 +142,8 @@ public class App {
       LlmProviderAvailability providerAvailability,
       ChatServiceResolver chatServiceResolver,
       ObjectMapper objectMapper,
-      HttpClient httpClient) {
+      HttpClient httpClient,
+      DemoProtection demoProtection) {
     try (httpClient;
         ApiServer server =
             new ApiServer(
@@ -137,7 +151,8 @@ public class App {
                 providerAvailability,
                 chatServiceResolver,
                 config.provider(),
-                objectMapper)) {
+                objectMapper,
+                demoProtection)) {
       server.start();
       Runtime.getRuntime().addShutdownHook(new Thread(server::close));
       log.info("HTTP server started on port {}", server.port());

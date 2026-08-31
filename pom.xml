@@ -18,12 +18,15 @@
         <slf4j.version>2.0.18</slf4j.version>
         <logback.version>1.5.38</logback.version>
         <javalin.version>7.2.3</javalin.version>
+        <firestore.version>3.33.3</firestore.version>
         <swagger-parser.version>2.1.47</swagger-parser.version>
         <junit.version>6.1.1</junit.version>
         <mockito.version>5.23.0</mockito.version>
         <compiler.plugin.version>3.15.0</compiler.plugin.version>
         <surefire.plugin.version>3.5.6</surefire.plugin.version>
         <spotless.plugin.version>3.8.0</spotless.plugin.version>
+        <resources.plugin.version>3.3.1</resources.plugin.version>
+        <jar.plugin.version>3.4.1</jar.plugin.version>
     </properties>
 
     <dependencies>
@@ -52,6 +55,11 @@
             <artifactId>javalin</artifactId>
             <version>${javalin.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.google.cloud</groupId>
+            <artifactId>google-cloud-firestore</artifactId>
+            <version>${firestore.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -75,6 +83,22 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>${resources.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>copy-frontend</id>
+                        <phase>process-resources</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/public</outputDirectory>
+                            <resources><resource><directory>${project.basedir}/frontend/dist</directory></resource></resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -108,6 +132,20 @@
                         <phase>verify</phase>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${jar.plugin.version}</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>ai.demo.App</mainClass>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>lib/</classpathPrefix>
+                        </manifest>
+                    </archive>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -3,9 +3,11 @@ package ai.demo.api;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.LlmProviderAvailability;
 import ai.demo.exception.ServerException;
+import ai.demo.persistence.DemoQuotaStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
+import io.javalin.http.staticfiles.Location;
 
 /** Embedded HTTP server exposing the public API. */
 public final class ApiServer implements AutoCloseable {
@@ -19,15 +21,22 @@ public final class ApiServer implements AutoCloseable {
   private final ObjectMapper objectMapper;
   private final ChatEndpoint chatEndpoint;
   private final StreamingChatEndpoint streamingChatEndpoint;
+  private final DemoQuotaStore quotaStore;
   private Javalin app;
 
   public ApiServer(int configuredPort) {
-    this(configuredPort, null, null, null, new ObjectMapper());
+    this(configuredPort, null, null, null, new ObjectMapper(), DemoProtection.localDevelopment());
   }
 
   public ApiServer(
       int configuredPort, LlmProviderAvailability providerAvailability, ObjectMapper objectMapper) {
-    this(configuredPort, providerAvailability, null, null, objectMapper);
+    this(
+        configuredPort,
+        providerAvailability,
+        null,
+        null,
+        objectMapper,
+        DemoProtection.localDevelopment());
   }
 
   public ApiServer(
@@ -36,18 +45,39 @@ public final class ApiServer implements AutoCloseable {
       ChatServiceResolver chatServiceResolver,
       LlmProvider defaultProvider,
       ObjectMapper objectMapper) {
+    this(
+        configuredPort,
+        providerAvailability,
+        chatServiceResolver,
+        defaultProvider,
+        objectMapper,
+        DemoProtection.localDevelopment());
+  }
+
+  public ApiServer(
+      int configuredPort,
+      LlmProviderAvailability providerAvailability,
+      ChatServiceResolver chatServiceResolver,
+      LlmProvider defaultProvider,
+      ObjectMapper objectMapper,
+      DemoProtection demoProtection) {
     this.configuredPort = configuredPort;
     this.openApiDocument = OpenApiDocument.load();
     this.providerAvailability = providerAvailability;
     this.objectMapper = objectMapper;
+    this.quotaStore = demoProtection.quotaStore();
+    DemoRequestGate requestGate =
+        new DemoRequestGate(
+            demoProtection.limits(), demoProtection.quotaStore(), demoProtection.ipHashSalt());
     if (chatServiceResolver == null) {
       this.chatEndpoint = null;
       this.streamingChatEndpoint = null;
     } else {
       ChatRequestParser requestParser = new ChatRequestParser(defaultProvider, objectMapper);
-      this.chatEndpoint = new ChatEndpoint(chatServiceResolver, requestParser, objectMapper);
+      this.chatEndpoint =
+          new ChatEndpoint(chatServiceResolver, requestParser, objectMapper, requestGate);
       this.streamingChatEndpoint =
-          new StreamingChatEndpoint(chatServiceResolver, requestParser, objectMapper);
+          new StreamingChatEndpoint(chatServiceResolver, requestParser, objectMapper, requestGate);
     }
   }
 
@@ -55,25 +85,27 @@ public final class ApiServer implements AutoCloseable {
     try {
       app =
           Javalin.create(
-                  config ->
-                      config
-                          .routes
-                          .get(
-                              "/api/health",
-                              context ->
-                                  context.contentType(JSON_CONTENT_TYPE).result(HEALTH_RESPONSE))
-                          .get(
-                              "/openapi.yaml",
-                              context ->
-                                  context.contentType("application/yaml").result(openApiDocument))
-                          .get(
-                              "/api/llm/providers",
-                              context ->
-                                  context
-                                      .contentType(JSON_CONTENT_TYPE)
-                                      .result(llmProvidersResponse()))
-                          .post("/api/chat", this::handleChat)
-                          .post("/api/chat/stream", this::handleStreamingChat))
+                  config -> {
+                    config.staticFiles.add("/public", Location.CLASSPATH);
+                    config
+                        .routes
+                        .get(
+                            "/api/health",
+                            context ->
+                                context.contentType(JSON_CONTENT_TYPE).result(HEALTH_RESPONSE))
+                        .get(
+                            "/openapi.yaml",
+                            context ->
+                                context.contentType("application/yaml").result(openApiDocument))
+                        .get(
+                            "/api/llm/providers",
+                            context ->
+                                context
+                                    .contentType(JSON_CONTENT_TYPE)
+                                    .result(llmProvidersResponse()))
+                        .post("/api/chat", this::handleChat)
+                        .post("/api/chat/stream", this::handleStreamingChat);
+                  })
               .start(configuredPort);
     } catch (RuntimeException e) {
       throw new ServerException("Unable to start HTTP server", e);
@@ -137,5 +169,6 @@ public final class ApiServer implements AutoCloseable {
     if (app != null) {
       app.stop();
     }
+    quotaStore.close();
   }
 }

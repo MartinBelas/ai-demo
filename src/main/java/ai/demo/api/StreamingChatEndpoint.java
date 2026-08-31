@@ -9,6 +9,7 @@ import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
 import ai.demo.model.chat.ChatResponse;
+import ai.demo.persistence.DemoQuotaStore;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
@@ -19,26 +20,33 @@ import org.slf4j.LoggerFactory;
 final class StreamingChatEndpoint {
 
   private static final Logger log = LoggerFactory.getLogger(StreamingChatEndpoint.class);
+  private static final String ERROR_EVENT = "error";
 
   private final ChatServiceResolver serviceResolver;
   private final ChatRequestParser requestParser;
   private final ObjectMapper objectMapper;
+  private final DemoRequestGate requestGate;
 
   StreamingChatEndpoint(
       ChatServiceResolver serviceResolver,
       ChatRequestParser requestParser,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      DemoRequestGate requestGate) {
     this.serviceResolver = serviceResolver;
     this.requestParser = requestParser;
     this.objectMapper = objectMapper;
+    this.requestGate = requestGate;
   }
 
   void handle(Context context) {
     ResolvedChatRequest request;
     ChatService chatService;
+    DemoQuotaStore.Reservation reservation = null;
     try {
       request = requestParser.parse(context.body());
+      requestGate.validate(request.conversation());
       chatService = serviceResolver.resolve(request.provider());
+      reservation = requestGate.reserve(context, true);
     } catch (ApiRequestException e) {
       writeValidationError(context, e);
       return;
@@ -46,29 +54,65 @@ final class StreamingChatEndpoint {
       log.warn("Selected LLM provider is unavailable", e);
       writeProviderUnavailable(context);
       return;
+    } catch (ai.demo.exception.DemoLimitException e) {
+      writeDemoLimitError(context, e);
+      return;
     }
 
     prepareStream(context);
     SseEventWriter writer = new SseEventWriter(context.res(), context.outputStream(), objectMapper);
-    stream(chatService, request, writer);
+    stream(chatService, request, writer, reservation);
   }
 
-  private void stream(ChatService chatService, ResolvedChatRequest request, SseEventWriter writer) {
+  private void stream(
+      ChatService chatService,
+      ResolvedChatRequest request,
+      SseEventWriter writer,
+      DemoQuotaStore.Reservation reservation) {
     try {
       ChatResponse response =
           chatService.ask(request.conversation(), event -> writeAgentEvent(writer, event));
+      requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       writer.send("completion", SseCompletionEvent.from(response));
     } catch (SseConnectionException e) {
       log.debug("SSE client disconnected", e);
     } catch (LlmException e) {
       log.warn("Streaming LLM request failed", e);
       writer.send(
-          "error",
+          ERROR_EVENT,
           ApiErrorResponse.of(
               "LLM_COMMUNICATION_ERROR", "Unable to communicate with the AI model."));
+    } catch (ai.demo.exception.DemoLimitException e) {
+      log.warn("Demo quota reconciliation failed", e);
+      writer.send(
+          ERROR_EVENT,
+          ApiErrorResponse.of(
+              "DEMO_LIMIT_UNAVAILABLE", "The public demo is temporarily unavailable."));
     } catch (RuntimeException e) {
       log.error("Unexpected streaming chat API error", e);
-      writer.send("error", ApiErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred."));
+      writer.send(
+          ERROR_EVENT, ApiErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred."));
+    } finally {
+      requestGate.release(reservation);
+    }
+  }
+
+  private void writeDemoLimitError(
+      Context context, ai.demo.exception.DemoLimitException exception) {
+    if (exception.unavailable()) {
+      ApiResponseWriter.writeError(
+          context,
+          503,
+          "DEMO_LIMIT_UNAVAILABLE",
+          "The public demo is temporarily unavailable.",
+          objectMapper);
+    } else {
+      ApiResponseWriter.writeError(
+          context,
+          429,
+          "DEMO_LIMIT_EXCEEDED",
+          "A usage limit for this demo application has been reached. Please try again later.",
+          objectMapper);
     }
   }
 

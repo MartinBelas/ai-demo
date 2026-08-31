@@ -50,6 +50,24 @@ class AppConfigLoaderTest {
     assertEquals(9090, config.server().port());
   }
 
+  @Test
+  void shouldLoadPublicDemoLimitsFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "DEMO_LIMITS_ENABLED" -> "true";
+                  case "DEMO_LIMITS_DAILY_REQUESTS" -> "25";
+                  case "DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL" -> "2000";
+                  default -> null;
+                });
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
+
+    assertTrue(config.demoLimits().enabled());
+    assertEquals(25, config.demoLimits().dailyRequests());
+  }
+
   private String serverEnvironment(String key) {
     return switch (key) {
       case "APP_INTERFACE" -> "http";

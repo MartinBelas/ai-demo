@@ -1,0 +1,9 @@
+.git
+.github
+.idea
+.env
+conversation.json
+target
+frontend/node_modules
+frontend/dist
+*.iml

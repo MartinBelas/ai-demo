@@ -76,6 +76,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: A configured public demo limit has been reached.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Public demo quota enforcement is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Communication with the selected LLM provider failed.
           content:
@@ -128,6 +140,18 @@ paths:
                     data: {"model":"qwen3:4b","tokenUsage":{"promptTokens":12,"completionTokens":4,"totalTokens":16},"durationMs":25}
         "400":
           description: Invalid request or unavailable LLM provider before streaming starts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: A configured public demo limit has been reached before streaming starts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Public demo quota enforcement is temporarily unavailable before streaming starts.
           content:
             application/json:
               schema:

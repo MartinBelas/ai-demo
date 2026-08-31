@@ -55,7 +55,11 @@ public final class AppConfigLoader {
   private AppConfig createConfig(Properties properties) {
 
     try {
-      LlmProvider provider = LlmProvider.from(requiredProperty(properties, "llm.provider"));
+      String configuredProvider = value(properties, "llm.provider", "LLM_PROVIDER", null);
+      if (configuredProvider == null || configuredProvider.isBlank()) {
+        throw new ConfigurationException("Required property 'llm.provider' is missing or empty");
+      }
+      LlmProvider provider = LlmProvider.from(configuredProvider);
       GenerationConfig generation =
           new GenerationConfig(
               requiredDouble(properties, "llm.temperature"),
@@ -76,7 +80,8 @@ public final class AppConfigLoader {
           gemini,
           Path.of(requiredProperty(properties, "conversation.file")),
           appInterface,
-          server);
+          server,
+          loadDemoLimits(properties));
     } catch (IllegalArgumentException e) {
       throw new ConfigurationException(e.getMessage(), e);
     }
@@ -146,6 +151,53 @@ public final class AppConfigLoader {
         requiredProperty(properties, "openai.model"),
         requiredProperty(properties, "openai.base-url"),
         requiredProperty(properties, "openai.api-key-env"));
+  }
+
+  private DemoLimitsConfig loadDemoLimits(Properties properties) {
+    return new DemoLimitsConfig(
+        booleanValue(properties, "demo.limits.enabled", "DEMO_LIMITS_ENABLED", false),
+        booleanValue(
+            properties, "demo.limits.firestore.enabled", "DEMO_LIMITS_FIRESTORE_ENABLED", false),
+        value(properties, "demo.limits.firestore.project-id", "GOOGLE_CLOUD_PROJECT", ""),
+        value(
+            properties, "demo.limits.firestore.database-id", "FIRESTORE_DATABASE_ID", "(default)"),
+        properties.getProperty("demo.limits.ip-hash-salt-env", "DEMO_IP_HASH_SALT"),
+        intValue(properties, "demo.limits.daily-requests", "DEMO_LIMITS_DAILY_REQUESTS", 200),
+        intValue(
+            properties,
+            "demo.limits.hourly-requests-per-ip",
+            "DEMO_LIMITS_HOURLY_REQUESTS_PER_IP",
+            20),
+        intValue(properties, "demo.limits.concurrent-streams", "DEMO_LIMITS_CONCURRENT_STREAMS", 5),
+        intValue(
+            properties,
+            "demo.limits.max-input-characters",
+            "DEMO_LIMITS_MAX_INPUT_CHARACTERS",
+            20000),
+        intValue(
+            properties, "demo.limits.max-history-messages", "DEMO_LIMITS_MAX_HISTORY_MESSAGES", 10),
+        intValue(properties, "demo.limits.max-rag-chunks", "DEMO_LIMITS_MAX_RAG_CHUNKS", 5),
+        intValue(
+            properties,
+            "demo.limits.max-output-tokens-per-call",
+            "DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL",
+            1000));
+  }
+
+  private boolean booleanValue(
+      Properties properties, String property, String variable, boolean fallback) {
+    String value = value(properties, property, variable, Boolean.toString(fallback));
+    return parseBoolean(value, property);
+  }
+
+  private int intValue(Properties properties, String property, String variable, int fallback) {
+    return parseInt(value(properties, property, variable, Integer.toString(fallback)), property);
+  }
+
+  private String value(Properties properties, String property, String variable, String fallback) {
+    String environmentValue = environment.apply(variable);
+    if (environmentValue != null && !environmentValue.isBlank()) return environmentValue;
+    return properties.getProperty(property, fallback);
   }
 
   private Properties loadProperties(String resourceName) throws IOException {
