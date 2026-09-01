@@ -110,6 +110,9 @@ Local execution may enable Ollama in either console or HTTP mode. The Cloud Run 
 - The browser sends at most the configured maximum number of history messages.
 - Stopping a web stream discards its incomplete user turn so a later request receives only completed conversation context.
 - Browser history loaded after an interrupted stream ignores trailing user messages without an assistant response.
+- The web interface provides an English Q&A view at `/#/faq` covering the project purpose, local setup, and Docker/Ollama setup.
+- The top navigation remains visible while scrolling and links to Chat, About, Q&A, and the external health endpoint.
+- The conversation uses separate header, scrollable message, and composer zones. The composer never covers the header or messages; on extremely short viewports, the panel extends into normal page scrolling.
 
 ### REST API
 

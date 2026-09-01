@@ -15,10 +15,11 @@ interface Props {
 }
 
 export function ConversationThread(props: Props) {
-  const threadEnd = useRef<HTMLDivElement>(null);
+  const messageList = useRef<HTMLDivElement>(null);
   const [thinkingExpanded, setThinkingExpanded] = useState(true);
   useEffect(() => {
-    threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const region = messageList.current;
+    if (region) region.scrollTop = region.scrollHeight;
   }, [props.messages, props.partial, props.thinking, props.toolActivity]);
   useEffect(() => {
     if (props.streaming && props.thinking) setThinkingExpanded(true);
@@ -34,12 +35,12 @@ export function ConversationThread(props: Props) {
   return <div class="thread">
     <span class="visually-hidden" role="status" aria-live="polite">{streamStatusMessage(props.streamState)}</span>
     <ConversationHeader onSuggestion={props.onSuggestion} />
-    <div class="message-list">
+    <div class="message-list" ref={messageList} aria-label="Conversation messages">
       {props.messages.map((message, index) => <Message key={`${index}-${message.content.slice(0, 12)}`} message={message} />)}
     {showLive && <LiveResponse {...props} thinkingExpanded={thinkingExpanded} onThinkingToggle={setThinkingExpanded} />}
     {showCompletedActivity && <ActivityTrace thinking={props.thinking} toolActivity={props.toolActivity} thinkingExpanded={thinkingExpanded} onThinkingToggle={setThinkingExpanded} />}
     {props.completion && <CompletionMeta value={props.completion} />}
-      <div class="thread-end" ref={threadEnd} />
+      <div class="thread-end" />
     </div>
   </div>;
 }
