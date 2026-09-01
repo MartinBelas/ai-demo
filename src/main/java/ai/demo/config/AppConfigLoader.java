@@ -126,8 +126,8 @@ public final class AppConfigLoader {
   private OllamaConfig loadOllama(Properties properties) {
     if (!properties.containsKey("ollama.model")) return null;
     return new OllamaConfig(
-        requiredProperty(properties, "ollama.model"),
-        requiredProperty(properties, "ollama.base-url"),
+        value(properties, "ollama.model", "OLLAMA_MODEL", null),
+        value(properties, "ollama.base-url", "OLLAMA_BASE_URL", null),
         requiredInt(properties, "ollama.context-window"),
         requiredDouble(properties, "ollama.repeat-penalty"),
         ollamaEnabled(properties));

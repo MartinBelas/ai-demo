@@ -192,7 +192,8 @@ Invalid or missing configuration results in a `ConfigurationException`.
 `server.port` locally. The `APP_INTERFACE` and `PORT` environment variables override these values,
 which allows the same configuration and artifact to run on Cloud Run.
 
-`LLM_PROVIDER`, `APP_INTERFACE`, `PORT`, and `OLLAMA_ENABLED` override their corresponding
+`LLM_PROVIDER`, `APP_INTERFACE`, `PORT`, `OLLAMA_ENABLED`, `OLLAMA_MODEL`, and `OLLAMA_BASE_URL`
+override their corresponding
 properties. Cloud deployments should select `OPENAI`, `GROQ`, or `GEMINI`; API keys are read only
 from the provider's configured environment variable. Do not put API keys into properties, images,
 deployment environment files, or source control.
@@ -457,6 +458,46 @@ docker run --rm -p 8080:8080 `
   ai-demo:local
 ```
 
+### Run the published application with local Ollama
+
+Docker Compose starts the published application image, an Ollama server, and a one-time model
+download. The model is stored in the named `ollama-data` volume and is reused after restarts.
+
+```powershell
+docker compose --profile ollama pull
+docker compose --profile ollama up -d
+```
+
+The first start takes longer while Ollama downloads `qwen3:4b`. Follow its progress with:
+
+```powershell
+docker compose logs -f ollama-model
+```
+
+After the download completes, open `http://localhost:8080`. Stop the containers without deleting
+the downloaded model using:
+
+```powershell
+docker compose --profile ollama down
+```
+
+To select another model or host port, copy `.env.example` to `.env` and change `OLLAMA_MODEL` or
+`AI_DEMO_PORT`. Removing the model data is an explicit destructive operation:
+
+```powershell
+docker compose --profile ollama down --volumes
+```
+
+To build the application image from the current checkout instead of downloading it, run:
+
+```powershell
+docker compose --profile ollama up -d --build
+```
+
+The `Publish container image` GitHub Actions workflow publishes `latest`, Git tag, and commit-SHA
+tags to GitHub Container Registry. The package must be public for unauthenticated `docker compose
+pull`; otherwise users must authenticate with `docker login ghcr.io` first.
+
 For Cloud Run:
 
 1. Create a Firestore Native-mode database in the same European region as Cloud Run.
@@ -507,7 +548,7 @@ MVP – Public demo target (two weeks)
 ✓ Add Firestore-backed demo request quotas and LLM limits
 → Add public aggregate metrics endpoint and status page
 ✓ Add production Dockerfile
-→ Add Docker Compose with optional Ollama
+✓ Add Docker Compose with optional Ollama
 ✓ Add deployment smoke tests
 → Deploy the Docker image to Google Cloud Run
 → Complete MVP documentation and release verification

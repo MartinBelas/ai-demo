@@ -87,6 +87,23 @@ class AppConfigLoaderTest {
   }
 
   @Test
+  void shouldOverrideOllamaConnectionFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "OLLAMA_MODEL" -> "qwen3:8b";
+                  case "OLLAMA_BASE_URL" -> "http://ollama:11434";
+                  default -> null;
+                });
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
+
+    assertEquals("qwen3:8b", config.ollama().model());
+    assertEquals("http://ollama:11434", config.ollama().baseUrl());
+  }
+
+  @Test
   void shouldRejectDisabledSelectedOllamaProvider() {
     AppConfigLoader environmentLoader =
         new AppConfigLoader(key -> "OLLAMA_ENABLED".equals(key) ? "false" : null);
