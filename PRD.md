@@ -85,7 +85,16 @@ demo.limits.enabled=true|false
 
 Local execution may enable Ollama in either console or HTTP mode. The Cloud Run deployment must set `app.interface=http`, disable Ollama, and enable demo limits.
 
-`GET /api/llm/providers` exposes only providers available in the current deployment. A request for a disabled provider returns an application-specific client error. The cloud web interface must not display Ollama.
+`GET /api/llm/providers` exposes only providers available in the current deployment. A request naming a disabled or unconfigured provider is rejected with HTTP `400` and:
+
+```json
+{
+  "code": "LLM_PROVIDER_UNAVAILABLE",
+  "message": "The selected LLM provider is not available."
+}
+```
+
+The cloud web interface must not display Ollama.
 
 ## Functional requirements
 
@@ -127,6 +136,7 @@ GET    /api/rag/documents
 POST   /api/rag/documents
 DELETE /api/rag/documents/{id}
 GET    /api/demo/status
+GET    /openapi.yaml
 ```
 
 - REST models are provider independent.
@@ -160,10 +170,8 @@ GET    /api/demo/status
 
 ### Tool calling
 
-- The model returns a structured direct-reply or tool-call decision when no registered tool can safely resolve the request deterministically.
-- Unambiguous numeric expressions and localized number-word expressions use the calculator without an LLM routing call. The deterministic localized set covers Czech, English, German, Slovak, and Polish; additional languages are routed by the LLM without requiring language-specific application code.
-- A single-character typo in a one-word localized operator is accepted only when both surrounding operands parse completely as localized numbers. Ordinary text and ambiguous expressions continue to the LLM.
-- Common additive conjunctions are accepted only in the unambiguous number–conjunction–number form, for example `dva a dva` and `two and two`.
+- If no registered tool can resolve the request deterministically, the model returns a structured decision: either a direct reply or a tool call.
+- Unambiguous numeric expressions and localized number-word expressions in Czech, English, German, Slovak, and Polish use the calculator without an LLM routing call; additional languages are routed by the LLM without requiring language-specific application code. The exact matching rules (accepted typo tolerance, accepted conjunction forms) are implementation detail defined in `AGENTS.md`.
 - When the LLM recognizes arithmetic in another language or despite a spelling mistake, it normalizes the expression and calls the calculator immediately without discussing the language or performing the calculation itself.
 - JSON wrapped in a Markdown code block is accepted.
 - An invalid decision triggers at most one repair request.
@@ -188,7 +196,15 @@ GET    /api/demo/status
 - Retrieved context is clearly separated from user instructions in the prompt.
 - RAG answers include source attribution.
 - PDF, Word, crawling, reranking, and persistent document storage are outside the MVP.
-- Anonymous upload must be size and rate limited and may be disabled in the public deployment.
+- Anonymous upload is bounded by `demo.limits.max-rag-upload-bytes` per file and `demo.limits.max-rag-documents` for the total corpus, and may be disabled in the public deployment.
+- A request to a `/api/rag/documents` endpoint while `rag.enabled=false` is rejected with HTTP `400` and:
+
+```json
+{
+  "code": "RAG_DISABLED",
+  "message": "Retrieval-augmented generation is not enabled in this deployment."
+}
+```
 
 ### Conversation persistence
 
@@ -221,8 +237,12 @@ demo.limits.max-input-characters=20000
 demo.limits.max-history-messages=10
 demo.limits.max-rag-chunks=5
 demo.limits.max-output-tokens-per-call=1000
+demo.limits.max-rag-upload-bytes=200000
+demo.limits.max-rag-documents=20
 ```
 
+- `demo.limits.daily-requests` resets at `00:00 UTC`. `demo.limits.hourly-requests-per-ip` uses a rolling one-hour window per hashed client identifier.
+- `demo.limits.concurrent-streams` bounds only concurrent in-flight `POST /api/chat/stream` requests. Non-streaming `POST /api/chat` requests are not subject to a concurrency limit, only to the daily and hourly request-rate limits.
 - Limit values are configurable through application configuration and environment variables.
 - Firestore stores only aggregate usage counters and hashed client identifiers required for rate limiting.
 - Raw IP addresses, prompts, responses, conversation history, and provider secrets must not be stored in Firestore.
@@ -230,10 +250,18 @@ demo.limits.max-output-tokens-per-call=1000
 - A Firestore transaction checks and reserves quota before a paid LLM request begins.
 - Token usage from every agent step is aggregated and reconciled against the reservation.
 - A concurrency slot is released when a stream completes or fails.
-- If Firestore quota enforcement is unavailable in cloud mode, paid LLM requests fail closed with HTTP `503`.
+- If Firestore quota enforcement is unavailable in cloud mode, paid LLM requests fail closed with HTTP `503` and:
+
+```json
+{
+  "code": "DEMO_LIMIT_UNAVAILABLE",
+  "message": "The public demo is temporarily unavailable."
+}
+```
+
 - Local development may disable demo limits or use the Firestore emulator.
 
-When any configured demo or provider quota is reached before streaming starts, the API returns:
+When a demo request-rate quota (daily, hourly, or concurrency) is reached before streaming starts, the API returns:
 
 ```http
 HTTP/1.1 429 Too Many Requests
@@ -247,9 +275,10 @@ Content-Type: application/json
 }
 ```
 
-- The same public code and English message are used for all demo limit failures and provider quota responses.
+- The same public code and English message are used for every demo request-rate quota rejection, regardless of which specific limit (daily, hourly, or concurrency) was reached.
 - `Retry-After` is included when the retry time is known.
-- Once an SSE response has started, its HTTP status cannot change. A provider quota discovered during streaming therefore terminates the stream with an `error` event containing status `429`, code `DEMO_LIMIT_EXCEEDED`, and the same public message.
+- Once an SSE response has started, its HTTP status cannot change. `DEMO_LIMIT_EXCEEDED` can therefore only be returned before streaming starts, as an HTTP `429`. A demo-quota failure discovered after streaming has started — for example a token-usage reconciliation failure — instead terminates the stream with an `error` event containing code `DEMO_LIMIT_UNAVAILABLE` and its public message.
+- Provider-side failures, including a provider reporting its own quota or rate limit exhausted, are not distinguished from other provider communication failures: both produce `LLM_COMMUNICATION_ERROR` (HTTP `502` before streaming starts, or a terminal `error` event with the same code once streaming has started). The client cannot currently tell a provider quota failure apart from a provider outage.
 - Internal logs may record the actual limit type but must not expose secrets, raw IP addresses, prompts, or responses.
 
 ### Demo metrics and status
@@ -303,17 +332,17 @@ Content-Type: application/json
 
 - Java 21 and Maven are required; Docker is required for container workflows.
 - Ollama is required only when using the local Ollama provider.
-- Ollama, OpenAI, GroqCloud, and Gemini API are the implemented LLM providers.
+- Adding a new LLM provider requires a new `LlmClient` implementation; there is no plugin or dynamic provider mechanism.
 - Console conversation persistence uses a local file.
 - Cloud Run filesystems and in-memory RAG indexes are disposable.
 - Only the calculator tool is currently registered.
 - Tool-based answers require multiple LLM calls and normally use more time and tokens.
 - The agent supports one tool execution before the final response.
 - Small local models may return invalid structured output.
-- Localized calculator routing depends on ICU spell-out rules, which do not cover every language or every regional phrasing.
+- Localized calculator routing does not cover every language or every regional phrasing; the matching implementation is documented in `AGENTS.md`.
 - Provider-specific generation settings differ and unsupported settings are not forwarded.
 - Anonymous IP-based rate limiting is an abuse deterrent, not a reliable user identity system.
-- A provider may report quota exhaustion after an SSE stream has already begun; this is represented as a terminal SSE error rather than a changed HTTP status.
+- A provider may report quota exhaustion after an SSE stream has already begun; this surfaces as the same terminal `LLM_COMMUNICATION_ERROR` event used for any other provider communication failure, since provider-reported quota exhaustion is not currently distinguished from other provider errors.
 
 ## Success criteria
 

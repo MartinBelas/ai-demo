@@ -266,6 +266,19 @@ Benefits:
 
 ---
 
+# Calculator Routing Rules
+
+Implementation detail for the deterministic localized-calculator routing required by `PRD.md`
+("Tool calling").
+
+- A single-character typo in a one-word localized operator (e.g. `plu` for `plus`) is accepted only
+  when both surrounding operands parse completely as localized numbers. Ordinary text and ambiguous
+  expressions continue to the LLM decision path instead of being routed deterministically.
+- Common additive conjunctions are accepted only in the unambiguous number-conjunction-number form,
+  for example `dva a dva` and `two and two`. Any other placement is left to the LLM.
+- The deterministic localized set (Czech, English, German, Slovak, Polish) is implemented with ICU
+  spell-out rules, which is why coverage does not extend to every language or regional phrasing.
+
 # Configuration
 
 Configuration flow:

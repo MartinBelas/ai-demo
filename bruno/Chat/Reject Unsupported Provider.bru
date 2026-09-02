@@ -1,0 +1,42 @@
+meta {
+  name: Reject Unsupported Provider
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "provider": "UNKNOWN",
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is Spring Framework?"
+      }
+    ]
+  }
+}
+
+tests {
+  test("returns HTTP 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  test("returns the stable validation error", function () {
+    expect(res.getBody()).to.eql({
+      code: "INVALID_REQUEST",
+      message: "Invalid chat request.",
+      details: [
+        {
+          field: "provider",
+          message: "Unsupported LLM provider."
+        }
+      ]
+    });
+  });
+}
