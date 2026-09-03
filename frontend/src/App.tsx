@@ -2,7 +2,6 @@ import { useEffect, useState } from "preact/hooks";
 import { Composer } from "./components/Composer";
 import { ConversationThread } from "./components/ConversationThread";
 import { Masthead } from "./components/Masthead";
-import { ProjectIntroduction } from "./components/ProjectIntroduction";
 import { ProviderPanel } from "./components/ProviderPanel";
 import { FaqPage } from "./components/FaqPage";
 import { StatusPage } from "./components/StatusPage";
@@ -13,19 +12,20 @@ import { useProviders } from "./hooks/useProviders";
 export function App() {
   const [route, setRoute] = useState(() => routeFromHash(window.location.hash));
   useEffect(() => {
-    const handleHashChange = () => {
+    const scrollToTarget = () => {
+      const faqSection = /^#\/faq\/(why|limitations|local|docker)$/.exec(window.location.hash)?.[1];
       const nextRoute = routeFromHash(window.location.hash);
-      setRoute(nextRoute);
-      window.setTimeout(() => {
-        const faqSection = /^#\/faq\/(why|local|docker)$/.exec(window.location.hash)?.[1];
-        let targetId = "main";
-        if (faqSection) targetId = faqSection;
-        else if (nextRoute === "chat") targetId = window.location.hash.slice(1) || "main";
-        document.getElementById(targetId)?.scrollIntoView();
-      }, 0);
+      let targetId = "main";
+      if (faqSection) targetId = faqSection;
+      else if (nextRoute === "chat") targetId = window.location.hash.slice(1) || "main";
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "auto" });
+    };
+    const handleHashChange = () => {
+      setRoute(routeFromHash(window.location.hash));
+      requestAnimationFrame(() => requestAnimationFrame(scrollToTarget));
     };
     window.addEventListener("hashchange", handleHashChange);
-    handleHashChange();
+    if (window.location.hash) handleHashChange();
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
   if (route === "chat") return <ChatPage />;
@@ -40,7 +40,6 @@ function ChatPage() {
 
   return <div class="app-shell">
     <Masthead route="chat" />
-    <ProjectIntroduction />
     <main id="main" class="workbench">
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />
       <section class="conversation" aria-label="Conversation">
