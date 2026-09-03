@@ -39,7 +39,7 @@ function ChatPage() {
   const canClear = conversation.messages.length > 0 || Boolean(conversation.partial);
 
   return <div class="app-shell">
-    <Masthead route="chat" loading={providerState.loading} providerError={providerState.error} providerCount={providerState.providers.length} />
+    <Masthead route="chat" />
     <ProjectIntroduction />
     <main id="main" class="workbench">
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />

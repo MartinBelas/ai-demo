@@ -12,13 +12,21 @@ interface Props {
 }
 
 export function ProviderPanel(props: Props) {
+  const status = providerStatus(props.loading, props.error, props.providers.length);
   return <aside class="context-panel" aria-label="Model context">
     <p class="eyebrow">01 / Model</p>
     <h2>Choose the voice behind the response.</h2>
+    <span class={`backend-status provider-status ${status.className}`}><i />{status.label}</span>
     <ProviderControl {...props} />
     {props.activeProvider && <ModelFacts provider={props.activeProvider} />}
     <p class="privacy-note"><span aria-hidden="true">↳</span>Your conversation stays in this browser. Only the latest 10 messages are sent with each request.</p>
   </aside>;
+}
+
+function providerStatus(loading: boolean, error: string, count: number) {
+  if (loading) return { label: "Connecting", className: "" };
+  if (error) return { label: "Backend unavailable", className: "is-error" };
+  return { label: `${count} provider${count === 1 ? "" : "s"} ready`, className: "is-live" };
 }
 
 function ProviderControl({ providers, providerId, loading, error, streaming, onChange, onRetry }: Props) {
