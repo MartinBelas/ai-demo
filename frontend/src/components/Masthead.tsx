@@ -9,6 +9,7 @@ export function Masthead({ route, loading, providerError = "", providerCount = 0
       <a href="/#main" aria-current={route === "chat" ? "page" : undefined}>Chat</a>
       <a href="/#about">About</a>
       <a href="/#/faq" aria-current={route === "faq" ? "page" : undefined}>Q&amp;A</a>
+      <a href="/#/status" aria-current={route === "status" ? "page" : undefined}>Status</a>
       <a href="/api/health" target="_blank" rel="noopener noreferrer"><span>Health</span><span class="external-mark" aria-hidden="true">↗</span><span class="visually-hidden">Opens in a new tab</span></a>
     </nav>
     {status

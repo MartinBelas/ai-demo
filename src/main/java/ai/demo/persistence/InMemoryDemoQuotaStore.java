@@ -2,6 +2,8 @@ package ai.demo.persistence;
 
 import ai.demo.config.DemoLimitsConfig;
 import ai.demo.exception.DemoLimitException;
+import ai.demo.model.app.AppMetrics;
+import ai.demo.model.app.AppOutcome;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -20,6 +22,7 @@ public final class InMemoryDemoQuotaStore implements DemoQuotaStore {
   private final ConcurrentMap<String, AtomicInteger> hourlyByClient = new ConcurrentHashMap<>();
   private final ConcurrentMap<String, AtomicLong> tokens = new ConcurrentHashMap<>();
   private final AtomicInteger activeStreams = new AtomicInteger();
+  private final ConcurrentMap<String, AppMetrics> outcomes = new ConcurrentHashMap<>();
 
   public InMemoryDemoQuotaStore(DemoLimitsConfig limits) {
     this(limits, Clock.systemUTC());
@@ -60,5 +63,39 @@ public final class InMemoryDemoQuotaStore implements DemoQuotaStore {
   @Override
   public void release(Reservation reservation) {
     if (reservation.streaming()) activeStreams.updateAndGet(value -> Math.max(0, value - 1));
+  }
+
+  @Override
+  public void recordOutcome(Reservation reservation, AppOutcome outcome, long durationMs) {
+    outcomes.compute(
+        reservation.period(),
+        (period, previous) -> {
+          AppMetrics old = previous == null ? AppMetrics.empty() : previous;
+          return new AppMetrics(
+              0,
+              0,
+              old.completed() + (outcome == AppOutcome.COMPLETED ? 1 : 0),
+              old.failed() + (outcome == AppOutcome.FAILED ? 1 : 0),
+              old.disconnected() + (outcome == AppOutcome.DISCONNECTED ? 1 : 0),
+              old.completedDurationMs()
+                  + (outcome == AppOutcome.COMPLETED ? Math.max(0, durationMs) : 0));
+        });
+  }
+
+  @Override
+  public AppMetrics snapshot(String period) {
+    AppMetrics values = outcomes.getOrDefault(period, AppMetrics.empty());
+    return new AppMetrics(
+        daily.getOrDefault(period, new AtomicInteger()).get(),
+        tokens.getOrDefault(period, new AtomicLong()).get(),
+        values.completed(),
+        values.failed(),
+        values.disconnected(),
+        values.completedDurationMs());
+  }
+
+  @Override
+  public int activeStreams() {
+    return activeStreams.get();
   }
 }

@@ -2,8 +2,10 @@ package ai.demo.api;
 
 import ai.demo.config.LlmProvider;
 import ai.demo.config.LlmProviderAvailability;
+import ai.demo.exception.PersistenceException;
 import ai.demo.exception.ServerException;
 import ai.demo.persistence.DemoQuotaStore;
+import ai.demo.service.AppStatusService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
@@ -22,6 +24,7 @@ public final class ApiServer implements AutoCloseable {
   private final ChatEndpoint chatEndpoint;
   private final StreamingChatEndpoint streamingChatEndpoint;
   private final DemoQuotaStore quotaStore;
+  private final AppStatusService appStatusService;
   private Javalin app;
 
   public ApiServer(int configuredPort) {
@@ -66,6 +69,7 @@ public final class ApiServer implements AutoCloseable {
     this.providerAvailability = providerAvailability;
     this.objectMapper = objectMapper;
     this.quotaStore = demoProtection.quotaStore();
+    this.appStatusService = new AppStatusService(quotaStore, demoProtection.limits());
     DemoRequestGate requestGate =
         new DemoRequestGate(
             demoProtection.limits(), demoProtection.quotaStore(), demoProtection.ipHashSalt());
@@ -103,6 +107,7 @@ public final class ApiServer implements AutoCloseable {
                                 context
                                     .contentType(JSON_CONTENT_TYPE)
                                     .result(llmProvidersResponse()))
+                        .get("/api/app/status", this::handleAppStatus)
                         .post("/api/chat", this::handleChat)
                         .post("/api/chat/stream", this::handleStreamingChat);
                   })
@@ -118,6 +123,20 @@ public final class ApiServer implements AutoCloseable {
       return;
     }
     chatEndpoint.handle(context);
+  }
+
+  private void handleAppStatus(io.javalin.http.Context context) {
+    context.header("Cache-Control", "no-store");
+    try {
+      ApiResponseWriter.write(context, 200, appStatusService.status(), objectMapper);
+    } catch (PersistenceException e) {
+      ApiResponseWriter.writeError(
+          context,
+          503,
+          "APP_METRICS_UNAVAILABLE",
+          "Application metrics are temporarily unavailable.",
+          objectMapper);
+    }
   }
 
   private void handleStreamingChat(io.javalin.http.Context context) {

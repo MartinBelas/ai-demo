@@ -3,6 +3,7 @@ package ai.demo.api;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
+import ai.demo.model.app.AppOutcome;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.persistence.DemoQuotaStore;
 import ai.demo.service.ChatService;
@@ -32,6 +33,8 @@ final class ChatEndpoint {
 
   void handle(Context context) {
     DemoQuotaStore.Reservation reservation = null;
+    AppOutcome outcome = AppOutcome.FAILED;
+    long started = System.nanoTime();
     try {
       ResolvedChatRequest request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
@@ -40,6 +43,7 @@ final class ChatEndpoint {
       ChatResponse response = chatService.ask(request.conversation());
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       ApiResponseWriter.write(context, 200, ApiChatResponse.from(response), objectMapper);
+      outcome = AppOutcome.COMPLETED;
     } catch (ApiRequestException e) {
       writeValidationError(context, e);
     } catch (ConfigurationException e) {
@@ -56,6 +60,7 @@ final class ChatEndpoint {
       writeError(context, 500, "INTERNAL_ERROR", "An unexpected error occurred.");
     } finally {
       requestGate.release(reservation);
+      requestGate.recordOutcome(reservation, outcome, started);
     }
   }
 

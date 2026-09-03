@@ -8,6 +8,7 @@ import ai.demo.agent.ToolResultEvent;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
+import ai.demo.model.app.AppOutcome;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.persistence.DemoQuotaStore;
 import ai.demo.service.ChatService;
@@ -41,7 +42,7 @@ final class StreamingChatEndpoint {
   void handle(Context context) {
     ResolvedChatRequest request;
     ChatService chatService;
-    DemoQuotaStore.Reservation reservation = null;
+    DemoQuotaStore.Reservation reservation;
     try {
       request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
@@ -59,12 +60,22 @@ final class StreamingChatEndpoint {
       return;
     }
 
-    prepareStream(context);
-    SseEventWriter writer = new SseEventWriter(context.res(), context.outputStream(), objectMapper);
-    stream(chatService, request, writer, reservation);
+    long started = System.nanoTime();
+    AppOutcome outcome = AppOutcome.FAILED;
+    try {
+      prepareStream(context);
+      SseEventWriter writer =
+          new SseEventWriter(context.res(), context.outputStream(), objectMapper);
+      outcome = stream(chatService, request, writer, reservation);
+    } catch (SseConnectionException e) {
+      outcome = AppOutcome.DISCONNECTED;
+    } finally {
+      requestGate.release(reservation);
+      requestGate.recordOutcome(reservation, outcome, started);
+    }
   }
 
-  private void stream(
+  private AppOutcome stream(
       ChatService chatService,
       ResolvedChatRequest request,
       SseEventWriter writer,
@@ -74,8 +85,10 @@ final class StreamingChatEndpoint {
           chatService.ask(request.conversation(), event -> writeAgentEvent(writer, event));
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       writer.send("completion", SseCompletionEvent.from(response));
+      return AppOutcome.COMPLETED;
     } catch (SseConnectionException e) {
       log.debug("SSE client disconnected", e);
+      return AppOutcome.DISCONNECTED;
     } catch (LlmException e) {
       log.warn("Streaming LLM request failed", e);
       writer.send(
@@ -92,13 +105,11 @@ final class StreamingChatEndpoint {
       log.error("Unexpected streaming chat API error", e);
       writer.send(
           ERROR_EVENT, ApiErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred."));
-    } finally {
-      requestGate.release(reservation);
     }
+    return AppOutcome.FAILED;
   }
 
-  private void writeDemoLimitError(
-      Context context, ai.demo.exception.DemoLimitException exception) {
+  private void writeDemoLimitError(Context context, ai.demo.exception.DemoLimitException exception) {
     if (exception.unavailable()) {
       ApiResponseWriter.writeError(
           context,

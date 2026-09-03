@@ -28,6 +28,8 @@ class OpenApiSpecificationTest {
     assertNotNull(result.getOpenAPI());
     assertTrue(result.getMessages().isEmpty(), () -> String.join(", ", result.getMessages()));
     assertNotNull(result.getOpenAPI().getPaths().get("/api/health").getGet());
+    assertNotNull(result.getOpenAPI().getPaths().get("/api/app/status").getGet());
+    assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("AppStatus"));
     var operation = result.getOpenAPI().getPaths().get("/api/llm/providers").getGet();
     assertNotNull(operation);
     assertEquals("getLlmProviders", operation.getOperationId());

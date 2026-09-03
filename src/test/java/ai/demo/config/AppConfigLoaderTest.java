@@ -77,6 +77,38 @@ class AppConfigLoaderTest {
   }
 
   @Test
+  void shouldLoadDemoLimitProperties() throws IOException {
+    DemoLimitsConfig limits =
+        loader.loadFromResource("app-config/valid-demo-limits.properties").demoLimits();
+    assertTrue(limits.enabled());
+    assertEquals(37, limits.dailyRequests());
+    assertEquals(9, limits.hourlyRequestsPerIp());
+    assertEquals("DEMO_IP_HASH_SALT", limits.ipHashSaltEnvironmentVariable());
+  }
+
+  @Test
+  void shouldOverrideDemoLimitsFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "DEMO_LIMITS_ENABLED" -> "true";
+                  case "DEMO_LIMITS_FIRESTORE_ENABLED" -> "true";
+                  case "DEMO_LIMITS_DAILY_REQUESTS" -> "73";
+                  case "DEMO_LIMITS_HOURLY_REQUESTS_PER_IP" -> "11";
+                  case "DEMO_LIMITS_CONCURRENT_STREAMS" -> "2";
+                  default -> null;
+                });
+    DemoLimitsConfig limits =
+        environmentLoader.loadFromResource("app-config/valid-demo-limits.properties").demoLimits();
+    assertTrue(limits.enabled());
+    assertTrue(limits.firestoreEnabled());
+    assertEquals(73, limits.dailyRequests());
+    assertEquals(11, limits.hourlyRequestsPerIp());
+    assertEquals(2, limits.concurrentStreams());
+  }
+
+  @Test
   void shouldOverrideOllamaAvailabilityFromEnvironment() throws IOException {
     AppConfigLoader environmentLoader =
         new AppConfigLoader(key -> "OLLAMA_ENABLED".equals(key) ? "false" : null);

@@ -6,8 +6,7 @@ import ai.demo.persistence.DemoQuotaStoreFactory;
 import ai.demo.persistence.InMemoryDemoQuotaStore;
 
 /** Dependencies used to protect the public demo endpoints. */
-public record DemoProtection(
-    DemoLimitsConfig limits, DemoQuotaStore quotaStore, String ipHashSalt) {
+public record DemoProtection(DemoLimitsConfig limits, DemoQuotaStore quotaStore, String ipHashSalt) {
 
   private static final String LOCAL_DEVELOPMENT_SALT = "local-development";
 

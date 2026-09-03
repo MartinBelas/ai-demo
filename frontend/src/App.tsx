@@ -5,6 +5,8 @@ import { Masthead } from "./components/Masthead";
 import { ProjectIntroduction } from "./components/ProjectIntroduction";
 import { ProviderPanel } from "./components/ProviderPanel";
 import { FaqPage } from "./components/FaqPage";
+import { StatusPage } from "./components/StatusPage";
+import { SiteFooter } from "./components/SiteFooter";
 import { useConversation } from "./hooks/useConversation";
 import { useProviders } from "./hooks/useProviders";
 
@@ -16,14 +18,18 @@ export function App() {
       setRoute(nextRoute);
       window.setTimeout(() => {
         const faqSection = /^#\/faq\/(why|local|docker)$/.exec(window.location.hash)?.[1];
-        document.getElementById(faqSection ?? (window.location.hash.slice(1) || "main"))?.scrollIntoView();
+        let targetId = "main";
+        if (faqSection) targetId = faqSection;
+        else if (nextRoute === "chat") targetId = window.location.hash.slice(1) || "main";
+        document.getElementById(targetId)?.scrollIntoView();
       }, 0);
     };
     window.addEventListener("hashchange", handleHashChange);
     handleHashChange();
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
-  return route === "faq" ? <div class="app-shell"><Masthead route={route} /><FaqPage /></div> : <ChatPage />;
+  if (route === "chat") return <ChatPage />;
+  return <div class="app-shell"><Masthead route={route} />{route === "faq" ? <FaqPage /> : <StatusPage />}<SiteFooter /></div>;
 }
 
 function ChatPage() {
@@ -42,8 +48,13 @@ function ChatPage() {
         <Composer providerAvailable={Boolean(providerState.providerId)} streaming={conversation.streaming} suggestion={suggestion} canClear={canClear} onSuggestionUsed={() => setSuggestion("")} onSubmit={conversation.submit} onStop={conversation.stop} onClear={conversation.clear} />
       </section>
     </main>
+    <SiteFooter />
   </div>;
 }
 
-export type Route = "chat" | "faq";
-export function routeFromHash(hash: string): Route { return hash.startsWith("#/faq") ? "faq" : "chat"; }
+export type Route = "chat" | "faq" | "status";
+export function routeFromHash(hash: string): Route {
+  if (hash === "#/status") return "status";
+  if (hash.startsWith("#/faq")) return "faq";
+  return "chat";
+}

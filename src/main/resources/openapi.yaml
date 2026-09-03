@@ -13,6 +13,34 @@ tags:
     description: Stateless chat operations.
 
 paths:
+  /api/app/status:
+    get:
+      tags: [System]
+      summary: Read aggregate application usage for today in UTC
+      operationId: getAppStatus
+      description: >-
+        Daily counters are collected only when demo limits are enabled and cached for up to
+        ten seconds. Requests count accepted chat reservations, including subsequent failures.
+        Outcomes are best-effort and may not sum to requests (in-flight requests, restarts,
+        storage failures or legacy counters). Tokens include successfully reconciled usage only.
+        Streams are assigned to the UTC date of admission. Active streams and uptime refer
+        to this instance. No visitor identities or conversation content are exposed.
+      responses:
+        "200":
+          description: Aggregate status; trackingEnabled=false means counters are not measured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppStatus"
+        "503":
+          description: Metrics storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: APP_METRICS_UNAVAILABLE
+                message: Application metrics are temporarily unavailable.
   /api/health:
     get:
       tags:
@@ -221,6 +249,62 @@ paths:
 
 components:
   schemas:
+    AppStatus:
+      type: object
+      additionalProperties: false
+      required: [trackingEnabled, persistent, period, requests, tokens, completed, failed, disconnected, averageDurationMs, activeStreams, uptimeSeconds, dailyRequestLimit, requestsRemaining]
+      properties:
+        trackingEnabled:
+          type: boolean
+        persistent:
+          type: boolean
+          description: True when enabled counters use Firestore; otherwise counters reset on restart.
+        period:
+          type: string
+          format: date
+          description: Current UTC date.
+        requests:
+          type: integer
+          format: int64
+          minimum: 0
+        tokens:
+          type: integer
+          format: int64
+          minimum: 0
+        completed:
+          type: integer
+          format: int64
+          minimum: 0
+        failed:
+          type: integer
+          format: int64
+          minimum: 0
+        disconnected:
+          type: integer
+          format: int64
+          minimum: 0
+        averageDurationMs:
+          type: [number, "null"]
+          minimum: 0
+          description: Average server processing time for completed requests, null without samples.
+        activeStreams:
+          type: integer
+          minimum: 0
+          description: Current instance only, including streams admitted on previous days.
+        uptimeSeconds:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Time since this instance initialized the status service.
+        dailyRequestLimit:
+          type: [integer, "null"]
+          minimum: 0
+          description: Null when demo limits are disabled.
+        requestsRemaining:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: Null when demo limits are disabled.
     HealthResponse:
       type: object
       additionalProperties: false

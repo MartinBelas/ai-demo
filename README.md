@@ -223,6 +223,27 @@ call and reconcile aggregate token usage afterward. Because the deployment is bo
 Run instance, active SSE concurrency is enforced in that process. If Firestore is unavailable,
 requests fail closed with HTTP `503`.
 
+### Application status and usage metrics
+
+Open `/#/status` (the **Status** navigation link) or request `GET /api/app/status` for
+today's aggregate usage in UTC: accepted chat requests, reconciled tokens, completed/failed/
+disconnected outcomes, average completed-request duration, and daily quota remaining. The page
+also shows active streams and uptime for the current server instance. Use Refresh to update;
+storage reads are cached for up to ten seconds.
+
+Collection uses `demo.limits.enabled=true`. With limits disabled the page explicitly says tracking
+is disabled; zeros are not measured usage. With `demo.limits.firestore.enabled=true`, daily
+counters are retained in `demoDailyUsage`, and per-client quota counters use `demoHourlyClients`.
+In-memory development counters reset on restart.
+
+Requests count quota admissions, including requests that subsequently fail; rejected requests are
+excluded. Outcomes are recorded on a best-effort basis from this release onward, so old requests,
+in-flight requests, process crashes and failed metric writes may leave totals unmatched. Token
+totals may omit usage on failed or interrupted requests and should not be treated as billing data.
+Requests crossing midnight belong to their admission day. This version does not count page views
+or unique visitors and stores no message content or new visitor identifiers. A storage read failure
+returns `503 APP_METRICS_UNAVAILABLE`; the page provides a retry action.
+
 ## HTTP API
 
 HTTP mode currently exposes:
@@ -437,15 +458,19 @@ Covered areas include:
 
 - Ollama, OpenAI, GroqCloud, and Gemini API are the implemented LLM providers.
 - Only the calculator tool is available.
-- A tool request requires two LLM calls.
+- Calculator results can be returned directly; deterministic routing needs no LLM call, while
+  model-based routing needs a decision call (and may retry or repair the decision).
 - The agent supports a single tool execution before the final response.
 - There is no retry or timeout recovery strategy beyond HTTP error handling.
-- Uploaded RAG documents, the public status page, and persistent RAG storage are not implemented.
-- Conversation history is stored in a local JSON file.
+- RAG ingestion, retrieval, and document endpoints are not implemented. The public status page is
+  implemented; daily metric collection requires demo limits to be enabled.
+- Console history is stored in a local JSON file; web history stays in the browser.
+- Per-client request limits currently use fixed UTC hours, not the rolling one-hour window required
+  by PRD. Completing that requirement remains on the roadmap.
 
 ## Docker and Google Cloud Run
 
-The multi-stage `Dockerfile` builds the Preact client, packages it into a shaded Java JAR, and runs
+The multi-stage `Dockerfile` builds the Preact client, packages it into a Java JAR with runtime dependencies in `lib/`, and runs
 the result as a non-root user on the `PORT` supplied by Cloud Run.
 
 Build and test the image locally:
@@ -530,224 +555,260 @@ can continue to use GitHub Pages or any other hosting.
 
 ## Roadmap
 
-MVP – Public demo target (two weeks)
-✓ Define MVP scope, limits, and acceptance criteria in PRD
-→ Add local and cloud runtime configuration
-✓ Add HTTP mode and health endpoint
-✓ Add configurable Ollama availability
-✓ Add OpenAPI specification foundation
-✓ Add LLM provider availability endpoint
-✓ Add stateless chat REST API
-✓ Add SSE chat streaming and REST tests
-✓ Add Bruno API collection foundation
-✓ Add simple web chat with browser-local history
-✓ Serve the production frontend build from the HTTP application
-→ Add provider-independent embedding and vector store abstractions
-→ Add TXT and Markdown ingestion, chunking, and retrieval
-→ Add RAG context assembly and source attribution
-✓ Add Firestore-backed demo request quotas and LLM limits
-→ Add public aggregate metrics endpoint and status page
-✓ Add production Dockerfile
-✓ Add Docker Compose with optional Ollama
-✓ Add deployment smoke tests
-→ Deploy the Docker image to Google Cloud Run
-→ Complete MVP documentation and release verification
+Reviewed against this checkout on 2026-09-03. Checked items have an implementation in the repository;
+they do not certify a successful cloud deployment or CI run. Unchecked items are still pending,
+including the remaining scope explicitly named on partially implemented features. Later phases
+include ideas beyond the current MVP, not additional MVP commitments.
 
-Phase 1 – Core LLM application
-✓ LLM client abstraction
-✓ Ollama integration
-✓ Native Java HTTP transport
-✓ Configuration loading
-✓ Configuration validation
-✓ Application-specific exceptions
-✓ Provider-independent models
-✓ Ollama DTO isolation
-✓ Prompt model
-✓ Prompt composition
-✓ Prompt templates
-✓ Streaming responses
-✓ Streaming thinking output
-✓ Token usage extraction
-✓ Request and response logging
-✓ LLM client tests
-✓ Ollama client tests
-✓ Configuration loading tests
-✓ Configuration validation tests
-✓ Prompt composition tests
-✓ Prompt template tests
-✓ Forward all configured generation options to Ollama
-✓ Additional LLM providers
-✓ Provider selection through configuration
-→ Ollama integration tests
+Evidence: `src/main/java`, `src/test/java`, `frontend/src`, `Dockerfile`, `compose.yaml`,
+`.github/workflows/publish-container.yaml`, and `deploy/`. Cloud deployment status has not been
+verified in this review.
 
-Phase 2 – Conversation & observability
-✓ Conversation model
-✓ Conversation memory
-✓ Conversation persistence
-✓ New conversation command
-✓ Conversation history command
-✓ Prompt token reporting
-✓ Completion token reporting
-✓ Total token reporting
-✓ Response duration
-✓ Aggregated token usage for tool calls
-✓ Request identifiers in logs
-✓ Configurable thinking output
-✓ Minimal thinking preview
-✓ Conversation model tests
-✓ Conversation persistence tests
-✓ Console command tests
-✓ Thinking output regression tests
-✓ Response summary regression tests
-→ Conversation history limits
-→ Context-window usage tracking
-→ Automatic conversation trimming
-→ Prompt + response logging controls
-→ Sensitive-data filtering
-→ Metrics
-→ Structured logging improvements
-→ LLM performance metrics
-→ Langfuse integration
-→ Tracing
-→ Token usage analytics
-→ Latency + cost dashboards
-✓ End-to-end console tests
+### MVP – Public demo target
 
-Phase 3 – Agent
-✓ Agent abstraction
-✓ Agent event model
-✓ Agent LLM gateway
-✓ Structured agent decisions
-✓ Tool abstraction
-✓ Tool description formatting
-✓ Tool calling
-✓ Tool call events
-✓ Tool result events
-✓ Calculator tool
-✓ Tool result conversation history
-✓ Final response after tool execution
-✓ Token aggregation across agent steps
-✓ Agent gateway tests
-✓ Agent decision tests
-✓ Tool calling tests
-✓ Calculator tool tests
-✓ Token aggregation tests
-→ Configurable tool registry
-→ Multiple tool calls per request
-→ Bounded multi-step agent loop
-→ Maximum agent-step configuration
-→ Tool execution timeout
-→ Tool authorization policies
-→ Tool input schema validation
-→ Parallel tool execution
-→ Agent state
-→ Agent execution trace
-✓ One repair attempt for invalid agent output
-→ Repeated tool-call recovery
+- [x] Define MVP scope, limits, and acceptance criteria in PRD
+- [x] Add console/HTTP, provider availability, port, and demo-limit runtime configuration
+- [ ] Add RAG enablement and document-upload limit configuration
+- [x] Add HTTP mode and health endpoint
+- [x] Add configurable Ollama availability
+- [x] Add OpenAPI specification foundation
+- [x] Add LLM provider availability endpoint
+- [x] Add stateless chat REST API
+- [x] Add SSE chat streaming and REST tests
+- [x] Add Bruno API collection foundation
+- [x] Add simple web chat with browser-local history
+- [x] Serve the production frontend build from the HTTP application
+- [ ] Add provider-independent embedding and vector store abstractions
+- [ ] Add TXT and Markdown ingestion, chunking, and retrieval
+- [ ] Add RAG context assembly and source attribution
+- [x] Add Firestore-backed demo request quotas and LLM limits
+- [x] Add public aggregate metrics endpoint and status page
+- [x] Add production Dockerfile
+- [x] Add Docker Compose with optional Ollama
+- [x] Add deployment smoke tests
+- [x] Add Cloud Run deployment script and environment example
+- [ ] Verify deployment of the current Docker image to Google Cloud Run
+- [ ] Complete MVP documentation and release verification
 
-Phase 4 – Data & RAG
-→ Document ingestion
-→ Document format detection
-→ Document parsing
-→ Text normalization
-→ Chunking
-→ Chunk metadata
-→ Embedding client abstraction
-→ Ollama embedding integration
-→ Vector store abstraction
-→ Local vector store implementation
-→ Semantic retrieval
-→ Metadata filtering
-→ Retrieval ranking
-→ Context assembly
-→ RAG prompt templates
-→ Citation generation
-→ Source attribution
-→ Retrieval diagnostics
-→ Document ingestion tests
-→ Document parsing tests
-→ Chunking tests
-→ Embedding client tests
-→ Vector store tests
-→ Retrieval tests
-→ RAG pipeline tests
-→ Citation generation tests
-→ n8n integration
-→ Ingestion workflows
-→ Scheduled crawlers
-→ Preprocessing pipelines
-→ External API enrichment
+### Phase 1 – Core LLM application
 
-Phase 5 – Evaluation
-✓ Google Java Format enforcement
-✓ Maven verification lifecycle
-→ Evaluation dataset
-→ Automated evaluation
-→ Tool selection evaluation
-→ Tool result correctness
-→ Retrieval relevance
-→ Answer correctness
-→ Citation coverage
-→ Confidence scoring
-→ Prompt regression evaluation
-→ Model comparison benchmarks
-→ Performance regression evaluation
-→ SonarQube quality gate
+- [x] LLM client abstraction
+- [x] Ollama integration
+- [x] Native Java HTTP transport
+- [x] Configuration loading
+- [x] Configuration validation
+- [x] Application-specific exceptions
+- [x] Provider-independent models
+- [x] Ollama DTO isolation
+- [x] Prompt model
+- [x] Prompt composition
+- [x] Prompt templates
+- [x] Streaming responses
+- [x] Streaming thinking output
+- [x] Token usage extraction
+- [x] Request/response metadata logging (not conversation content)
+- [x] LLM client tests
+- [x] Ollama client tests
+- [x] Configuration loading tests
+- [x] Configuration validation tests
+- [x] Prompt composition tests
+- [x] Prompt template tests
+- [x] Forward all configured generation options to Ollama
+- [x] Additional LLM providers
+- [x] Provider selection through configuration
+- [ ] Integration tests against a real local Ollama server (current client tests mock HTTP transport)
 
-Phase 6 – Production engineering
-✓ HTTP connection timeout
-✓ Graceful HTTP client shutdown
-✓ Interrupted request handling
-✓ Communication exception mapping
-✓ Invalid configuration handling
-✓ Invalid provider response handling
-✓ Application startup error tests
-✓ Communication error tests
-→ Request timeout configuration
-→ Retry policy
-→ Exponential backoff
-→ Circuit breaker
-→ Rate limiting
-→ Request cancellation
-→ Concurrency
-→ Thread-safety review
-→ Context-window management
-→ Response caching
-→ Tool result caching
-→ Performance benchmarks
-→ Load testing
-→ Resilience tests
-→ Concurrency tests
-→ Performance tests
-→ Health checks
-→ Readiness checks
-→ Metrics endpoint
-→ Secure secret management
-→ Log redaction
-→ Configuration profiles
+### Phase 2 – Conversation & observability
 
-Phase 7 – Integration & deployment
-→ REST API
-→ Streaming REST endpoint
-✓ OpenAPI specification foundation
-→ Interactive API documentation
-→ REST API tests
-→ Web user interface
-→ Docker
-→ Docker Compose
-→ Ollama container integration
-→ GitHub Actions CI
-→ Automated tests
-→ Formatting verification
-→ SonarQube analysis
-→ Dependency vulnerability scanning
-→ Container vulnerability scanning
-→ Integration tests
-→ Deployment smoke tests
-→ Release packaging
-→ Versioned releases
-→ Deployment documentation
-→ Production deployment
+- [x] Conversation model
+- [x] Conversation memory
+- [x] Conversation persistence
+- [x] New conversation command
+- [x] Conversation history command
+- [x] Prompt token reporting
+- [x] Completion token reporting
+- [x] Total token reporting
+- [x] Response duration
+- [x] Aggregated token usage for tool calls
+- [x] Request identifiers in logs
+- [x] Configurable thinking output
+- [x] Minimal thinking preview
+- [x] Conversation model tests
+- [x] Conversation persistence tests
+- [x] Console command tests
+- [x] Thinking output regression tests
+- [x] Response summary regression tests
+- [x] Web request history limited to ten messages; configurable server bound when demo limits are enabled
+- [ ] Console history limits and browser history retention limits
+- [ ] Context-window usage tracking
+- [ ] Automatic conversation trimming
+- [ ] Prompt + response logging controls
+- [ ] Sensitive-data filtering
+- [x] Daily aggregate demo metrics and public Status page
+- [ ] Structured logging improvements
+- [x] Average completed-request duration in demo metrics
+- [ ] Per-provider performance metrics, latency percentiles, and time to first token
+- [ ] Langfuse integration
+- [ ] Tracing
+- [x] Daily aggregate reconciled token usage
+- [ ] Historical and per-provider token usage analytics
+- [ ] Latency + cost dashboards
+- [x] End-to-end console tests
+
+### Phase 3 – Agent
+
+- [x] Agent abstraction
+- [x] Agent event model
+- [x] Agent LLM gateway
+- [x] Structured agent decisions
+- [x] Tool abstraction
+- [x] Tool description formatting
+- [x] Tool calling
+- [x] Tool call events
+- [x] Tool result events
+- [x] Calculator tool
+- [x] Tool result conversation history
+- [x] Final response after tool execution
+- [x] Direct final calculator result without a follow-up LLM call
+- [x] Deterministic localized arithmetic routing
+- [x] Token aggregation across agent steps
+- [x] Agent gateway tests
+- [x] Agent decision tests
+- [x] Tool calling tests
+- [x] Calculator tool tests
+- [x] Token aggregation tests
+- [ ] Configurable tool registry
+- [ ] Multiple tool calls per request
+- [ ] Bounded multi-step agent loop
+- [ ] Maximum agent-step configuration
+- [ ] Tool execution timeout
+- [ ] Tool authorization policies
+- [x] Calculator input validation
+- [ ] General tool input schema validation
+- [ ] Parallel tool execution
+- [ ] Agent state
+- [ ] Agent execution trace
+- [x] One repair attempt for invalid agent output
+- [x] One decision retry when reasoning exhausts the output budget
+- [ ] Repeated tool-call recovery
+
+### Phase 4 – Data & RAG
+
+- [ ] Document ingestion
+- [ ] Document format detection
+- [ ] Document parsing
+- [ ] Text normalization
+- [ ] Chunking
+- [ ] Chunk metadata
+- [ ] Embedding client abstraction
+- [ ] Ollama embedding integration
+- [ ] Vector store abstraction
+- [ ] Local vector store implementation
+- [ ] Semantic retrieval
+- [ ] Metadata filtering
+- [ ] Retrieval ranking
+- [ ] Context assembly
+- [ ] RAG prompt templates
+- [ ] Citation generation
+- [ ] Source attribution
+- [ ] Retrieval diagnostics
+- [ ] Document ingestion tests
+- [ ] Document parsing tests
+- [ ] Chunking tests
+- [ ] Embedding client tests
+- [ ] Vector store tests
+- [ ] Retrieval tests
+- [ ] RAG pipeline tests
+- [ ] Citation generation tests
+- [ ] n8n integration
+- [ ] Ingestion workflows
+- [ ] Scheduled crawlers
+- [ ] Preprocessing pipelines
+- [ ] External API enrichment
+
+### Phase 5 – Evaluation
+
+- [x] Google Java Format enforcement
+- [x] Maven verification lifecycle
+- [ ] Evaluation dataset
+- [ ] Automated evaluation
+- [ ] Tool selection evaluation
+- [ ] Tool result correctness
+- [ ] Retrieval relevance
+- [ ] Answer correctness
+- [ ] Citation coverage
+- [ ] Confidence scoring
+- [ ] Prompt regression evaluation
+- [ ] Model comparison benchmarks
+- [ ] Performance regression evaluation
+- [ ] SonarQube quality gate
+
+### Phase 6 – Production engineering
+
+- [x] HTTP connection timeout
+- [x] Graceful HTTP client shutdown
+- [x] Interrupted request handling
+- [x] Communication exception mapping
+- [x] Invalid configuration handling
+- [x] Invalid provider response handling
+- [x] Application startup error tests
+- [x] Communication error tests
+- [ ] Configurable application/provider request deadlines (Cloud Run script sets a 300-second timeout)
+- [ ] Retry policy
+- [ ] Exponential backoff
+- [ ] Circuit breaker
+- [x] Daily request quota and fixed-hour per-client quota
+- [ ] Rolling one-hour per-client quota required by PRD
+- [x] Browser Stop action aborts the stream and discards the incomplete turn
+- [ ] End-to-end provider request cancellation
+- [x] Current-instance concurrent-stream limit
+- [ ] Distributed concurrency control
+- [ ] Thread-safety review
+- [ ] Context-window management
+- [ ] Response caching
+- [ ] Tool result caching
+- [ ] Performance benchmarks
+- [ ] Load testing
+- [x] Isolated provider-error and quota-storage failure tests
+- [ ] Extended resilience and recovery tests
+- [ ] Parallel quota-reservation and concurrent-stream stress tests
+- [ ] Performance tests
+- [x] HTTP liveness endpoint at `/api/health`
+- [ ] Readiness checks
+- [x] Public aggregate metrics endpoint at `/api/app/status`
+- [x] Environment/.env credential loading and Secret Manager references in the deployment script
+- [ ] Verify deployed secret access policies and rotation
+- [ ] Log redaction
+- [x] External properties file and environment overrides for local/cloud execution
+- [ ] Named configuration profiles
+
+### Phase 7 – Integration & deployment
+
+- [x] REST API for health, providers, chat, and application status
+- [ ] RAG document REST endpoints
+- [x] Streaming REST endpoint
+- [x] OpenAPI specification foundation
+- [ ] Interactive API documentation
+- [x] REST and SSE tests with embedded server and mocked application services
+- [x] Web chat, Q&A, Status, and shared project/author links
+- [x] Multi-stage Docker build
+- [x] Docker Compose
+- [x] Optional Ollama container and model-download service
+- [x] GitHub Actions container build/publish workflow
+- [x] Automated Java and frontend test suites runnable locally
+- [x] Formatting verification in `mvn verify`
+- [ ] CI test and formatting gates (the publish workflow uses a Docker build that skips tests)
+- [ ] SonarQube analysis
+- [ ] Dependency vulnerability scanning
+- [ ] Container vulnerability scanning
+- [x] Embedded HTTP and console integration tests with mocked providers
+- [ ] Live provider, Firestore emulator, and container integration tests
+- [x] Deployment smoke script for health, provider availability, frontend, and OpenAPI
+- [ ] Extend deployment smoke checks to application status and quota behavior
+- [x] JAR/runtime dependency and container packaging
+- [ ] Versioned releases (tag-triggered image publishing is configured)
+- [x] Local Docker and Cloud Run deployment instructions
+- [ ] Verify current production deployment
 
 ## License
 

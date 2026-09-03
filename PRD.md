@@ -120,7 +120,7 @@ The cloud web interface must not display Ollama.
 - Stopping a web stream discards its incomplete user turn so a later request receives only completed conversation context.
 - Browser history loaded after an interrupted stream ignores trailing user messages without an assistant response.
 - The web interface provides an English Q&A view at `/#/faq` covering the project purpose, local setup, and Docker/Ollama setup.
-- The top navigation remains visible while scrolling and links to Chat, About, Q&A, and the external health endpoint.
+- The top navigation remains visible while scrolling and links to Chat, About, Q&A, Status, and the external health endpoint.
 - The conversation uses separate header, scrollable message, and composer zones. The composer never covers the header or messages; on extremely short viewports, the panel extends into normal page scrolling.
 
 ### REST API
@@ -135,7 +135,7 @@ POST   /api/chat/stream
 GET    /api/rag/documents
 POST   /api/rag/documents
 DELETE /api/rag/documents/{id}
-GET    /api/demo/status
+GET    /api/app/status
 GET    /openapi.yaml
 ```
 
@@ -159,6 +159,8 @@ GET    /openapi.yaml
 - It presents API and SSE errors in a readable form.
 - It provides a small status page for non-sensitive aggregate demo metrics.
 - It contains no secrets or provider API keys.
+- Chat, Q&A, and Status share a footer linking to the source repository, the author's website,
+  and the author's LinkedIn profile. External footer links open in a new tab with an accessible notice.
 
 ### Thinking output
 
@@ -281,13 +283,30 @@ Content-Type: application/json
 - Provider-side failures, including a provider reporting its own quota or rate limit exhausted, are not distinguished from other provider communication failures: both produce `LLM_COMMUNICATION_ERROR` (HTTP `502` before streaming starts, or a terminal `error` event with the same code once streaming has started). The client cannot currently tell a provider quota failure apart from a provider outage.
 - Internal logs may record the actual limit type but must not expose secrets, raw IP addresses, prompts, or responses.
 
-### Demo metrics and status
+### Application metrics and status
 
-- `GET /api/demo/status` exposes safe aggregate metrics for the current public demo period.
+- `GET /api/app/status` exposes safe aggregate metrics for the current public demo period.
 - The web status page may display requests used and remaining, aggregate token usage, active streams, configured public limits, provider availability, and service uptime.
 - Metrics must not expose raw or hashed IP identifiers, prompts, responses, API keys, Firestore identifiers, or per-user activity.
 - Metrics are read-only and may be cached briefly to avoid unnecessary Firestore reads.
 - Operationally sensitive diagnostics remain available only in server logs or cloud monitoring.
+- The first status page is available at `/#/status` and shows today's accepted chat requests,
+  reconciled tokens, completed/failed/disconnected outcomes, average completed-request processing
+  time, daily quota remaining, current-instance active streams, and uptime.
+- Daily metrics are collected when demo limits are enabled. Disabled tracking must be shown as
+  unavailable rather than measured zero usage. Firestore counters survive instance restarts;
+  local in-memory counters reset on restart.
+- Daily periods follow UTC and requests that cross midnight remain assigned to their admission day.
+  Status storage reads are cached for up to ten seconds, with a fresh read on UTC date changes.
+- Accepted requests include later failures; validation and quota rejections are excluded. Outcome
+  counts begin with this feature and are best-effort: interrupted processes or telemetry storage
+  failures may leave accepted requests without a recorded outcome. Telemetry failures must not
+  change an already delivered chat result. Tokens may omit failed or disconnected requests whose
+  usage was never returned/reconciled, and are not an exact billing total.
+- Average duration covers completed requests only and is null when no samples exist. No visitor
+  identities, page views, or unique visitor counts are collected by this first version.
+- Metrics read failures return HTTP `503` with code `APP_METRICS_UNAVAILABLE` and message
+  `Application metrics are temporarily unavailable.`
 
 ### Response summary
 

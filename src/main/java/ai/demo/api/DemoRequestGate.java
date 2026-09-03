@@ -2,11 +2,15 @@ package ai.demo.api;
 
 import ai.demo.config.DemoLimitsConfig;
 import ai.demo.exception.ApiRequestException;
+import ai.demo.model.app.AppOutcome;
 import ai.demo.model.chat.Conversation;
 import ai.demo.persistence.DemoQuotaStore;
 import io.javalin.http.Context;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class DemoRequestGate {
+  private static final Logger log = LoggerFactory.getLogger(DemoRequestGate.class);
 
   private final DemoLimitsConfig limits;
   private final DemoQuotaStore quotaStore;
@@ -41,5 +45,15 @@ final class DemoRequestGate {
 
   void release(DemoQuotaStore.Reservation reservation) {
     if (reservation != null) quotaStore.release(reservation);
+  }
+
+  void recordOutcome(DemoQuotaStore.Reservation reservation, AppOutcome outcome, long started) {
+    if (reservation == null) return;
+    try {
+      quotaStore.recordOutcome(reservation, outcome, (System.nanoTime() - started) / 1_000_000L);
+    } catch (RuntimeException e) {
+      // Optional telemetry must not turn a delivered answer into an error or leak identifiers.
+      log.warn("Unable to record aggregate demo outcome");
+    }
   }
 }

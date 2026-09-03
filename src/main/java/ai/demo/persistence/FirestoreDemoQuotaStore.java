@@ -2,9 +2,13 @@ package ai.demo.persistence;
 
 import ai.demo.config.DemoLimitsConfig;
 import ai.demo.exception.DemoLimitException;
+import ai.demo.exception.PersistenceException;
+import ai.demo.model.app.AppMetrics;
+import ai.demo.model.app.AppOutcome;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.FieldValue;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.FirestoreOptions;
 import com.google.cloud.firestore.SetOptions;
@@ -21,6 +25,8 @@ public final class FirestoreDemoQuotaStore implements DemoQuotaStore {
 
   private static final String REQUESTS_FIELD = "requests";
   private static final String UPDATED_AT_FIELD = "updatedAt";
+  private static final String TOKENS_FIELD = "tokens";
+  private static final String DAILY_USAGE_COLLECTION = "demoDailyUsage";
 
   private final DemoLimitsConfig limits;
   private final Firestore firestore;
@@ -46,7 +52,7 @@ public final class FirestoreDemoQuotaStore implements DemoQuotaStore {
     String day = LocalDate.now(clock).format(DateTimeFormatter.ISO_DATE);
     String hour =
         day + "T" + String.format("%02d", clock.instant().atZone(ZoneOffset.UTC).getHour());
-    DocumentReference daily = firestore.collection("demoDailyUsage").document(day);
+    DocumentReference daily = firestore.collection(DAILY_USAGE_COLLECTION).document(day);
     DocumentReference client =
         firestore.collection("demoHourlyClients").document(hour + "_" + clientHash);
     try {
@@ -91,17 +97,18 @@ public final class FirestoreDemoQuotaStore implements DemoQuotaStore {
 
   @Override
   public void recordUsage(Reservation reservation, int totalTokens) {
-    DocumentReference daily = firestore.collection("demoDailyUsage").document(reservation.period());
+    DocumentReference daily =
+        firestore.collection(DAILY_USAGE_COLLECTION).document(reservation.period());
     try {
       await(
           firestore.runTransaction(
               transaction -> {
                 DocumentSnapshot snapshot = transaction.get(daily).get();
-                long tokens = count(snapshot, "tokens");
+                long tokens = count(snapshot, TOKENS_FIELD);
                 transaction.set(
                     daily,
                     Map.of(
-                        "tokens",
+                        TOKENS_FIELD,
                         tokens + Math.max(0, totalTokens),
                         UPDATED_AT_FIELD,
                         clock.instant().toString()),
@@ -116,6 +123,52 @@ public final class FirestoreDemoQuotaStore implements DemoQuotaStore {
   @Override
   public void release(Reservation reservation) {
     releaseStream(reservation.streaming());
+  }
+
+  @Override
+  public void recordOutcome(Reservation reservation, AppOutcome outcome, long durationMs) {
+    String field =
+        switch (outcome) {
+          case COMPLETED -> "completed";
+          case FAILED -> "failed";
+          case DISCONNECTED -> "disconnected";
+        };
+    try {
+      Map<String, Object> updates = new java.util.HashMap<>();
+      updates.put(field, FieldValue.increment(1));
+      if (outcome == AppOutcome.COMPLETED) {
+        updates.put("completedDurationMs", FieldValue.increment(Math.max(0, durationMs)));
+      }
+      await(
+          firestore
+              .collection(DAILY_USAGE_COLLECTION)
+              .document(reservation.period())
+              .set(updates, SetOptions.merge()));
+    } catch (RuntimeException e) {
+      throw new PersistenceException("Unable to record demo metrics", e);
+    }
+  }
+
+  @Override
+  public AppMetrics snapshot(String period) {
+    try {
+      DocumentSnapshot snapshot =
+          await(firestore.collection(DAILY_USAGE_COLLECTION).document(period).get());
+      return new AppMetrics(
+          count(snapshot, REQUESTS_FIELD),
+          count(snapshot, TOKENS_FIELD),
+          count(snapshot, "completed"),
+          count(snapshot, "failed"),
+          count(snapshot, "disconnected"),
+          count(snapshot, "completedDurationMs"));
+    } catch (RuntimeException e) {
+      throw new PersistenceException("Unable to read demo metrics", e);
+    }
+  }
+
+  @Override
+  public int activeStreams() {
+    return activeStreams.get();
   }
 
   @Override
