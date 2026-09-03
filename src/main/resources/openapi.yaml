@@ -144,7 +144,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
               example:
                 code: LLM_COMMUNICATION_ERROR
-                message: Unable to communicate with the AI model.
+                message: Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later.
         "500":
           description: Unexpected server error.
           content:
@@ -207,7 +207,7 @@ paths:
                     data: {"content":"Hello"}
 
                     event: error
-                    data: {"code":"LLM_COMMUNICATION_ERROR","message":"Unable to communicate with the AI model."}
+                    data: {"code":"LLM_COMMUNICATION_ERROR","message":"Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later."}
         "400":
           description: Invalid request or unavailable LLM provider before streaming starts.
           content:

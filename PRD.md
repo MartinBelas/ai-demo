@@ -108,7 +108,8 @@ The cloud web interface must not display Ollama.
 - Tool events expose the tool name and lifecycle status without exposing tool input or output.
 - A successful console answer is added to the local conversation and persisted.
 - The cloud server does not persist conversation history.
-- Provider failures produce an application-specific LLM exception and a safe API error.
+- Provider failures produce an application-specific LLM exception and a safe API error that
+  identifies the selected provider and suggests trying another provider or trying again later.
 
 ### Stateless web conversations
 

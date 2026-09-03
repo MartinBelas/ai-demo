@@ -94,7 +94,8 @@ final class StreamingChatEndpoint {
       writer.send(
           ERROR_EVENT,
           ApiErrorResponse.of(
-              "LLM_COMMUNICATION_ERROR", "Unable to communicate with the AI model."));
+              "LLM_COMMUNICATION_ERROR",
+              LlmErrorMessages.communicationFailure(request.provider())));
     } catch (ai.demo.exception.DemoLimitException e) {
       log.warn("Demo quota reconciliation failed", e);
       writer.send(
@@ -109,7 +110,8 @@ final class StreamingChatEndpoint {
     return AppOutcome.FAILED;
   }
 
-  private void writeDemoLimitError(Context context, ai.demo.exception.DemoLimitException exception) {
+  private void writeDemoLimitError(
+      Context context, ai.demo.exception.DemoLimitException exception) {
     if (exception.unavailable()) {
       ApiResponseWriter.writeError(
           context,

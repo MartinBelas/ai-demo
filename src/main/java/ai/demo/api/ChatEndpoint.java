@@ -35,8 +35,9 @@ final class ChatEndpoint {
     DemoQuotaStore.Reservation reservation = null;
     AppOutcome outcome = AppOutcome.FAILED;
     long started = System.nanoTime();
+    ResolvedChatRequest request = null;
     try {
-      ResolvedChatRequest request = requestParser.parse(context.body());
+      request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
       ChatService chatService = serviceResolver.resolve(request.provider());
       reservation = requestGate.reserve(context, false);
@@ -51,8 +52,12 @@ final class ChatEndpoint {
       writeProviderUnavailable(context);
     } catch (LlmException e) {
       log.warn("LLM request failed", e);
+      String message =
+          request == null
+              ? LlmErrorMessages.communicationFailure()
+              : LlmErrorMessages.communicationFailure(request.provider());
       writeError(
-          context, 502, "LLM_COMMUNICATION_ERROR", "Unable to communicate with the AI model.");
+          context, 502, "LLM_COMMUNICATION_ERROR", message);
     } catch (ai.demo.exception.DemoLimitException e) {
       writeDemoLimitError(context, e);
     } catch (RuntimeException e) {

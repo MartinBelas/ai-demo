@@ -32,6 +32,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Writer;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -51,8 +52,12 @@ class ApiServerTest {
   private static final String EVENT_STREAM = "text/event-stream";
   private static final String LOCAL_SERVER = "http://localhost:";
   private static final String OLLAMA_MODEL = "qwen3:4b";
+  private static final String USER_MESSAGE_BODY =
+      "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}";
   private static final String PROVIDER_FAILURE_DETAILS = "Secret provider details";
-  private static final String SAFE_LLM_ERROR = "Unable to communicate with the AI model.";
+  private static final String SAFE_LLM_ERROR =
+      "Unable to communicate with the OLLAMA AI model. "
+          + "Try selecting a different AI provider or try again later.";
 
   @Test
   void shouldExposeHealthEndpoint() throws IOException, InterruptedException {
@@ -290,8 +295,7 @@ class ApiServerTest {
 
       HttpResponse<String> response =
           client.send(
-              streamingChatRequest(
-                  server, "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}"),
+              streamingChatRequest(server),
               HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
@@ -338,8 +342,7 @@ class ApiServerTest {
 
       CompletableFuture<HttpResponse<InputStream>> responseFuture =
           client.sendAsync(
-              streamingChatRequest(
-                  server, "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}"),
+              streamingChatRequest(server),
               HttpResponse.BodyHandlers.ofInputStream());
 
       assertTrue(thinkingSent.await(2, TimeUnit.SECONDS));
@@ -352,9 +355,7 @@ class ApiServerTest {
       assertEquals("", reader.readLine());
       allowCompletion.countDown();
       assertTrue(responseFuture.orTimeout(2, TimeUnit.SECONDS).isDone());
-      while (reader.readLine() != null) {
-        // Drain the completed SSE response so the HTTP client can close deterministically.
-      }
+      reader.transferTo(Writer.nullWriter());
       reader.close();
     } finally {
       allowCompletion.countDown();
@@ -376,8 +377,7 @@ class ApiServerTest {
 
       HttpResponse<String> response =
           client.send(
-              streamingChatRequest(
-                  server, "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}"),
+              streamingChatRequest(server),
               HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
@@ -430,11 +430,11 @@ class ApiServerTest {
         .build();
   }
 
-  private HttpRequest streamingChatRequest(ApiServer server, String body) {
+  private HttpRequest streamingChatRequest(ApiServer server) {
     return HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/chat/stream"))
         .header(CONTENT_TYPE, APPLICATION_JSON)
         .header("Accept", EVENT_STREAM)
-        .POST(HttpRequest.BodyPublishers.ofString(body))
+        .POST(HttpRequest.BodyPublishers.ofString(USER_MESSAGE_BODY))
         .build();
   }
 }
