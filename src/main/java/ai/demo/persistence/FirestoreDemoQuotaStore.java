@@ -19,10 +19,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Firestore-backed atomic request and token counters for Cloud Run. */
 public final class FirestoreDemoQuotaStore implements DemoQuotaStore {
 
+  private static final Logger log = LoggerFactory.getLogger(FirestoreDemoQuotaStore.class);
   private static final String REQUESTS_FIELD = "requests";
   private static final String UPDATED_AT_FIELD = "updatedAt";
   private static final String TOKENS_FIELD = "tokens";
@@ -176,7 +179,10 @@ public final class FirestoreDemoQuotaStore implements DemoQuotaStore {
     try {
       firestore.close();
     } catch (Exception e) {
-      throw new DemoLimitException(true, e);
+      // Runs on the JVM shutdown hook thread (see App.addShutdownHook); nothing catches or
+      // retries this, so throwing here would only surface as an uncaught-exception stack trace
+      // during routine Cloud Run instance teardown. Log it instead.
+      log.warn("Failed to close Firestore client during shutdown", e);
     }
   }
 
