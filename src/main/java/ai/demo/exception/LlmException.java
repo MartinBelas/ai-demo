@@ -10,4 +10,8 @@ public class LlmException extends RuntimeException {
   public LlmException(String message, Throwable cause) {
     super(message, cause);
   }
+
+  public LlmErrorCategory category() {
+    return LlmErrorCategory.OTHER;
+  }
 }

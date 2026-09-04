@@ -55,7 +55,7 @@ final class ChatEndpoint {
       String message =
           request == null
               ? LlmErrorMessages.communicationFailure()
-              : LlmErrorMessages.communicationFailure(request.provider());
+              : LlmErrorMessages.communicationFailure(e.category(), request.provider());
       writeError(
           context, 502, "LLM_COMMUNICATION_ERROR", message);
     } catch (ai.demo.exception.DemoLimitException e) {

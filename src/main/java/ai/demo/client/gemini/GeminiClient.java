@@ -7,6 +7,7 @@ import ai.demo.client.TokenUsage;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.LlmErrorCategory;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -183,7 +184,14 @@ public final class GeminiClient implements LlmClient {
 
   private void requireSuccess(int statusCode) {
     if (statusCode < 200 || statusCode >= 300) {
-      throw new LlmCommunicationException("Gemini returned HTTP status " + statusCode);
+      throw new LlmCommunicationException(
+          "Gemini returned HTTP status " + statusCode, categorizeStatus(statusCode));
     }
+  }
+
+  private LlmErrorCategory categorizeStatus(int statusCode) {
+    if (statusCode == 429) return LlmErrorCategory.RATE_LIMIT;
+    if (statusCode == 401 || statusCode == 403) return LlmErrorCategory.AUTHENTICATION;
+    return LlmErrorCategory.OTHER;
   }
 }

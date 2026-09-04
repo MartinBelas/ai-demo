@@ -10,6 +10,7 @@ import ai.demo.client.openai.dto.OpenAiRequest;
 import ai.demo.config.AppConfig;
 import ai.demo.config.GenerationConfig;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.LlmErrorCategory;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -129,22 +130,38 @@ public final class OpenAiClient implements LlmClient {
           responseModel = completed.path("model").asText(responseModel);
           usage = mapUsage(completed.path("usage"));
         } else if ("error".equals(type) || "response.failed".equals(type)) {
-          throw new LlmCommunicationException(
-              providerName + " streaming response failed: " + describeError(event));
+          throwStreamError(event);
         }
       }
     }
     return new StreamingResult(responseModel, usage);
   }
 
-  private String describeError(JsonNode event) {
+  private void throwStreamError(JsonNode event) {
     JsonNode error = event.has("error") ? event.path("error") : event.path("response").path("error");
     String code = error.path("code").asText(null);
     String message = error.path("message").asText(null);
     if (message == null) {
       message = event.toString();
     }
-    return code != null ? code + " - " + message : message;
+    String description = code != null ? code + " - " + message : message;
+    throw new LlmCommunicationException(
+        providerName + " streaming response failed: " + description, categorize(code));
+  }
+
+  private LlmErrorCategory categorize(String errorCode) {
+    if (errorCode == null) return LlmErrorCategory.OTHER;
+    String lower = errorCode.toLowerCase();
+    if (lower.contains("quota") || lower.contains("credit") || lower.contains("billing")) {
+      return LlmErrorCategory.QUOTA_EXHAUSTED;
+    }
+    if (lower.contains("rate_limit")) {
+      return LlmErrorCategory.RATE_LIMIT;
+    }
+    if (lower.contains("api_key") || lower.contains("unauthorized") || lower.contains("permission")) {
+      return LlmErrorCategory.AUTHENTICATION;
+    }
+    return LlmErrorCategory.OTHER;
   }
 
   private void emit(String value, ChatChunkType type, Consumer<ChatChunk> consumer) {
@@ -206,7 +223,15 @@ public final class OpenAiClient implements LlmClient {
 
   private void requireSuccess(int statusCode) {
     if (statusCode < 200 || statusCode >= 300) {
-      throw new LlmCommunicationException(providerName + " returned HTTP status " + statusCode);
+      throw new LlmCommunicationException(
+          providerName + " returned HTTP status " + statusCode, categorizeStatus(statusCode));
     }
+  }
+
+  private LlmErrorCategory categorizeStatus(int statusCode) {
+    if (statusCode == 429) return LlmErrorCategory.RATE_LIMIT;
+    if (statusCode == 401 || statusCode == 403) return LlmErrorCategory.AUTHENTICATION;
+    if (statusCode == 402) return LlmErrorCategory.QUOTA_EXHAUSTED;
+    return LlmErrorCategory.OTHER;
   }
 }

@@ -95,7 +95,7 @@ final class StreamingChatEndpoint {
           ERROR_EVENT,
           ApiErrorResponse.of(
               "LLM_COMMUNICATION_ERROR",
-              LlmErrorMessages.communicationFailure(request.provider())));
+              LlmErrorMessages.communicationFailure(e.category(), request.provider())));
     } catch (ai.demo.exception.DemoLimitException e) {
       log.warn("Demo quota reconciliation failed", e);
       writer.send(
