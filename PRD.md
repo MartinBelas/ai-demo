@@ -233,9 +233,9 @@ GET    /openapi.yaml
 The public deployment applies the following initial limits:
 
 ```properties
-demo.limits.daily-requests=200
+demo.limits.daily-requests=1000
 demo.limits.hourly-requests-per-ip=20
-demo.limits.concurrent-streams=5
+demo.limits.concurrent-streams=10
 demo.limits.max-input-characters=20000
 demo.limits.max-history-messages=10
 demo.limits.max-rag-chunks=5
