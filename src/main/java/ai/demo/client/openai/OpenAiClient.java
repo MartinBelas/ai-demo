@@ -129,11 +129,22 @@ public final class OpenAiClient implements LlmClient {
           responseModel = completed.path("model").asText(responseModel);
           usage = mapUsage(completed.path("usage"));
         } else if ("error".equals(type) || "response.failed".equals(type)) {
-          throw new LlmCommunicationException(providerName + " streaming response failed");
+          throw new LlmCommunicationException(
+              providerName + " streaming response failed: " + describeError(event));
         }
       }
     }
     return new StreamingResult(responseModel, usage);
+  }
+
+  private String describeError(JsonNode event) {
+    JsonNode error = event.has("error") ? event.path("error") : event.path("response").path("error");
+    String code = error.path("code").asText(null);
+    String message = error.path("message").asText(null);
+    if (message == null) {
+      message = event.toString();
+    }
+    return code != null ? code + " - " + message : message;
   }
 
   private void emit(String value, ChatChunkType type, Consumer<ChatChunk> consumer) {
