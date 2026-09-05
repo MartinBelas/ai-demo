@@ -161,7 +161,7 @@ public final class AppConfigLoader {
         value(
             properties, "demo.limits.firestore.database-id", "FIRESTORE_DATABASE_ID", "(default)"),
         properties.getProperty("demo.limits.ip-hash-salt-env", "DEMO_IP_HASH_SALT"),
-        intValue(properties, "demo.limits.daily-requests", "DEMO_LIMITS_DAILY_REQUESTS", 200),
+        intValue(properties, "demo.limits.daily-requests", "DEMO_LIMITS_DAILY_REQUESTS", 1000),
         intValue(
             properties,
             "demo.limits.hourly-requests-per-ip",

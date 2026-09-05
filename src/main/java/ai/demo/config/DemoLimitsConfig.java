@@ -31,7 +31,7 @@ public record DemoLimitsConfig(
 
   public static DemoLimitsConfig disabled() {
     return new DemoLimitsConfig(
-        false, false, "", "(default)", "DEMO_IP_HASH_SALT", 200, 20, 5, 20000, 10, 5, 1000);
+        false, false, "", "(default)", "DEMO_IP_HASH_SALT", 1000, 20, 5, 20000, 10, 5, 1500);
   }
 
   private static void positive(int value, String name) {
