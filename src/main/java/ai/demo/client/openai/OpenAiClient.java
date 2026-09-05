@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -34,6 +35,7 @@ import java.util.function.Consumer;
 public final class OpenAiClient implements LlmClient {
 
   private static final String RESPONSES_ENDPOINT = "/responses";
+  private static final String ERROR_FIELD = "error";
 
   private final String providerName;
   private final String model;
@@ -81,7 +83,7 @@ public final class OpenAiClient implements LlmClient {
   public LlmResponse chat(Prompt prompt) {
     try {
       HttpResponse<String> response = transport.send(createRequest(toRequest(prompt, false)));
-      requireSuccess(response.statusCode());
+      requireSuccess(response.statusCode(), response.body());
       return mapResponse(objectMapper.readTree(response.body()));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -98,7 +100,10 @@ public final class OpenAiClient implements LlmClient {
       HttpResponse<InputStream> response =
           transport.sendStreaming(createRequest(toRequest(prompt, true)));
       try (InputStream body = response.body()) {
-        requireSuccess(response.statusCode());
+        int statusCode = response.statusCode();
+        if (statusCode < 200 || statusCode >= 300) {
+          requireSuccess(statusCode, readErrorBody(body));
+        }
         return readStream(body, consumer);
       }
     } catch (InterruptedException e) {
@@ -116,21 +121,23 @@ public final class OpenAiClient implements LlmClient {
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(body))) {
       String line;
       while ((line = reader.readLine()) != null) {
-        if (!line.startsWith("data:")) continue;
-        String data = line.substring(5).trim();
-        if (data.isEmpty() || "[DONE]".equals(data)) continue;
-        JsonNode event = objectMapper.readTree(data);
-        String type = event.path("type").asText();
-        if ("response.output_text.delta".equals(type)) {
-          emit(event.path("delta").asText(), ChatChunkType.CONTENT, consumer);
-        } else if ("response.reasoning_summary_text.delta".equals(type)) {
-          emit(event.path("delta").asText(), ChatChunkType.THINKING, consumer);
-        } else if ("response.completed".equals(type)) {
-          JsonNode completed = event.path("response");
-          responseModel = completed.path("model").asText(responseModel);
-          usage = mapUsage(completed.path("usage"));
-        } else if ("error".equals(type) || "response.failed".equals(type)) {
-          throwStreamError(event);
+        if (line.startsWith("data:")) {
+          String data = line.substring(5).trim();
+          if (!data.isEmpty() && !"[DONE]".equals(data)) {
+            JsonNode event = objectMapper.readTree(data);
+            String type = event.path("type").asText();
+            if ("response.output_text.delta".equals(type)) {
+              emit(event.path("delta").asText(), ChatChunkType.CONTENT, consumer);
+            } else if ("response.reasoning_summary_text.delta".equals(type)) {
+              emit(event.path("delta").asText(), ChatChunkType.THINKING, consumer);
+            } else if ("response.completed".equals(type)) {
+              JsonNode completed = event.path("response");
+              responseModel = completed.path("model").asText(responseModel);
+              usage = mapUsage(completed.path("usage"));
+            } else if (ERROR_FIELD.equals(type) || "response.failed".equals(type)) {
+              throwStreamError(event);
+            }
+          }
         }
       }
     }
@@ -138,7 +145,8 @@ public final class OpenAiClient implements LlmClient {
   }
 
   private void throwStreamError(JsonNode event) {
-    JsonNode error = event.has("error") ? event.path("error") : event.path("response").path("error");
+    JsonNode error =
+        event.has(ERROR_FIELD) ? event.path(ERROR_FIELD) : event.path("response").path(ERROR_FIELD);
     String code = error.path("code").asText(null);
     String message = error.path("message").asText(null);
     if (message == null) {
@@ -221,11 +229,38 @@ public final class OpenAiClient implements LlmClient {
     return new OpenAiInputMessage(message.role().name().toLowerCase(), message.content());
   }
 
-  private void requireSuccess(int statusCode) {
+  private void requireSuccess(int statusCode, String body) {
     if (statusCode < 200 || statusCode >= 300) {
       throw new LlmCommunicationException(
-          providerName + " returned HTTP status " + statusCode, categorizeStatus(statusCode));
+          providerName + " returned HTTP status " + statusCode,
+          categorizeError(body, statusCode));
     }
+  }
+
+  private String readErrorBody(InputStream body) {
+    try {
+      return new String(body.readAllBytes(), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      return null;
+    }
+  }
+
+  private LlmErrorCategory categorizeError(String body, int statusCode) {
+    if (body != null && !body.isBlank()) {
+      try {
+        JsonNode error = objectMapper.readTree(body).path(ERROR_FIELD);
+        String code = error.path("code").asText(null);
+        if (code == null) {
+          code = error.path("type").asText(null);
+        }
+        if (code != null) {
+          return categorize(code);
+        }
+      } catch (JsonProcessingException ignored) {
+        // Body isn't a parseable OpenAI error payload; fall back to status-based categorization.
+      }
+    }
+    return categorizeStatus(statusCode);
   }
 
   private LlmErrorCategory categorizeStatus(int statusCode) {

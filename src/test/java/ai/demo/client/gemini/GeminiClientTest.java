@@ -96,6 +96,7 @@ class GeminiClientTest {
   @Test
   void shouldCloseStreamingBodyWhenProviderReturnsError() throws Exception {
     java.io.InputStream body = mock(java.io.InputStream.class);
+    when(body.readAllBytes()).thenReturn(new byte[0]);
     HttpResponse<java.io.InputStream> response = mock();
     when(response.statusCode()).thenReturn(500);
     when(response.body()).thenReturn(body);

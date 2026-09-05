@@ -25,12 +25,15 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
 /** Google Gemini Generate Content API adapter. */
 public final class GeminiClient implements LlmClient {
+
+  private static final String PARTS_FIELD = "parts";
 
   private final AppConfig config;
   private final String apiKey;
@@ -52,7 +55,7 @@ public final class GeminiClient implements LlmClient {
   public LlmResponse chat(Prompt prompt) {
     try {
       HttpResponse<String> response = transport.send(createRequest(prompt, false));
-      requireSuccess(response.statusCode());
+      requireSuccess(response.statusCode(), response.body());
       JsonNode body = objectMapper.readTree(response.body());
       return new LlmResponse(text(body), config.gemini().model(), usage(body));
     } catch (InterruptedException e) {
@@ -68,7 +71,10 @@ public final class GeminiClient implements LlmClient {
     try {
       HttpResponse<InputStream> response = transport.sendStreaming(createRequest(prompt, true));
       try (InputStream body = response.body()) {
-        requireSuccess(response.statusCode());
+        int statusCode = response.statusCode();
+        if (statusCode < 200 || statusCode >= 300) {
+          requireSuccess(statusCode, readErrorBody(body));
+        }
         return readStream(body, consumer);
       }
     } catch (InterruptedException e) {
@@ -85,12 +91,14 @@ public final class GeminiClient implements LlmClient {
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(body))) {
       String line;
       while ((line = reader.readLine()) != null) {
-        if (!line.startsWith("data:")) continue;
-        String data = line.substring(5).trim();
-        if (data.isEmpty()) continue;
-        JsonNode event = objectMapper.readTree(data);
-        emitParts(event, consumer);
-        if (event.has("usageMetadata")) tokenUsage = usage(event);
+        if (line.startsWith("data:")) {
+          String data = line.substring(5).trim();
+          if (!data.isEmpty()) {
+            JsonNode event = objectMapper.readTree(data);
+            emitParts(event, consumer);
+            if (event.has("usageMetadata")) tokenUsage = usage(event);
+          }
+        }
       }
     }
     return new StreamingResult(config.gemini().model(), tokenUsage);
@@ -103,7 +111,7 @@ public final class GeminiClient implements LlmClient {
             candidate ->
                 candidate
                     .path("content")
-                    .path("parts")
+                    .path(PARTS_FIELD)
                     .forEach(
                         part -> {
                           String value = part.path("text").asText();
@@ -125,7 +133,7 @@ public final class GeminiClient implements LlmClient {
             candidate ->
                 candidate
                     .path("content")
-                    .path("parts")
+                    .path(PARTS_FIELD)
                     .forEach(
                         part -> {
                           if (!part.path("thought").asBoolean(false)
@@ -164,7 +172,7 @@ public final class GeminiClient implements LlmClient {
       if (message.role() == Role.SYSTEM) {
         request
             .putObject("systemInstruction")
-            .putArray("parts")
+            .putArray(PARTS_FIELD)
             .addObject()
             .put("text", message.content());
       } else {
@@ -172,7 +180,7 @@ public final class GeminiClient implements LlmClient {
         content.put("role", message.role() == Role.ASSISTANT ? "model" : "user");
         String text =
             message.role() == Role.TOOL ? "Tool result:\n" + message.content() : message.content();
-        content.putArray("parts").addObject().put("text", text);
+        content.putArray(PARTS_FIELD).addObject().put("text", text);
       }
     }
     request
@@ -182,11 +190,51 @@ public final class GeminiClient implements LlmClient {
     return request;
   }
 
-  private void requireSuccess(int statusCode) {
+  private void requireSuccess(int statusCode, String body) {
     if (statusCode < 200 || statusCode >= 300) {
       throw new LlmCommunicationException(
-          "Gemini returned HTTP status " + statusCode, categorizeStatus(statusCode));
+          "Gemini returned HTTP status " + statusCode, categorizeError(body, statusCode));
     }
+  }
+
+  private String readErrorBody(InputStream body) {
+    try {
+      return new String(body.readAllBytes(), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      return null;
+    }
+  }
+
+  private LlmErrorCategory categorizeError(String body, int statusCode) {
+    if (body != null && !body.isBlank()) {
+      try {
+        JsonNode error = objectMapper.readTree(body).path("error");
+        String status = error.path("status").asText(null);
+        if (status != null) {
+          return categorize(status, error.path("message").asText(""));
+        }
+      } catch (JsonProcessingException ignored) {
+        // Body isn't a parseable Gemini error payload; fall back to status-based categorization.
+      }
+    }
+    return categorizeStatus(statusCode);
+  }
+
+  private LlmErrorCategory categorize(String status, String message) {
+    String lowerStatus = status.toLowerCase();
+    String lowerMessage = message.toLowerCase();
+    if (lowerStatus.equals("permission_denied") || lowerStatus.equals("unauthenticated")) {
+      return LlmErrorCategory.AUTHENTICATION;
+    }
+    if (lowerStatus.equals("resource_exhausted")) {
+      // Gemini reports both transient per-minute throttling and hard daily/free-tier quota caps
+      // as RESOURCE_EXHAUSTED; the message text is the only way to tell them apart.
+      if (lowerMessage.contains("quota") || lowerMessage.contains("per day")) {
+        return LlmErrorCategory.QUOTA_EXHAUSTED;
+      }
+      return LlmErrorCategory.RATE_LIMIT;
+    }
+    return LlmErrorCategory.OTHER;
   }
 
   private LlmErrorCategory categorizeStatus(int statusCode) {
