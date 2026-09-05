@@ -227,9 +227,13 @@ public final class GeminiClient implements LlmClient {
       return LlmErrorCategory.AUTHENTICATION;
     }
     if (lowerStatus.equals("resource_exhausted")) {
-      // Gemini reports both transient per-minute throttling and hard daily/free-tier quota caps
-      // as RESOURCE_EXHAUSTED; the message text is the only way to tell them apart.
-      if (lowerMessage.contains("quota") || lowerMessage.contains("per day")) {
+      // Gemini reports both transient per-minute throttling and hard quota/billing exhaustion
+      // (e.g. "prepayment credits are depleted") as RESOURCE_EXHAUSTED; the message text is the
+      // only way to tell them apart.
+      if (lowerMessage.contains("quota")
+          || lowerMessage.contains("credit")
+          || lowerMessage.contains("billing")
+          || lowerMessage.contains("per day")) {
         return LlmErrorCategory.QUOTA_EXHAUSTED;
       }
       return LlmErrorCategory.RATE_LIMIT;
