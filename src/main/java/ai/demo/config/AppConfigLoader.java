@@ -155,9 +155,8 @@ public final class AppConfigLoader {
 
   private DemoLimitsConfig loadDemoLimits(Properties properties) {
     return new DemoLimitsConfig(
-        booleanValue(properties, "demo.limits.enabled", "DEMO_LIMITS_ENABLED", false),
-        booleanValue(
-            properties, "demo.limits.firestore.enabled", "DEMO_LIMITS_FIRESTORE_ENABLED", false),
+        booleanValue(properties, "demo.limits.enabled", "DEMO_LIMITS_ENABLED"),
+        booleanValue(properties, "demo.limits.firestore.enabled", "DEMO_LIMITS_FIRESTORE_ENABLED"),
         value(properties, "demo.limits.firestore.project-id", "GOOGLE_CLOUD_PROJECT", ""),
         value(
             properties, "demo.limits.firestore.database-id", "FIRESTORE_DATABASE_ID", "(default)"),
@@ -181,12 +180,11 @@ public final class AppConfigLoader {
             properties,
             "demo.limits.max-output-tokens-per-call",
             "DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL",
-            1000));
+            1500));
   }
 
-  private boolean booleanValue(
-      Properties properties, String property, String variable, boolean fallback) {
-    String value = value(properties, property, variable, Boolean.toString(fallback));
+  private boolean booleanValue(Properties properties, String property, String variable) {
+    String value = value(properties, property, variable, Boolean.toString(false));
     return parseBoolean(value, property);
   }
 

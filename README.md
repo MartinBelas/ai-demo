@@ -162,7 +162,7 @@ server.port=8080
 
 llm.provider=ollama
 llm.temperature=0.4
-llm.max-output-tokens=1000
+llm.max-output-tokens=1500
 llm.system-message=You are a helpful AI assistant. Be concise and clear. If you are uncertain, state it directly.
 
 ollama.model=qwen3:4b
@@ -171,7 +171,7 @@ ollama.base-url=http://localhost:11434
 ollama.context-window=4096
 ollama.repeat-penalty=1.18
 
-openai.model=gpt-5.4-mini
+openai.model=gpt-5.6-luna
 openai.base-url=https://api.openai.com/v1
 openai.api-key-env=OPENAI_API_KEY
 
@@ -211,7 +211,7 @@ DEMO_LIMITS_HOURLY_REQUESTS_PER_IP=20
 DEMO_LIMITS_CONCURRENT_STREAMS=5
 DEMO_LIMITS_MAX_INPUT_CHARACTERS=20000
 DEMO_LIMITS_MAX_HISTORY_MESSAGES=10
-DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL=1000
+DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL=1500
 GOOGLE_CLOUD_PROJECT=your-project-id
 FIRESTORE_DATABASE_ID=(default)
 ```

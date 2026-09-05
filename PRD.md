@@ -239,7 +239,7 @@ demo.limits.concurrent-streams=10
 demo.limits.max-input-characters=20000
 demo.limits.max-history-messages=10
 demo.limits.max-rag-chunks=5
-demo.limits.max-output-tokens-per-call=1000
+demo.limits.max-output-tokens-per-call=1500
 demo.limits.max-rag-upload-bytes=200000
 demo.limits.max-rag-documents=20
 ```
