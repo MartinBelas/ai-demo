@@ -64,7 +64,8 @@ class AppStatusEndpointTest {
     var store = mock(DemoQuotaStore.class);
     when(store.snapshot(any())).thenThrow(new PersistenceException("secret database", null));
     try (var server =
-            new ApiServer(0, null, null, null, mapper, new DemoProtection(limits, store, "secret"));
+            new ApiServer(
+                0, null, null, null, mapper, new DemoProtection(limits, store, "secret"));
         var client = HttpClient.newHttpClient()) {
       server.start();
       var response = get(client, server);

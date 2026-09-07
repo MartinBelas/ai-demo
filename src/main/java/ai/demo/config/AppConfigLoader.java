@@ -13,6 +13,8 @@ public final class AppConfigLoader {
 
   private static final String CONFIG_FILE = "application.properties";
   private static final int DEFAULT_SERVER_PORT = 8080;
+  private static final String MAX_RAG_CHUNKS_PROPERTY = "demo.limits.max-rag-chunks";
+  private static final String MAX_RAG_CHUNKS_VARIABLE = "DEMO_LIMITS_MAX_RAG_CHUNKS";
 
   private final UnaryOperator<String> environment;
 
@@ -81,10 +83,33 @@ public final class AppConfigLoader {
           Path.of(requiredProperty(properties, "conversation.file")),
           appInterface,
           server,
-          loadDemoLimits(properties));
+          loadDemoLimits(properties),
+          loadRag(properties));
     } catch (IllegalArgumentException e) {
       throw new ConfigurationException(e.getMessage(), e);
     }
+  }
+
+  private RagConfig loadRag(Properties properties) {
+    return new RagConfig(
+        booleanValue(properties, "rag.enabled", "RAG_ENABLED"),
+        EmbeddingProvider.from(
+            value(properties, "rag.embedding.provider", "RAG_EMBEDDING_PROVIDER", "OLLAMA")),
+        value(
+            properties,
+            "rag.embedding.base-url",
+            "RAG_EMBEDDING_BASE_URL",
+            "http://localhost:11434"),
+        value(properties, "rag.embedding.model", "RAG_EMBEDDING_MODEL", "embeddinggemma"),
+        value(properties, "rag.embedding.api-key-env", "RAG_EMBEDDING_API_KEY_ENV", null),
+        intValue(properties, "rag.max-document-bytes", "RAG_MAX_DOCUMENT_BYTES", 200000),
+        intValue(properties, "rag.max-documents", "RAG_MAX_DOCUMENTS", 20),
+        intValue(properties, "rag.max-corpus-bytes", "RAG_MAX_CORPUS_BYTES", 400000),
+        intValue(properties, "rag.max-chunk-bytes", "RAG_MAX_CHUNK_BYTES", 1200),
+        intValue(properties, "rag.max-context-bytes", "RAG_MAX_CONTEXT_BYTES", 6000),
+        intValue(properties, "rag.max-query-bytes", "RAG_MAX_QUERY_BYTES", 4000),
+        intValue(properties, MAX_RAG_CHUNKS_PROPERTY, MAX_RAG_CHUNKS_VARIABLE, 5),
+        Double.parseDouble(value(properties, "rag.minimum-score", "RAG_MINIMUM_SCORE", "0.2")));
   }
 
   private AppInterface appInterface(Properties properties) {
@@ -175,7 +200,7 @@ public final class AppConfigLoader {
             20000),
         intValue(
             properties, "demo.limits.max-history-messages", "DEMO_LIMITS_MAX_HISTORY_MESSAGES", 10),
-        intValue(properties, "demo.limits.max-rag-chunks", "DEMO_LIMITS_MAX_RAG_CHUNKS", 5),
+        intValue(properties, MAX_RAG_CHUNKS_PROPERTY, MAX_RAG_CHUNKS_VARIABLE, 5),
         intValue(
             properties,
             "demo.limits.max-output-tokens-per-call",

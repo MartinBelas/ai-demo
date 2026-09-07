@@ -7,11 +7,18 @@ export async function fetchProviders(): Promise<LlmProvider[]> {
   return isProviderResponse(body) ? body.providers : [];
 }
 
-export async function streamChat(provider: string, messages: ChatMessage[], signal: AbortSignal, onEvent: (event: StreamEvent) => void): Promise<void> {
+export async function fetchRagStatus(): Promise<boolean> {
+  const response = await fetch("/api/rag/status");
+  if (!response.ok) throw new Error("Project document search is unavailable.");
+  const body: unknown = await response.json();
+  return isRecord(body) && body.enabled === true;
+}
+
+export async function streamChat(provider: string, messages: ChatMessage[], signal: AbortSignal, onEvent: (event: StreamEvent) => void, rag = false): Promise<void> {
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ provider, messages: messages.slice(-10) }),
+    body: JSON.stringify({ provider, messages: messages.slice(-10).map(({ role, content }) => ({ role, content })), ...(rag ? { rag: true } : {}) }),
     signal,
   });
   if (!response.ok) throw new Error(await publicError(response, "Unable to start the response."));
@@ -82,7 +89,13 @@ function isLlmProvider(value: unknown): value is LlmProvider {
 }
 
 function isCompletion(value: unknown): value is Completion {
-  return isRecord(value) && typeof value.model === "string" && isTokenUsage(value.tokenUsage) && typeof value.durationMs === "number";
+  return isRecord(value) && typeof value.model === "string" && isTokenUsage(value.tokenUsage) && typeof value.durationMs === "number"
+    && (value.sources === undefined || (Array.isArray(value.sources) && value.sources.every(isRagSource)));
+}
+
+export function isRagSource(value: unknown): value is import("./types").RagSource {
+  return isRecord(value) && typeof value.id === "string" && typeof value.document === "string"
+    && typeof value.chunk === "number" && Number.isInteger(value.chunk) && value.chunk > 0 && typeof value.text === "string";
 }
 
 function isTokenUsage(value: unknown): value is TokenUsage {

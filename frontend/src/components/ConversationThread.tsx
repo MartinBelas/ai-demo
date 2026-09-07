@@ -58,7 +58,12 @@ function ConversationHeader({ onSuggestion }: ConversationHeaderProps) {
 
 function Message({ message }: { message: ChatMessage }) {
   const role = message.role === "USER" ? "You" : "Assistant";
-  return <article class={`message message-${message.role.toLowerCase()}`}><p class="role-label">{role}</p><p>{message.content}</p></article>;
+  return <article class={`message message-${message.role.toLowerCase()}`}><p class="role-label">{role}</p><p>{message.content}</p>
+    {message.role === "ASSISTANT" && Boolean(message.sources?.length) && <details class="rag-sources"><summary>Retrieved sources ({message.sources!.length})</summary>
+      <p>Passages supplied to the model for this answer.</p>
+      {message.sources!.map(source => <section key={source.id}><strong>[{source.id}]</strong><p>{source.text}</p></section>)}
+    </details>}
+  </article>;
 }
 
 interface ThinkingToggleProps {

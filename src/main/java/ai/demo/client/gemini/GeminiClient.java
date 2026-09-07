@@ -168,13 +168,15 @@ public final class GeminiClient implements LlmClient {
   private ObjectNode body(Prompt prompt) {
     ObjectNode request = objectMapper.createObjectNode();
     ArrayNode contents = request.putArray("contents");
+    ArrayNode systemParts = null;
     for (ChatMessage message : prompt.messages()) {
       if (message.role() == Role.SYSTEM) {
-        request
-            .putObject("systemInstruction")
-            .putArray(PARTS_FIELD)
-            .addObject()
-            .put("text", message.content());
+        // Gemini has a single systemInstruction; multiple system messages become extra parts
+        // in it instead of each overwriting the previous one.
+        if (systemParts == null) {
+          systemParts = request.putObject("systemInstruction").putArray(PARTS_FIELD);
+        }
+        systemParts.addObject().put("text", message.content());
       } else {
         ObjectNode content = contents.addObject();
         content.put("role", message.role() == Role.ASSISTANT ? "model" : "user");

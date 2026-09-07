@@ -3,7 +3,10 @@ export type Role = "USER" | "ASSISTANT";
 export interface ChatMessage {
   role: Role;
   content: string;
+  sources?: RagSource[];
 }
+
+export interface RagSource { id: string; document: string; chunk: number; text: string }
 
 export interface LlmProvider {
   id: string;
@@ -17,6 +20,7 @@ export interface TokenUsage {
 }
 
 export interface Completion {
+  sources?: RagSource[];
   model: string;
   tokenUsage: TokenUsage;
   durationMs: number;

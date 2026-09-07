@@ -5,7 +5,7 @@ import type { ChatMessage, Completion, StreamEvent, ToolActivity } from "../type
 
 export type StreamState = "idle" | "connecting" | "thinking" | "tooling" | "answering" | "complete" | "error";
 
-export function useConversation(providerId: string) {
+export function useConversation(providerId: string, rag = false) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialHistory);
   const [thinking, setThinking] = useState("");
   const [partial, setPartial] = useState("");
@@ -47,7 +47,7 @@ export function useConversation(providerId: string) {
     resetResponse(setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState);
     setStreamState("connecting");
     await runStream(providerId, requestMessages, requestId, abortController);
-  }, [messages, providerId, streamState]);
+  }, [messages, providerId, streamState, rag]);
 
   async function runStream(
     selectedProvider: string,
@@ -64,12 +64,13 @@ export function useConversation(providerId: string) {
       answer = result.answer;
       completed = result.completed || completed;
       if (result.completed && answer.trim()) {
-        setMessages((value) => [...value, { role: "ASSISTANT", content: answer }]);
+        const sources = event.type === "completion" ? event.completion.sources : undefined;
+        setMessages((value) => [...value, { role: "ASSISTANT", content: answer, ...(sources?.length ? { sources } : {}) }]);
       }
     };
 
     try {
-      await streamChat(selectedProvider, requestMessages, abortController.signal, handleEvent);
+      await streamChat(selectedProvider, requestMessages, abortController.signal, handleEvent, rag);
     } catch (reason) {
       if (current()) handleStreamFailure(reason, abortController.signal.aborted, setError, setStreamState);
     } finally {

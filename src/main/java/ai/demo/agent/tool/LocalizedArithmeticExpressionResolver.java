@@ -12,24 +12,26 @@ import java.util.regex.Pattern;
 
 final class LocalizedArithmeticExpressionResolver {
 
+  private static final String MINUS_WORD = "minus";
+
   private static final List<LanguageProfile> LANGUAGES =
       List.of(
           profile(
               "cs",
               operator("+", "a", "plus"),
-              operator("-", "minus", "mínus"),
+              operator("-", MINUS_WORD, "mínus"),
               operator("*", "krát"),
               operator("/", "děleno")),
           profile(
               "en",
               operator("+", "and", "plus"),
-              operator("-", "minus"),
+              operator("-", MINUS_WORD),
               operator("*", "times"),
               operator("/", "divided by")),
           profile(
               "de",
               operator("+", "und", "plus"),
-              operator("-", "minus"),
+              operator("-", MINUS_WORD),
               operator("*", "mal"),
               operator("/", "geteilt durch")),
           profile(
@@ -41,7 +43,7 @@ final class LocalizedArithmeticExpressionResolver {
           profile(
               "pl",
               operator("+", "i", "plus"),
-              operator("-", "minus"),
+              operator("-", MINUS_WORD),
               operator("*", "razy"),
               operator("/", "podzielone przez")));
 

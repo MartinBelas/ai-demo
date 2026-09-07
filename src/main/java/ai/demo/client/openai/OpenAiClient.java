@@ -166,7 +166,9 @@ public final class OpenAiClient implements LlmClient {
     if (lower.contains("rate_limit")) {
       return LlmErrorCategory.RATE_LIMIT;
     }
-    if (lower.contains("api_key") || lower.contains("unauthorized") || lower.contains("permission")) {
+    if (lower.contains("api_key")
+        || lower.contains("unauthorized")
+        || lower.contains("permission")) {
       return LlmErrorCategory.AUTHENTICATION;
     }
     return LlmErrorCategory.OTHER;
@@ -232,8 +234,7 @@ public final class OpenAiClient implements LlmClient {
   private void requireSuccess(int statusCode, String body) {
     if (statusCode < 200 || statusCode >= 300) {
       throw new LlmCommunicationException(
-          providerName + " returned HTTP status " + statusCode,
-          categorizeError(body, statusCode));
+          providerName + " returned HTTP status " + statusCode, categorizeError(body, statusCode));
     }
   }
 

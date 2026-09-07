@@ -1,0 +1,3 @@
+target/
+avast-root.cer
+local-truststore.jks

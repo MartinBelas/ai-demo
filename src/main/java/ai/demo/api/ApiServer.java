@@ -16,6 +16,7 @@ public final class ApiServer implements AutoCloseable {
 
   private static final String HEALTH_RESPONSE = "{\"status\":\"UP\"}";
   private static final String JSON_CONTENT_TYPE = ApiResponseWriter.JSON_CONTENT_TYPE;
+  private static final String SERVER_NOT_STARTED_MESSAGE = "HTTP server has not been started";
 
   private final int configuredPort;
   private final String openApiDocument;
@@ -26,6 +27,7 @@ public final class ApiServer implements AutoCloseable {
   private final DemoQuotaStore quotaStore;
   private final AppStatusService appStatusService;
   private Javalin app;
+  private final boolean ragEnabled;
 
   public ApiServer(int configuredPort) {
     this(configuredPort, null, null, null, new ObjectMapper(), DemoProtection.localDevelopment());
@@ -64,6 +66,25 @@ public final class ApiServer implements AutoCloseable {
       LlmProvider defaultProvider,
       ObjectMapper objectMapper,
       DemoProtection demoProtection) {
+    this(
+        configuredPort,
+        providerAvailability,
+        chatServiceResolver,
+        defaultProvider,
+        objectMapper,
+        demoProtection,
+        false);
+  }
+
+  public ApiServer(
+      int configuredPort,
+      LlmProviderAvailability providerAvailability,
+      ChatServiceResolver chatServiceResolver,
+      LlmProvider defaultProvider,
+      ObjectMapper objectMapper,
+      DemoProtection demoProtection,
+      boolean ragEnabled) {
+    this.ragEnabled = ragEnabled;
     this.configuredPort = configuredPort;
     this.openApiDocument = OpenApiDocument.load();
     this.providerAvailability = providerAvailability;
@@ -108,6 +129,15 @@ public final class ApiServer implements AutoCloseable {
                                     .contentType(JSON_CONTENT_TYPE)
                                     .result(llmProvidersResponse()))
                         .get("/api/app/status", this::handleAppStatus)
+                        .get(
+                            "/api/rag/status",
+                            context ->
+                                ApiResponseWriter.write(
+                                    context,
+                                    200,
+                                    java.util.Map.of(
+                                        "enabled", ragEnabled, "uploadsEnabled", false),
+                                    objectMapper))
                         .post("/api/chat", this::handleChat)
                         .post("/api/chat/stream", this::handleStreamingChat);
                   })
@@ -166,14 +196,14 @@ public final class ApiServer implements AutoCloseable {
 
   public int port() {
     if (app == null) {
-      throw new ServerException("HTTP server has not been started", null);
+      throw new ServerException(SERVER_NOT_STARTED_MESSAGE, null);
     }
     return app.port();
   }
 
   public void awaitShutdown() {
     if (app == null) {
-      throw new ServerException("HTTP server has not been started", null);
+      throw new ServerException(SERVER_NOT_STARTED_MESSAGE, null);
     }
     try {
       app.jettyServer().server().join();

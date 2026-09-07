@@ -11,10 +11,35 @@ import java.util.function.Consumer;
 public class ChatService {
 
   private final Agent agent;
+  private final RagService rag;
 
   public ChatService(Agent agent) {
+    this(agent, null);
+  }
 
+  public ChatService(Agent agent, RagService rag) {
     this.agent = Objects.requireNonNull(agent);
+    this.rag = rag;
+  }
+
+  public void validateRag(Conversation conversation) {
+    validateConversation(conversation);
+    if (rag == null) throw new ai.demo.exception.RagDisabledException();
+    rag.validateQuery(conversation.messages().getLast().content());
+  }
+
+  public ChatResponse askWithRag(Conversation conversation, Consumer<AgentEvent> eventConsumer) {
+    validateRag(conversation);
+    long started = System.currentTimeMillis();
+    var sources = rag.retrieve(conversation.messages().getLast().content());
+    Conversation enriched = new ai.demo.prompt.RagPromptComposer().compose(conversation, sources);
+    ChatResponse response = ask(enriched, eventConsumer);
+    return new ChatResponse(
+        response.answer(),
+        response.model(),
+        response.tokenUsage(),
+        System.currentTimeMillis() - started,
+        sources);
   }
 
   public ChatResponse ask(Conversation conversation) {

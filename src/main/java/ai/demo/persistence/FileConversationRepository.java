@@ -44,9 +44,7 @@ public class FileConversationRepository implements ConversationRepository {
         return new Conversation();
       }
 
-      Conversation loaded = objectMapper.readValue(json, Conversation.class);
-
-      return loaded;
+      return objectMapper.readValue(json, Conversation.class);
 
     } catch (IOException e) {
       throw new PersistenceException("Failed to load conversation from " + file, e);

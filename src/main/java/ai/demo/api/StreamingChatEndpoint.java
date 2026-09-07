@@ -22,6 +22,9 @@ final class StreamingChatEndpoint {
 
   private static final Logger log = LoggerFactory.getLogger(StreamingChatEndpoint.class);
   private static final String ERROR_EVENT = "error";
+  private static final String DEMO_LIMIT_UNAVAILABLE_CODE = "DEMO_LIMIT_UNAVAILABLE";
+  private static final String DEMO_LIMIT_UNAVAILABLE_MESSAGE =
+      "The public demo is temporarily unavailable.";
 
   private final ChatServiceResolver serviceResolver;
   private final ChatRequestParser requestParser;
@@ -47,7 +50,16 @@ final class StreamingChatEndpoint {
       request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
       chatService = serviceResolver.resolve(request.provider());
+      if (request.rag()) chatService.validateRag(request.conversation());
       reservation = requestGate.reserve(context, true);
+    } catch (ai.demo.exception.RagDisabledException e) {
+      ApiResponseWriter.writeError(
+          context,
+          400,
+          "RAG_DISABLED",
+          "Retrieval-augmented generation is not enabled in this deployment.",
+          objectMapper);
+      return;
     } catch (ApiRequestException e) {
       writeValidationError(context, e);
       return;
@@ -82,13 +94,22 @@ final class StreamingChatEndpoint {
       DemoQuotaStore.Reservation reservation) {
     try {
       ChatResponse response =
-          chatService.ask(request.conversation(), event -> writeAgentEvent(writer, event));
+          request.rag()
+              ? chatService.askWithRag(
+                  request.conversation(), event -> writeAgentEvent(writer, event))
+              : chatService.ask(request.conversation(), event -> writeAgentEvent(writer, event));
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       writer.send("completion", SseCompletionEvent.from(response));
       return AppOutcome.COMPLETED;
     } catch (SseConnectionException e) {
       log.debug("SSE client disconnected", e);
       return AppOutcome.DISCONNECTED;
+    } catch (ai.demo.exception.RagException e) {
+      log.warn("Streaming RAG request failed", e);
+      writer.send(
+          ERROR_EVENT,
+          ApiErrorResponse.of(
+              "RAG_UNAVAILABLE", "Project document search is temporarily unavailable."));
     } catch (LlmException e) {
       log.warn("Streaming LLM request failed", e);
       writer.send(
@@ -100,8 +121,7 @@ final class StreamingChatEndpoint {
       log.warn("Demo quota reconciliation failed", e);
       writer.send(
           ERROR_EVENT,
-          ApiErrorResponse.of(
-              "DEMO_LIMIT_UNAVAILABLE", "The public demo is temporarily unavailable."));
+          ApiErrorResponse.of(DEMO_LIMIT_UNAVAILABLE_CODE, DEMO_LIMIT_UNAVAILABLE_MESSAGE));
     } catch (RuntimeException e) {
       log.error("Unexpected streaming chat API error", e);
       writer.send(
@@ -114,11 +134,7 @@ final class StreamingChatEndpoint {
       Context context, ai.demo.exception.DemoLimitException exception) {
     if (exception.unavailable()) {
       ApiResponseWriter.writeError(
-          context,
-          503,
-          "DEMO_LIMIT_UNAVAILABLE",
-          "The public demo is temporarily unavailable.",
-          objectMapper);
+          context, 503, DEMO_LIMIT_UNAVAILABLE_CODE, DEMO_LIMIT_UNAVAILABLE_MESSAGE, objectMapper);
     } else {
       ApiResponseWriter.writeError(
           context,

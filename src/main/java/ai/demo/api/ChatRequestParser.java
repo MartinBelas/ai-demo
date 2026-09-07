@@ -22,7 +22,7 @@ final class ChatRequestParser {
         throw new ApiRequestException("request", "Request body is required.");
       }
       return new ResolvedChatRequest(
-          request.selectedProvider(defaultProvider), request.toConversation());
+          request.selectedProvider(defaultProvider), request.toConversation(), request.rag());
     } catch (JsonProcessingException e) {
       throw new ApiRequestException("request", "Request body must contain valid JSON.", e);
     }

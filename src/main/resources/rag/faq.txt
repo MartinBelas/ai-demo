@@ -1,0 +1,11 @@
+Are uploaded documents supported?
+This first RAG release uses only project documents bundled with the application. Public uploads and deletion are disabled.
+
+Do the documents survive a restart?
+The bundled source files remain in the application image. The in-memory vector index is discarded when the process stops and rebuilt lazily after restart. Separate server instances have separate indexes. Embeddings are not persisted in this release.
+
+How are costs bounded?
+Configuration limits document size, document count, total corpus size, chunk size, question size, retrieved chunk count, and total retrieved text size. Size limits use UTF-8 bytes, not exact model tokens. The full corpus is not sent with each question. Local Ollama requires compute resources but does not incur a hosted per-token API bill.
+
+What happens when retrieval finds no useful passages?
+The agent is instructed to state when the project documents do not provide enough information. Retrieved passages are reference data, not instructions. Source excerpts show what was supplied to the model, not a guarantee that every generated statement is correct.

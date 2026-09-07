@@ -9,6 +9,7 @@ import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.api.ApiServer;
 import ai.demo.api.ChatServiceResolver;
 import ai.demo.api.DemoProtection;
+import ai.demo.client.EmbeddingClientFactory;
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmClientFactory;
 import ai.demo.client.LoggingLlmClient;
@@ -27,14 +28,17 @@ import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.exception.ServerException;
+import ai.demo.persistence.BundledRagDocuments;
 import ai.demo.persistence.ConversationRepository;
 import ai.demo.persistence.FileConversationRepository;
+import ai.demo.persistence.InMemoryVectorStore;
 import ai.demo.prompt.PromptComposer;
 import ai.demo.prompt.template.PromptTemplateLoader;
 import ai.demo.prompt.template.PromptTemplateRenderer;
 import ai.demo.prompt.template.PromptTemplateType;
 import ai.demo.prompt.template.SystemPromptProvider;
 import ai.demo.service.ChatService;
+import ai.demo.service.RagService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.http.HttpClient;
@@ -43,12 +47,16 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Composition root: wiring every provider/service/config collaborator here is the point.
+@SuppressWarnings("java:S6539")
 public class App {
 
   private static final Logger log = LoggerFactory.getLogger(App.class);
+  private static final String CONFIGURATION_ERROR_LOG = "Configuration error: {}";
 
   public static void main(String[] args) {
     int exitCode = new App().run();
@@ -65,7 +73,7 @@ public class App {
     try {
       config = loadConfig();
     } catch (ConfigurationException | IOException e) {
-      log.error("Configuration error: {}", e.getMessage(), e);
+      log.error(CONFIGURATION_ERROR_LOG, e.getMessage(), e);
       return 1;
     }
 
@@ -81,7 +89,7 @@ public class App {
       providerClient = createLlmClient(config, httpClient, objectMapper);
     } catch (ConfigurationException e) {
       httpClient.shutdownNow();
-      log.error("Configuration error: {}", e.getMessage(), e);
+      log.error(CONFIGURATION_ERROR_LOG, e.getMessage(), e);
       return 1;
     }
     LlmClient llmClient = new LoggingLlmClient(providerClient);
@@ -114,10 +122,15 @@ public class App {
           new LlmProviderAvailability(config, environment::get);
       ObjectMapper objectMapper = new ObjectMapper();
       HttpClient httpClient = createHttpClient();
+      HttpTransport transport = new JdkHttpTransport(httpClient);
       LlmClientFactory clientFactory =
-          new LlmClientFactory(new JdkHttpTransport(httpClient), objectMapper, environment::get);
+          new LlmClientFactory(transport, objectMapper, environment::get);
       ChatServiceResolver chatServiceResolver =
-          createChatServiceResolver(config, clientFactory, objectMapper);
+          createChatServiceResolver(
+              config,
+              clientFactory,
+              objectMapper,
+              createRagService(config, transport, objectMapper, environment::get));
       String ipHashSalt = environment.get(config.demoLimits().ipHashSaltEnvironmentVariable());
       if (config.demoLimits().enabled() && (ipHashSalt == null || ipHashSalt.isBlank())) {
         throw new ConfigurationException(
@@ -132,7 +145,7 @@ public class App {
           httpClient,
           demoProtection);
     } catch (ConfigurationException e) {
-      log.error("Configuration error: {}", e.getMessage(), e);
+      log.error(CONFIGURATION_ERROR_LOG, e.getMessage(), e);
       return 1;
     }
   }
@@ -152,7 +165,8 @@ public class App {
                 chatServiceResolver,
                 config.provider(),
                 objectMapper,
-                demoProtection)) {
+                demoProtection,
+                config.rag().enabled())) {
       server.start();
       Runtime.getRuntime().addShutdownHook(new Thread(server::close));
       log.info("HTTP server started on port {}", server.port());
@@ -164,8 +178,25 @@ public class App {
     }
   }
 
+  private RagService createRagService(
+      AppConfig config,
+      HttpTransport transport,
+      ObjectMapper objectMapper,
+      UnaryOperator<String> environment) {
+    if (!config.rag().enabled()) {
+      return null;
+    }
+    EmbeddingClientFactory embeddingClientFactory =
+        new EmbeddingClientFactory(transport, objectMapper, environment);
+    return new RagService(
+        config.rag(),
+        embeddingClientFactory.create(config.rag()),
+        new InMemoryVectorStore(),
+        new BundledRagDocuments(config.rag())::load);
+  }
+
   private ChatServiceResolver createChatServiceResolver(
-      AppConfig config, LlmClientFactory clientFactory, ObjectMapper objectMapper) {
+      AppConfig config, LlmClientFactory clientFactory, ObjectMapper objectMapper, RagService rag) {
     ConcurrentMap<LlmProvider, ChatService> services = new ConcurrentHashMap<>();
     PromptComposer promptComposer = createAgentPromptComposer(config);
     return provider ->
@@ -174,7 +205,7 @@ public class App {
             selectedProvider -> {
               LlmClient client =
                   new LoggingLlmClient(clientFactory.create(config, selectedProvider));
-              return new ChatService(createAgent(client, promptComposer, objectMapper));
+              return new ChatService(createAgent(client, promptComposer, objectMapper), rag);
             });
   }
 

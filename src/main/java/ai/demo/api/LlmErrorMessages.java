@@ -18,8 +18,7 @@ final class LlmErrorMessages {
       case QUOTA_EXHAUSTED ->
           "The " + provider + " AI provider has run out of quota or credits." + SWITCH_SUGGESTION;
       case AUTHENTICATION ->
-          "The " + provider + " AI provider rejected the request credentials."
-              + SWITCH_SUGGESTION;
+          "The " + provider + " AI provider rejected the request credentials." + SWITCH_SUGGESTION;
       case OTHER -> "Unable to communicate with the " + provider + " AI model." + RETRY_SUGGESTION;
     };
   }

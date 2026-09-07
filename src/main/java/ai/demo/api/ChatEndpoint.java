@@ -40,11 +40,25 @@ final class ChatEndpoint {
       request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
       ChatService chatService = serviceResolver.resolve(request.provider());
+      if (request.rag()) chatService.validateRag(request.conversation());
       reservation = requestGate.reserve(context, false);
-      ChatResponse response = chatService.ask(request.conversation());
+      ChatResponse response =
+          request.rag()
+              ? chatService.askWithRag(request.conversation(), event -> {})
+              : chatService.ask(request.conversation());
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       ApiResponseWriter.write(context, 200, ApiChatResponse.from(response), objectMapper);
       outcome = AppOutcome.COMPLETED;
+    } catch (ai.demo.exception.RagDisabledException e) {
+      writeError(
+          context,
+          400,
+          "RAG_DISABLED",
+          "Retrieval-augmented generation is not enabled in this deployment.");
+    } catch (ai.demo.exception.RagException e) {
+      log.warn("RAG request failed", e);
+      writeError(
+          context, 503, "RAG_UNAVAILABLE", "Project document search is temporarily unavailable.");
     } catch (ApiRequestException e) {
       writeValidationError(context, e);
     } catch (ConfigurationException e) {
@@ -56,8 +70,7 @@ final class ChatEndpoint {
           request == null
               ? LlmErrorMessages.communicationFailure()
               : LlmErrorMessages.communicationFailure(e.category(), request.provider());
-      writeError(
-          context, 502, "LLM_COMMUNICATION_ERROR", message);
+      writeError(context, 502, "LLM_COMMUNICATION_ERROR", message);
     } catch (ai.demo.exception.DemoLimitException e) {
       writeDemoLimitError(context, e);
     } catch (RuntimeException e) {

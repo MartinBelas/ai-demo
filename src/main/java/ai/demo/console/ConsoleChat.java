@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
  * Console-based chat interface for interacting with the AI. Handles user input and displays AI
  * responses.
  */
+@SuppressWarnings("java:S106") // Console UI: printing to System.out is this class's actual job.
 public class ConsoleChat {
 
   private static final String ANSI_GRAY = "\u001B[90m";

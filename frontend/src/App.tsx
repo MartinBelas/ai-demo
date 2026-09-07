@@ -8,6 +8,7 @@ import { StatusPage } from "./components/StatusPage";
 import { SiteFooter } from "./components/SiteFooter";
 import { useConversation } from "./hooks/useConversation";
 import { useProviders } from "./hooks/useProviders";
+import { fetchRagStatus } from "./api";
 
 export function App() {
   const [route, setRoute] = useState(() => routeFromHash(window.location.hash));
@@ -34,7 +35,14 @@ export function App() {
 
 function ChatPage() {
   const providerState = useProviders();
-  const conversation = useConversation(providerState.providerId);
+  const [rag, setRag] = useState(false);
+  const [ragAvailable, setRagAvailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void fetchRagStatus().then(value => { if (active) setRagAvailable(value); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  const conversation = useConversation(providerState.providerId, rag && ragAvailable);
   const [suggestion, setSuggestion] = useState("");
   const canClear = conversation.messages.length > 0 || Boolean(conversation.partial);
 
@@ -44,6 +52,7 @@ function ChatPage() {
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />
       <section class="conversation" aria-label="Conversation">
         <ConversationThread {...conversation} onSuggestion={setSuggestion} />
+        {ragAvailable && <label class="rag-option"><input type="checkbox" checked={rag} disabled={conversation.streaming} onChange={event => setRag(event.currentTarget.checked)} /> Use project documents <small>Search project information and show source passages.</small></label>}
         <Composer providerAvailable={Boolean(providerState.providerId)} streaming={conversation.streaming} suggestion={suggestion} canClear={canClear} onSuggestionUsed={() => setSuggestion("")} onSubmit={conversation.submit} onStop={conversation.stop} onClear={conversation.clear} />
       </section>
     </main>

@@ -294,9 +294,7 @@ class ApiServerTest {
       server.start();
 
       HttpResponse<String> response =
-          client.send(
-              streamingChatRequest(server),
-              HttpResponse.BodyHandlers.ofString());
+          client.send(streamingChatRequest(server), HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
       assertTrue(
@@ -341,9 +339,7 @@ class ApiServerTest {
       server.start();
 
       CompletableFuture<HttpResponse<InputStream>> responseFuture =
-          client.sendAsync(
-              streamingChatRequest(server),
-              HttpResponse.BodyHandlers.ofInputStream());
+          client.sendAsync(streamingChatRequest(server), HttpResponse.BodyHandlers.ofInputStream());
 
       assertTrue(thinkingSent.await(2, TimeUnit.SECONDS));
       HttpResponse<InputStream> response = responseFuture.orTimeout(2, TimeUnit.SECONDS).join();
@@ -376,9 +372,7 @@ class ApiServerTest {
       server.start();
 
       HttpResponse<String> response =
-          client.send(
-              streamingChatRequest(server),
-              HttpResponse.BodyHandlers.ofString());
+          client.send(streamingChatRequest(server), HttpResponse.BodyHandlers.ofString());
 
       assertEquals(200, response.statusCode());
       assertTrue(response.body().contains("event: error"));

@@ -1,6 +1,7 @@
 package ai.demo.console.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,7 +32,7 @@ class ProviderCommandTest {
 
   @Test
   void shouldReturnFailureWithoutChangingProviderWhenSwitchFails() {
-    org.mockito.Mockito.doThrow(new IllegalStateException("Missing API key"))
+    doThrow(new IllegalStateException("Missing API key"))
         .when(selector)
         .switchTo(LlmProvider.OPENAI);
 
