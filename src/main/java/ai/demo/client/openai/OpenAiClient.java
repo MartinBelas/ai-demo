@@ -234,7 +234,20 @@ public final class OpenAiClient implements LlmClient {
   private void requireSuccess(int statusCode, String body) {
     if (statusCode < 200 || statusCode >= 300) {
       throw new LlmCommunicationException(
-          providerName + " returned HTTP status " + statusCode, categorizeError(body, statusCode));
+          providerName + " returned HTTP status " + statusCode + ": " + extractErrorMessage(body),
+          categorizeError(body, statusCode));
+    }
+  }
+
+  private String extractErrorMessage(String body) {
+    if (body == null || body.isBlank()) {
+      return "no response body";
+    }
+    try {
+      String message = objectMapper.readTree(body).path(ERROR_FIELD).path("message").asText(null);
+      return message != null ? message : body;
+    } catch (JsonProcessingException e) {
+      return body;
     }
   }
 
