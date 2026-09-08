@@ -1,0 +1,24 @@
+meta {
+  name: RAG Status
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/rag/status
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("reports RAG availability", function () {
+    const body = res.getBody();
+
+    expect(body.enabled).to.be.a("boolean");
+    expect(body.uploadsEnabled).to.be.a("boolean");
+  });
+}

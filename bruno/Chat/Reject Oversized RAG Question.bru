@@ -1,0 +1,43 @@
+meta {
+  name: Reject Oversized RAG Question
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "provider": "{{llmProvider}}",
+    "messages": [
+      {
+        "role": "USER",
+        "content": "This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit. This question is intentionally oversized to exceed the configured RAG query byte limit."
+      }
+    ],
+    "rag": true
+  }
+}
+
+tests {
+  test("returns HTTP 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  test("returns the stable validation error", function () {
+    expect(res.getBody()).to.eql({
+      code: "INVALID_REQUEST",
+      message: "Invalid chat request.",
+      details: [
+        {
+          field: "messages",
+          message: "The RAG question exceeds the configured size limit or is empty."
+        }
+      ]
+    });
+  });
+}

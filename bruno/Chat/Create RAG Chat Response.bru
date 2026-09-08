@@ -1,0 +1,49 @@
+meta {
+  name: Create RAG Chat Response
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "provider": "{{llmProvider}}",
+    "messages": [
+      {
+        "role": "USER",
+        "content": "Which chat providers does this project support?"
+      }
+    ],
+    "rag": true
+  }
+}
+
+tests {
+  test("returns HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("returns a RAG-aware chat response with source excerpts", function () {
+    const body = res.getBody();
+
+    expect(body.answer).to.be.a("string").and.not.empty;
+    expect(body.model).to.be.a("string").and.not.empty;
+    expect(body.tokenUsage).to.have.all.keys(
+      "promptTokens",
+      "completionTokens",
+      "totalTokens"
+    );
+    expect(body.durationMs).to.be.a("number").and.at.least(0);
+    // `sources` uses @JsonInclude(NON_EMPTY), so it is omitted rather than `[]` when
+    // retrieval finds nothing; the question above is chosen to reliably match bundled content.
+    expect(body.sources).to.be.an("array").with.length.above(0);
+    body.sources.forEach(function (source) {
+      expect(source).to.have.all.keys("id", "document", "chunk", "text");
+    });
+  });
+}

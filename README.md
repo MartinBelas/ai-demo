@@ -577,7 +577,8 @@ verified in this review.
 
 - [x] Define MVP scope, limits, and acceptance criteria in PRD
 - [x] Add console/HTTP, provider availability, port, and demo-limit runtime configuration
-- [ ] Add RAG enablement and document-upload limit configuration
+- [x] Add RAG enablement configuration
+- [ ] Add document-upload limit configuration
 - [x] Add HTTP mode and health endpoint
 - [x] Add configurable Ollama availability
 - [x] Add OpenAPI specification foundation
@@ -587,9 +588,9 @@ verified in this review.
 - [x] Add Bruno API collection foundation
 - [x] Add simple web chat with browser-local history
 - [x] Serve the production frontend build from the HTTP application
-- [ ] Add provider-independent embedding and vector store abstractions
-- [ ] Add TXT and Markdown ingestion, chunking, and retrieval
-- [ ] Add RAG context assembly and source attribution
+- [x] Add provider-independent embedding and vector store abstractions
+- [x] Add TXT and Markdown ingestion, chunking, and retrieval
+- [x] Add RAG context assembly and source attribution
 - [x] Add Firestore-backed demo request quotas and LLM limits
 - [x] Add public aggregate metrics endpoint and status page
 - [x] Add production Dockerfile
@@ -703,32 +704,32 @@ verified in this review.
 
 ### Phase 4 – Data & RAG
 
-- [ ] Document ingestion
+- [x] Document ingestion (bundled corpus only; no runtime upload)
 - [ ] Document format detection
 - [ ] Document parsing
-- [ ] Text normalization
-- [ ] Chunking
-- [ ] Chunk metadata
-- [ ] Embedding client abstraction
-- [ ] Ollama embedding integration
-- [ ] Vector store abstraction
-- [ ] Local vector store implementation
-- [ ] Semantic retrieval
+- [x] Text normalization
+- [x] Chunking
+- [x] Chunk metadata
+- [x] Embedding client abstraction
+- [x] Ollama embedding integration
+- [x] Vector store abstraction
+- [x] Local vector store implementation
+- [x] Semantic retrieval
 - [ ] Metadata filtering
-- [ ] Retrieval ranking
-- [ ] Context assembly
-- [ ] RAG prompt templates
-- [ ] Citation generation
-- [ ] Source attribution
+- [x] Retrieval ranking
+- [x] Context assembly
+- [x] RAG prompt templates
+- [x] Citation generation
+- [x] Source attribution
 - [ ] Retrieval diagnostics
-- [ ] Document ingestion tests
+- [x] Document ingestion tests
 - [ ] Document parsing tests
-- [ ] Chunking tests
-- [ ] Embedding client tests
-- [ ] Vector store tests
-- [ ] Retrieval tests
-- [ ] RAG pipeline tests
-- [ ] Citation generation tests
+- [x] Chunking tests
+- [x] Embedding client tests
+- [x] Vector store tests
+- [x] Retrieval tests
+- [x] RAG pipeline tests
+- [x] Citation generation tests
 - [ ] n8n integration
 - [ ] Ingestion workflows
 - [ ] Scheduled crawlers

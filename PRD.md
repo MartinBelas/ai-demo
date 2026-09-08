@@ -133,9 +133,7 @@ GET    /api/health
 GET    /api/llm/providers
 POST   /api/chat
 POST   /api/chat/stream
-GET    /api/rag/documents
-POST   /api/rag/documents
-DELETE /api/rag/documents/{id}
+GET    /api/rag/status
 GET    /api/app/status
 GET    /openapi.yaml
 ```
@@ -198,9 +196,10 @@ GET    /openapi.yaml
 - Retrieval selects at most the configured number of chunks.
 - Retrieved context is clearly separated from user instructions in the prompt.
 - RAG answers include source attribution.
-- PDF, Word, crawling, reranking, and persistent document storage are outside the MVP.
-- Anonymous upload is bounded by `demo.limits.max-rag-upload-bytes` per file and `demo.limits.max-rag-documents` for the total corpus, and may be disabled in the public deployment.
-- A request to a `/api/rag/documents` endpoint while `rag.enabled=false` is rejected with HTTP `400` and:
+- PDF, Word, crawling, reranking, user document upload, and persistent document storage are outside the MVP.
+- The corpus is fixed at build time from documents bundled with the application image; there is no runtime document upload or deletion in this release.
+- `GET /api/rag/status` reports whether RAG is enabled in the current deployment so the web interface can show or hide the retrieval option.
+- A chat request with `rag: true` while `rag.enabled=false` is rejected with HTTP `400` and:
 
 ```json
 {
