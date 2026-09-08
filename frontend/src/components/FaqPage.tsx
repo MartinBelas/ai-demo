@@ -1,4 +1,4 @@
-const topics = [["01", "Why was this project created?", "/#/faq/why"], ["02", "What are the current limitations?", "/#/faq/limitations"], ["03", "How do I run it locally?", "/#/faq/local"], ["04", "How do I run it locally with Docker?", "/#/faq/docker"]] as const;
+const topics = [["01", "Why was this project created?", "/#/faq/why"], ["02", "What are the current limitations?", "/#/faq/limitations"], ["03", "How do I run it locally?", "/#/faq/local"], ["04", "How do I run it locally with Docker?", "/#/faq/docker"], ["05", "What does “Use project documents” (RAG) do?", "/#/faq/rag"]] as const;
 
 export function FaqPage() {
   return <main id="main" class="faq-page">
@@ -30,6 +30,11 @@ export function FaqPage() {
           <li><h3>Open the application</h3><p>Visit <a href="http://localhost:8080">http://localhost:8080</a>. You can also check the backend at <a href="http://localhost:8080/api/health">http://localhost:8080/api/health</a>.</p></li>
           <li><h3>Stop safely</h3><pre><code>docker compose --profile ollama down</code></pre><p>The downloaded model remains saved in its Docker volume for the next start.</p></li>
         </ol><aside class="advanced-note"><p class="eyebrow">Advanced / build local source</p><p>To build the application image from your current checkout instead of pulling the published application image, run:</p><pre><code>docker compose --profile ollama up -d --build</code></pre></aside></div></article>
+        <article id="rag" class="faq-answer"><span class="faq-number" aria-hidden="true">05</span><div><p class="eyebrow">Retrieval-augmented generation</p><h2>What does &ldquo;Use project documents&rdquo; (RAG) do?</h2><p>The chat page has a checkbox labeled <strong>Use project documents (RAG)</strong>&mdash;short for <em>retrieval-augmented generation</em>. When it is on, your question is first compared against a small bundled set of documents about this project (this FAQ included). The passages that match best are inserted into the prompt as reference material, and the model is instructed to answer from them and to say so when they do not cover the question. The passages it used are shown under the answer as source excerpts.</p><p>Without it, the model answers from its general training only, which means it knows nothing about this specific codebase&mdash;it will guess, generalize, or say it does not know.</p><p>Try asking the same question with the checkbox off, then on:</p><ol>
+          <li><code>Does the in-memory vector index survive a server restart?</code></li>
+          <li><code>Which embedding client and vector store does this project use, and how are results ranked?</code></li>
+          <li><code>Does this release support uploading your own documents?</code></li>
+        </ol><p>Without retrieval these tend to produce generic or invented answers (unrelated libraries, made-up persistence). With it, the answer comes straight from this project&rsquo;s own documentation, with the matching excerpt shown alongside it.</p></div></article>
       </div>
     </div>
   </main>;

@@ -14,7 +14,7 @@ export function App() {
   const [route, setRoute] = useState(() => routeFromHash(window.location.hash));
   useEffect(() => {
     const scrollToTarget = () => {
-      const faqSection = /^#\/faq\/(why|limitations|local|docker)$/.exec(window.location.hash)?.[1];
+      const faqSection = /^#\/faq\/(why|limitations|local|docker|rag)$/.exec(window.location.hash)?.[1];
       const nextRoute = routeFromHash(window.location.hash);
       let targetId = "main";
       if (faqSection) targetId = faqSection;
@@ -52,7 +52,13 @@ function ChatPage() {
       <ProviderPanel providers={providerState.providers} providerId={providerState.providerId} activeProvider={providerState.activeProvider} loading={providerState.loading} error={providerState.error} streaming={conversation.streaming} onChange={providerState.setProviderId} onRetry={() => void providerState.load()} />
       <section class="conversation" aria-label="Conversation">
         <ConversationThread {...conversation} onSuggestion={setSuggestion} />
-        {ragAvailable && <label class="rag-option"><input type="checkbox" checked={rag} disabled={conversation.streaming} onChange={event => setRag(event.currentTarget.checked)} /> Use project documents <small>Search project information and show source passages.</small></label>}
+        {ragAvailable && <div class="rag-toggle">
+          <label class="rag-toggle-control">
+            <input type="checkbox" checked={rag} disabled={conversation.streaming} onChange={event => setRag(event.currentTarget.checked)} />
+            <span>Use project documents (RAG)</span>
+          </label>
+          <p class="rag-toggle-hint">Search project information and show source passages. <a href="/#/faq/rag">How this works &amp; example questions →</a></p>
+        </div>}
         <Composer providerAvailable={Boolean(providerState.providerId)} streaming={conversation.streaming} suggestion={suggestion} canClear={canClear} onSuggestionUsed={() => setSuggestion("")} onSubmit={conversation.submit} onStop={conversation.stop} onClear={conversation.clear} />
       </section>
     </main>

@@ -527,7 +527,7 @@ For Cloud Run:
 
 1. Create a Firestore Native-mode database in the same European region as Cloud Run.
 2. Grant the Cloud Run service account `roles/datastore.user` and Secret Manager access only to
-   the selected provider key and `demo-ip-hash-salt`.
+   the selected provider key(s) and `demo-ip-hash-salt`.
 3. Create a provider-key secret and a long random `demo-ip-hash-salt` secret in Secret Manager.
 4. Copy `deploy/cloudrun.env.yaml.example` to the ignored `deploy/cloudrun.env.yaml` file.
 5. Authenticate `gcloud`, then run:
@@ -540,10 +540,19 @@ For Cloud Run:
   -ApiKeySecret openai-api-key
 ```
 
+RAG has no local Ollama sidecar on Cloud Run, so the script enables it with a cloud embedding
+provider instead of the `ollama.*` config used locally. It defaults `-EmbeddingProvider` to
+`-Provider` when that provider can also do embeddings (OpenAI or Gemini), reusing the same
+`-ApiKeySecret` for both chat and retrieval—no extra secret needed for the command above. Choosing
+`-Provider GROQ` requires an explicit `-EmbeddingProvider OPENAI` or `-EmbeddingProvider GEMINI`
+(GroqCloud has no embeddings API), and if that differs from `-Provider` it also needs its own
+`-EmbeddingApiKeySecret` pointing at a second Secret Manager secret, granted to the service account
+alongside the chat key. Pass `-DisableRag` to deploy without project-document search at all.
+
 The deployment uses request-based billing, zero minimum instances, one maximum instance, bounded
 concurrency, and Secret Manager environment mounts. The script runs read-only smoke checks against
-the deployed health endpoint, provider list, frontend, and OpenAPI document. It deliberately does
-not send a paid chat request. Run the smoke checks independently with:
+the deployed health endpoint, provider list, RAG status, frontend, and OpenAPI document. It
+deliberately does not send a paid chat request. Run the smoke checks independently with:
 
 ```powershell
 .\deploy\smoke-test.ps1 -BaseUrl https://YOUR_SERVICE_URL

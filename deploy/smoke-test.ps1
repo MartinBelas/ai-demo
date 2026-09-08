@@ -13,6 +13,11 @@ if ($null -eq $providers.providers -or $providers.providers.Count -lt 1) {
     throw "No public LLM provider is available."
 }
 
+$rag = Invoke-RestMethod -Uri "$base/api/rag/status"
+if ($null -eq $rag.enabled) {
+    throw "RAG status endpoint did not return an 'enabled' field."
+}
+
 $page = Invoke-WebRequest -Uri "$base/"
 if ($page.StatusCode -ne 200 -or $page.Content -notmatch '<div id="app"></div>') {
     throw "Production frontend is not being served."

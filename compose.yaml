@@ -12,6 +12,9 @@ services:
       OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      RAG_ENABLED: ${RAG_ENABLED:-true}
+      RAG_EMBEDDING_BASE_URL: http://ollama:11434
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-nomic-embed-text}
 
   ollama:
     image: ollama/ollama:latest
@@ -31,6 +34,17 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
     command: ["pull", "${OLLAMA_MODEL:-qwen3:4b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  ollama-embedding-model:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${RAG_EMBEDDING_MODEL:-nomic-embed-text}"]
     depends_on:
       ollama:
         condition: service_healthy
