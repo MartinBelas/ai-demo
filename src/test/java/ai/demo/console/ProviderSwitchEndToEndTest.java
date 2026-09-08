@@ -68,7 +68,7 @@ class ProviderSwitchEndToEndTest {
             LlmProvider.OLLAMA,
             new GenerationConfig(0.4, 300, "Be helpful."),
             new OllamaConfig("ollama-model", "http://localhost:11434", 4096, 1.18),
-            new OpenAiConfig("openai-model", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+            new OpenAiConfig("openai-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
             conversationFile);
     var dispatcher = new ConsoleCommandDispatcher(new CommandRegistry(switchable).commands());
     InputStream originalIn = System.in;

@@ -171,9 +171,11 @@ ollama.base-url=http://localhost:11434
 ollama.context-window=4096
 ollama.repeat-penalty=1.18
 
+# gpt-5.6-luna rejects the 'temperature' request parameter (HTTP 400); set to true for models that accept it.
 openai.model=gpt-5.6-luna
 openai.base-url=https://api.openai.com/v1
 openai.api-key-env=OPENAI_API_KEY
+openai.temperature-supported=false
 
 groq.model=qwen/qwen3.6-27b
 groq.base-url=https://api.groq.com/openai/v1
@@ -297,6 +299,8 @@ All configured Ollama generation options are forwarded inside the provider's `op
 Cloud Run must set `OLLAMA_ENABLED=false`.
 
 `llm.provider` selects the startup provider. Each provider has its own model. To use or switch to OpenAI, provide the API key through the environment variable named by `openai.api-key-env`. Never store API keys in the properties file. The OpenAI client is created lazily, so a missing key does not prevent startup with Ollama.
+
+`openai.temperature-supported` (env override `OPENAI_TEMPERATURE_SUPPORTED`, default `true`) controls whether the `temperature` parameter is sent to the OpenAI Responses API. Some models (e.g. reasoning-tier models) reject it with `HTTP 400 Unsupported parameter: 'temperature'`; set this to `false` for those models. Groq always sends `temperature`, since it does not share this restriction.
 
 For local development, copy `.env.example` to `.env` and add the key:
 

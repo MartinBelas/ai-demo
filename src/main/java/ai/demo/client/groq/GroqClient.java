@@ -5,6 +5,7 @@ import ai.demo.client.LlmResponse;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.client.openai.OpenAiClient;
+import ai.demo.client.openai.OpenAiCompatibleSettings;
 import ai.demo.config.AppConfig;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.prompt.Prompt;
@@ -20,9 +21,8 @@ public final class GroqClient implements LlmClient {
       AppConfig config, String apiKey, HttpTransport transport, ObjectMapper objectMapper) {
     this.delegate =
         new OpenAiClient(
-            "Groq",
-            config.groq().model(),
-            config.groq().baseUrl(),
+            new OpenAiCompatibleSettings(
+                "Groq", config.groq().model(), config.groq().baseUrl(), true),
             config.generation(),
             apiKey,
             transport,

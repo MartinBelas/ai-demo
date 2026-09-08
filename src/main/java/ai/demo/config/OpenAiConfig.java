@@ -1,6 +1,7 @@
 package ai.demo.config;
 
-public record OpenAiConfig(String model, String baseUrl, String apiKeyEnvironmentVariable) {
+public record OpenAiConfig(
+    String model, String baseUrl, String apiKeyEnvironmentVariable, boolean temperatureSupported) {
   public OpenAiConfig {
     if (model == null || model.isBlank()) {
       throw new IllegalArgumentException("OpenAI model must not be blank");

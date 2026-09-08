@@ -1,6 +1,7 @@
 package ai.demo.client.openai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -17,19 +18,30 @@ import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.prompt.Prompt;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class OpenAiClientTest {
+
+  private static final String CHAT_RESPONSE_BODY =
+      """
+      {"model":"test-model","output":[{"type":"message","content":[{"type":"output_text","text":"Hello"}]}],"usage":{"input_tokens":1,"output_tokens":1}}
+      """;
 
   private HttpTransport transport;
   private OpenAiClient client;
@@ -37,14 +49,17 @@ class OpenAiClientTest {
   @BeforeEach
   void setUp() {
     transport = mock(HttpTransport.class);
-    var config =
-        new AppConfig(
-            LlmProvider.OPENAI,
-            new GenerationConfig(0.4, 300, "Be helpful."),
-            null,
-            new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY"),
-            Path.of("conversation.json"));
-    client = new OpenAiClient(config, "secret", transport, new ObjectMapper());
+    client = new OpenAiClient(openAiConfig(true), "secret", transport, new ObjectMapper());
+  }
+
+  private AppConfig openAiConfig(boolean temperatureSupported) {
+    return new AppConfig(
+        LlmProvider.OPENAI,
+        new GenerationConfig(0.4, 300, "Be helpful."),
+        null,
+        new OpenAiConfig(
+            "test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", temperatureSupported),
+        Path.of("conversation.json"));
   }
 
   @Test
@@ -122,6 +137,68 @@ class OpenAiClientTest {
     assertThrows(LlmCommunicationException.class, () -> client.stream(request, chunkConsumer));
 
     verify(body).close();
+  }
+
+  @Test
+  void shouldIncludeTemperatureWhenModelSupportsIt() throws Exception {
+    HttpResponse<String> response = mock();
+    when(response.statusCode()).thenReturn(200);
+    when(response.body()).thenReturn(CHAT_RESPONSE_BODY);
+    ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+    when(transport.send(captor.capture())).thenReturn(response);
+
+    client.chat(prompt());
+
+    JsonNode body = new ObjectMapper().readTree(bodyOf(captor.getValue()));
+    assertEquals(0.4, body.path("temperature").asDouble());
+  }
+
+  @Test
+  void shouldOmitTemperatureWhenModelDoesNotSupportIt() throws Exception {
+    OpenAiClient noTemperatureClient =
+        new OpenAiClient(openAiConfig(false), "secret", transport, new ObjectMapper());
+    HttpResponse<String> response = mock();
+    when(response.statusCode()).thenReturn(200);
+    when(response.body()).thenReturn(CHAT_RESPONSE_BODY);
+    ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+    when(transport.send(captor.capture())).thenReturn(response);
+
+    noTemperatureClient.chat(prompt());
+
+    JsonNode body = new ObjectMapper().readTree(bodyOf(captor.getValue()));
+    assertFalse(body.has("temperature"));
+  }
+
+  private static String bodyOf(HttpRequest request) throws Exception {
+    CompletableFuture<String> collected = new CompletableFuture<>();
+    request
+        .bodyPublisher()
+        .orElseThrow()
+        .subscribe(
+            new Flow.Subscriber<>() {
+              private final StringBuilder text = new StringBuilder();
+
+              @Override
+              public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+              }
+
+              @Override
+              public void onNext(ByteBuffer item) {
+                text.append(StandardCharsets.UTF_8.decode(item));
+              }
+
+              @Override
+              public void onError(Throwable throwable) {
+                collected.completeExceptionally(throwable);
+              }
+
+              @Override
+              public void onComplete() {
+                collected.complete(text.toString());
+              }
+            });
+    return collected.get(1, TimeUnit.SECONDS);
   }
 
   private Prompt prompt() {

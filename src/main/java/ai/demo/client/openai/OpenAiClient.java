@@ -41,6 +41,7 @@ public final class OpenAiClient implements LlmClient {
   private final String model;
   private final String baseUrl;
   private final GenerationConfig generation;
+  private final boolean temperatureSupported;
   private final String apiKey;
   private final HttpTransport transport;
   private final ObjectMapper objectMapper;
@@ -51,6 +52,7 @@ public final class OpenAiClient implements LlmClient {
     this.model = config.openAi().model();
     this.baseUrl = config.openAi().baseUrl();
     this.generation = config.generation();
+    this.temperatureSupported = config.openAi().temperatureSupported();
     if (apiKey == null || apiKey.isBlank()) {
       throw new IllegalArgumentException("OpenAI API key must not be blank");
     }
@@ -60,19 +62,18 @@ public final class OpenAiClient implements LlmClient {
   }
 
   public OpenAiClient(
-      String providerName,
-      String model,
-      String baseUrl,
+      OpenAiCompatibleSettings settings,
       GenerationConfig generation,
       String apiKey,
       HttpTransport transport,
       ObjectMapper objectMapper) {
-    this.providerName = providerName;
-    this.model = model;
-    this.baseUrl = baseUrl;
+    this.providerName = settings.providerName();
+    this.model = settings.model();
+    this.baseUrl = settings.baseUrl();
     this.generation = generation;
+    this.temperatureSupported = settings.temperatureSupported();
     if (apiKey == null || apiKey.isBlank()) {
-      throw new IllegalArgumentException(providerName + " API key must not be blank");
+      throw new IllegalArgumentException(settings.providerName() + " API key must not be blank");
     }
     this.apiKey = apiKey;
     this.transport = transport;
@@ -219,7 +220,7 @@ public final class OpenAiClient implements LlmClient {
         model,
         prompt.messages().stream().map(this::toInputMessage).toList(),
         stream,
-        generation.temperature(),
+        temperatureSupported ? generation.temperature() : null,
         generation.maxOutputTokens(),
         false);
   }

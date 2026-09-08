@@ -15,7 +15,7 @@ class LlmProviderAvailabilityTest {
             LlmProvider.OLLAMA,
             new GenerationConfig(0.4, 1000, "Be helpful."),
             new OllamaConfig("ollama-model", "http://localhost:11434", 4096, 1.18, true),
-            new OpenAiConfig("openai-model", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+            new OpenAiConfig("openai-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
             new GroqConfig("groq-model", "https://api.groq.com/openai/v1", "GROQ_API_KEY"),
             new GeminiConfig(
                 "gemini-model",

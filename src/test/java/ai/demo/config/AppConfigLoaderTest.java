@@ -152,6 +152,24 @@ class AppConfigLoaderTest {
     assertEquals(LlmProvider.OPENAI, config.provider());
     assertEquals("https://api.openai.com/v1", config.openAi().baseUrl());
     assertEquals("OPENAI_API_KEY", config.openAi().apiKeyEnvironmentVariable());
+    assertTrue(config.openAi().temperatureSupported());
+  }
+
+  @Test
+  void shouldDisableOpenAiTemperatureFromProperty() throws IOException {
+    AppConfig config = loader.loadFromResource("app-config/valid-openai-no-temperature.properties");
+
+    assertFalse(config.openAi().temperatureSupported());
+  }
+
+  @Test
+  void shouldOverrideOpenAiTemperatureSupportFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "OPENAI_TEMPERATURE_SUPPORTED".equals(key) ? "false" : null);
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid-openai.properties");
+
+    assertFalse(config.openAi().temperatureSupported());
   }
 
   @Test

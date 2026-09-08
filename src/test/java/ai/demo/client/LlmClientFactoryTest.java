@@ -67,7 +67,7 @@ class LlmClientFactoryTest {
             LlmProvider.OPENAI,
             new GenerationConfig(0.4, 300, "Be helpful."),
             new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18, false),
-            new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+            new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
             Path.of("conversation.json"));
 
     assertThrows(ConfigurationException.class, () -> factory.create(config, LlmProvider.OLLAMA));
@@ -96,7 +96,7 @@ class LlmClientFactoryTest {
         LlmProvider.OPENAI,
         new GenerationConfig(0.4, 300, "Be helpful."),
         null,
-        new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+        new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
         Path.of("conversation.json"));
   }
 }

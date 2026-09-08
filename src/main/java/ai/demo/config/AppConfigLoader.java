@@ -175,7 +175,9 @@ public final class AppConfigLoader {
     return new OpenAiConfig(
         requiredProperty(properties, "openai.model"),
         requiredProperty(properties, "openai.base-url"),
-        requiredProperty(properties, "openai.api-key-env"));
+        requiredProperty(properties, "openai.api-key-env"),
+        booleanValue(
+            properties, "openai.temperature-supported", "OPENAI_TEMPERATURE_SUPPORTED", true));
   }
 
   private DemoLimitsConfig loadDemoLimits(Properties properties) {
@@ -209,7 +211,12 @@ public final class AppConfigLoader {
   }
 
   private boolean booleanValue(Properties properties, String property, String variable) {
-    String value = value(properties, property, variable, Boolean.toString(false));
+    return booleanValue(properties, property, variable, false);
+  }
+
+  private boolean booleanValue(
+      Properties properties, String property, String variable, boolean fallback) {
+    String value = value(properties, property, variable, Boolean.toString(fallback));
     return parseBoolean(value, property);
   }
 
