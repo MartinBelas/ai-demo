@@ -174,6 +174,42 @@ class RagServiceTest {
     assertFalse(service.retrieve("question").isEmpty());
   }
 
+  @Test
+  void shouldRetrieveOnlyTheRelevantDocumentAmongUnrelatedCandidates() {
+    RagConfig config =
+        new RagConfig(
+            true,
+            EmbeddingProvider.OLLAMA,
+            "http://localhost:11434",
+            "embeddinggemma",
+            null,
+            4000,
+            20,
+            4000,
+            4000,
+            4000,
+            4000,
+            5,
+            0.5);
+    EmbeddingClient directional =
+        text -> new Embedding(text.contains("cat") ? List.of(1.0, 0.0) : List.of(0.0, 1.0));
+    RagService service =
+        new RagService(
+            config,
+            directional,
+            new InMemoryVectorStore(),
+            () ->
+                List.of(
+                    document("cats.txt", "Cats are small domesticated carnivorous mammals."),
+                    document(
+                        "cars.txt", "Cars are wheeled motor vehicles used for transportation.")));
+
+    List<RagSource> sources = service.retrieve("Tell me about cats");
+
+    assertFalse(sources.isEmpty());
+    assertTrue(sources.stream().allMatch(source -> source.document().equals("cats.txt")));
+  }
+
   private RagConfig config(
       int maxDocumentBytes, int maxCorpusBytes, int maxContextBytes, int maxQueryBytes) {
     return new RagConfig(

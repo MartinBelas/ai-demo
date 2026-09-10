@@ -466,8 +466,10 @@ Covered areas include:
   model-based routing needs a decision call (and may retry or repair the decision).
 - The agent supports a single tool execution before the final response.
 - There is no retry or timeout recovery strategy beyond HTTP error handling.
-- RAG ingestion, retrieval, and document endpoints are not implemented. The public status page is
-  implemented; daily metric collection requires demo limits to be enabled.
+- RAG ingests bundled `.txt` and `.md` documents at application startup and retrieves from an
+  in-memory index. Runtime document upload, deletion, and document-management endpoints are outside
+  the MVP. The public status page is implemented; daily metric collection requires demo limits to be
+  enabled.
 - Console history is stored in a local JSON file; web history stays in the browser.
 - Per-client request limits currently use fixed UTC hours, not the rolling one-hour window required
   by PRD. Completing that requirement remains on the roadmap.
