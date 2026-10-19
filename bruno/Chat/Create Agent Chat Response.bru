@@ -1,0 +1,48 @@
+meta {
+  name: Create Agent Chat Response
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is the current EUR to CZK exchange rate?"
+      }
+    ]
+  }
+}
+
+docs {
+  Needs agent mode (AGENT_LAB_ENABLED=true) and a running ai-agent-lab service. When agent mode
+  is disabled, the request is expected to fail with AGENT_MODE_DISABLED.
+}
+
+tests {
+  test("answers through the agent service or reports that agent mode is disabled", function () {
+    const body = res.getBody();
+
+    if (res.getStatus() === 400) {
+      expect(body.code).to.equal("AGENT_MODE_DISABLED");
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    expect(body.answer).to.be.a("string").and.not.empty;
+    expect(body.model).to.equal("agent-lab");
+    expect(body.tokenUsage).to.have.all.keys("promptTokens", "completionTokens", "totalTokens");
+    expect(body).to.not.have.property("sources");
+    (body.webSources || []).forEach(function (source) {
+      expect(source).to.have.all.keys("title", "url");
+      expect(source.url).to.match(/^https?:\/\//);
+    });
+  });
+}

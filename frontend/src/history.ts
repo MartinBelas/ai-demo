@@ -1,5 +1,5 @@
 import type { ChatMessage } from "./types";
-import { isRagSource } from "./api";
+import { isRagSource, isWebSource } from "./api";
 
 export const HISTORY_KEY = "ai-demo.conversation";
 
@@ -15,7 +15,8 @@ export function validateHistory(value: unknown): ChatMessage[] {
       typeof (item as ChatMessage).content === "string" &&
       (item as ChatMessage).content.trim().length > 0,
   ).map((item) => ({ role: item.role, content: item.content,
-    ...(Array.isArray(item.sources) ? { sources: item.sources.filter(isRagSource) } : {}) }));
+    ...(Array.isArray(item.sources) ? { sources: item.sources.filter(isRagSource) } : {}),
+    ...(Array.isArray(item.webSources) ? { webSources: item.webSources.filter(isWebSource) } : {}) }));
 }
 
 export function readHistory(storage: Pick<Storage, "getItem">): ChatMessage[] {

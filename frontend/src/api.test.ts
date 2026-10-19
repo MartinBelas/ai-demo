@@ -27,6 +27,32 @@ describe("SSE parser", () => {
     expect(events).toEqual([{ type: "completion", completion: payload }]);
   });
 
+  it("parses agent-mode web sources and drops unsafe links", async () => {
+    const payload = {
+      model: "agent-lab",
+      tokenUsage: { promptTokens: 900, completionTokens: 120, totalTokens: 1020 },
+      durationMs: 4200,
+      webSources: [
+        { title: "CNB rates", url: "https://www.cnb.cz/rates" },
+        { title: "Script", url: "javascript:alert(1)" },
+        { title: "", url: "https://untitled.example.test" },
+        { url: "https://no-title.example.test" },
+      ],
+    };
+    const stream = new Blob([`event: completion\ndata: ${JSON.stringify(payload)}\n\n`]).stream();
+    const events: unknown[] = [];
+    await parseSse(stream, (event) => events.push(event));
+    expect(events).toEqual([{ type: "completion", completion: { ...payload, webSources: [{ title: "CNB rates", url: "https://www.cnb.cz/rates" }] } }]);
+  });
+
+  it("keeps the completion when every web source is invalid", async () => {
+    const payload = { model: "agent-lab", tokenUsage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, durationMs: 10, webSources: [{ title: "x", url: "ftp://example.test" }] };
+    const stream = new Blob([`event: completion\ndata: ${JSON.stringify(payload)}\n\n`]).stream();
+    const events: unknown[] = [];
+    await parseSse(stream, (event) => events.push(event));
+    expect(events).toEqual([{ type: "completion", completion: { model: "agent-lab", tokenUsage: payload.tokenUsage, durationMs: 10 } }]);
+  });
+
   it("parses running and completed tool activity", async () => {
     const stream = new Blob([
       "event: tool\ndata: {\"name\":\"calculator\",\"status\":\"RUNNING\"}\n\n"

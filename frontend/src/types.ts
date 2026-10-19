@@ -4,9 +4,13 @@ export interface ChatMessage {
   role: Role;
   content: string;
   sources?: RagSource[];
+  webSources?: WebSource[];
 }
 
 export interface RagSource { id: string; document: string; chunk: number; text: string }
+
+/** A web page found by the agent in agent mode; `url` is always an absolute http(s) URL. */
+export interface WebSource { title: string; url: string }
 
 export interface LlmProvider {
   id: string;
@@ -21,6 +25,7 @@ export interface TokenUsage {
 
 export interface Completion {
   sources?: RagSource[];
+  webSources?: WebSource[];
   model: string;
   tokenUsage: TokenUsage;
   durationMs: number;

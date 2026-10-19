@@ -14,6 +14,17 @@ describe("conversation history", () => {
     ]);
   });
 
+  it("restores only safe web sources of agent-mode answers", () => {
+    expect(validateHistory([
+      { role: "ASSISTANT", content: "Rate", webSources: [
+        { title: "CNB rates", url: "https://www.cnb.cz/rates" },
+        { title: "Bad", url: "javascript:alert(1)" },
+      ] },
+    ])).toEqual([
+      { role: "ASSISTANT", content: "Rate", webSources: [{ title: "CNB rates", url: "https://www.cnb.cz/rates" }] },
+    ]);
+  });
+
   it("protects startup from malformed JSON", () => {
     const storage = { getItem: (key: string) => key === HISTORY_KEY ? "{" : null };
     expect(readHistory(storage)).toEqual([]);

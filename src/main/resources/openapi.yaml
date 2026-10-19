@@ -56,6 +56,24 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
               example:
                 status: UP
+  /api/agent/status:
+    get:
+      tags:
+        - System
+      summary: Check whether agent mode is enabled
+      description: >-
+        Agent mode answers chat requests with `agent: true` through a separate agent service
+        (ai-agent-lab) with web search, independently of the LLM provider.
+      operationId: getAgentStatus
+      responses:
+        "200":
+          description: Agent mode availability in this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentStatus"
+              example:
+                enabled: false
   /api/llm/providers:
     get:
       tags:
@@ -118,6 +136,11 @@ paths:
                   value:
                     code: LLM_PROVIDER_UNAVAILABLE
                     message: The selected LLM provider is not available.
+                agentModeDisabled:
+                  summary: Agent mode was requested but is not enabled
+                  value:
+                    code: AGENT_MODE_DISABLED
+                    message: Agent mode is not enabled in this deployment.
         "429":
           description: A configured public demo limit has been reached.
           content:
@@ -137,14 +160,22 @@ paths:
                 code: DEMO_LIMIT_UNAVAILABLE
                 message: The public demo is temporarily unavailable.
         "502":
-          description: Communication with the selected LLM provider failed.
+          description: Communication with the selected LLM provider or the agent service failed.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: LLM_COMMUNICATION_ERROR
-                message: Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later.
+              examples:
+                providerError:
+                  summary: LLM provider communication failed
+                  value:
+                    code: LLM_COMMUNICATION_ERROR
+                    message: Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later.
+                agentUnavailable:
+                  summary: Agent service failed, timed out, or returned an invalid response
+                  value:
+                    code: AGENT_UNAVAILABLE
+                    message: Agent mode is temporarily unavailable. Try again later or turn agent mode off.
         "500":
           description: Unexpected server error.
           content:
@@ -208,6 +239,14 @@ paths:
 
                     event: error
                     data: {"code":"LLM_COMMUNICATION_ERROR","message":"Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later."}
+                agentMode:
+                  summary: Agent mode answer with web sources (single content event)
+                  value: |-
+                    event: content
+                    data: {"content":"1 EUR is 24.30 CZK today."}
+
+                    event: completion
+                    data: {"model":"agent-lab","tokenUsage":{"promptTokens":900,"completionTokens":120,"totalTokens":1020},"durationMs":4200,"webSources":[{"title":"CNB rates","url":"https://www.cnb.cz/rates"}]}
         "400":
           description: Invalid request or unavailable LLM provider before streaming starts.
           content:
@@ -228,6 +267,11 @@ paths:
                   value:
                     code: LLM_PROVIDER_UNAVAILABLE
                     message: The selected LLM provider is not available.
+                agentModeDisabled:
+                  summary: Agent mode was requested but is not enabled
+                  value:
+                    code: AGENT_MODE_DISABLED
+                    message: Agent mode is not enabled in this deployment.
         "429":
           description: A configured public demo limit has been reached before streaming starts.
           content:
@@ -362,6 +406,18 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/ChatMessage"
+        rag:
+          type: boolean
+          default: false
+          description: Answers from bundled project documents and returns `sources`.
+        agent:
+          type: boolean
+          default: false
+          description: >-
+            Agent mode: the separate agent service answers with its own model and web search
+            and returns `webSources`; `provider` is not used. Cannot be combined with `rag`.
+            The last message may contain at most 4000 characters; earlier messages are
+            shortened or dropped to fit the agent service limits.
     ChatMessage:
       type: object
       additionalProperties: false
@@ -398,6 +454,16 @@ components:
           type: integer
           format: int64
           minimum: 0
+        sources:
+          type: array
+          description: Document passages supplied to the model (RAG only); omitted when empty.
+          items:
+            $ref: "#/components/schemas/RagSource"
+        webSources:
+          type: array
+          description: Web pages found by the agent (agent mode only); omitted when empty.
+          items:
+            $ref: "#/components/schemas/WebSource"
     TokenUsage:
       type: object
       additionalProperties: false
@@ -456,6 +522,49 @@ components:
           type: integer
           format: int64
           minimum: 0
+        sources:
+          type: array
+          description: Document passages supplied to the model (RAG only); omitted when empty.
+          items:
+            $ref: "#/components/schemas/RagSource"
+        webSources:
+          type: array
+          description: Web pages found by the agent (agent mode only); omitted when empty.
+          items:
+            $ref: "#/components/schemas/WebSource"
+    RagSource:
+      type: object
+      additionalProperties: false
+      required: [id, document, chunk, text]
+      properties:
+        id:
+          type: string
+        document:
+          type: string
+        chunk:
+          type: integer
+          minimum: 1
+        text:
+          type: string
+    WebSource:
+      type: object
+      additionalProperties: false
+      required: [title, url]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          format: uri
+          description: Absolute http or https URL.
+    AgentStatus:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
     ErrorResponse:
       type: object
       additionalProperties: false

@@ -5,6 +5,8 @@ import ai.demo.agent.ContentEvent;
 import ai.demo.agent.ThinkingEvent;
 import ai.demo.agent.ToolCallEvent;
 import ai.demo.agent.ToolResultEvent;
+import ai.demo.exception.AgentModeDisabledException;
+import ai.demo.exception.AgentServiceException;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
@@ -26,17 +28,17 @@ final class StreamingChatEndpoint {
   private static final String DEMO_LIMIT_UNAVAILABLE_MESSAGE =
       "The public demo is temporarily unavailable.";
 
-  private final ChatServiceResolver serviceResolver;
+  private final ChatServiceSelector serviceSelector;
   private final ChatRequestParser requestParser;
   private final ObjectMapper objectMapper;
   private final DemoRequestGate requestGate;
 
   StreamingChatEndpoint(
-      ChatServiceResolver serviceResolver,
+      ChatServiceSelector serviceSelector,
       ChatRequestParser requestParser,
       ObjectMapper objectMapper,
       DemoRequestGate requestGate) {
-    this.serviceResolver = serviceResolver;
+    this.serviceSelector = serviceSelector;
     this.requestParser = requestParser;
     this.objectMapper = objectMapper;
     this.requestGate = requestGate;
@@ -49,9 +51,17 @@ final class StreamingChatEndpoint {
     try {
       request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
-      chatService = serviceResolver.resolve(request.provider());
+      chatService = serviceSelector.select(request);
       if (request.rag()) chatService.validateRag(request.conversation());
       reservation = requestGate.reserve(context, true);
+    } catch (AgentModeDisabledException e) {
+      ApiResponseWriter.writeError(
+          context,
+          400,
+          AgentModeErrors.DISABLED_CODE,
+          AgentModeErrors.DISABLED_MESSAGE,
+          objectMapper);
+      return;
     } catch (ai.demo.exception.RagDisabledException e) {
       ApiResponseWriter.writeError(
           context,
@@ -104,6 +114,12 @@ final class StreamingChatEndpoint {
     } catch (SseConnectionException e) {
       log.debug("SSE client disconnected", e);
       return AppOutcome.DISCONNECTED;
+    } catch (AgentServiceException e) {
+      log.warn("Streaming agent mode request failed", e);
+      writer.send(
+          ERROR_EVENT,
+          ApiErrorResponse.of(
+              AgentModeErrors.UNAVAILABLE_CODE, AgentModeErrors.UNAVAILABLE_MESSAGE));
     } catch (ai.demo.exception.RagException e) {
       log.warn("Streaming RAG request failed", e);
       writer.send(

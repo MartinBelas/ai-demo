@@ -28,6 +28,7 @@ public final class ApiServer implements AutoCloseable {
   private final AppStatusService appStatusService;
   private Javalin app;
   private final boolean ragEnabled;
+  private final boolean agentModeEnabled;
 
   public ApiServer(int configuredPort) {
     this(configuredPort, null, null, null, new ObjectMapper(), DemoProtection.localDevelopment());
@@ -84,6 +85,28 @@ public final class ApiServer implements AutoCloseable {
       ObjectMapper objectMapper,
       DemoProtection demoProtection,
       boolean ragEnabled) {
+    this(
+        configuredPort,
+        providerAvailability,
+        chatServiceResolver == null ? null : new ChatServiceSelector(chatServiceResolver, null),
+        defaultProvider,
+        objectMapper,
+        demoProtection,
+        ragEnabled);
+  }
+
+  /**
+   * @param chatServices chooses between provider chat services and the agent-mode service, or
+   *     {@code null} when chat is not available
+   */
+  public ApiServer(
+      int configuredPort,
+      LlmProviderAvailability providerAvailability,
+      ChatServiceSelector chatServices,
+      LlmProvider defaultProvider,
+      ObjectMapper objectMapper,
+      DemoProtection demoProtection,
+      boolean ragEnabled) {
     this.ragEnabled = ragEnabled;
     this.configuredPort = configuredPort;
     this.openApiDocument = OpenApiDocument.load();
@@ -94,15 +117,16 @@ public final class ApiServer implements AutoCloseable {
     DemoRequestGate requestGate =
         new DemoRequestGate(
             demoProtection.limits(), demoProtection.quotaStore(), demoProtection.ipHashSalt());
-    if (chatServiceResolver == null) {
+    if (chatServices == null) {
       this.chatEndpoint = null;
       this.streamingChatEndpoint = null;
+      this.agentModeEnabled = false;
     } else {
       ChatRequestParser requestParser = new ChatRequestParser(defaultProvider, objectMapper);
-      this.chatEndpoint =
-          new ChatEndpoint(chatServiceResolver, requestParser, objectMapper, requestGate);
+      this.agentModeEnabled = chatServices.agentModeEnabled();
+      this.chatEndpoint = new ChatEndpoint(chatServices, requestParser, objectMapper, requestGate);
       this.streamingChatEndpoint =
-          new StreamingChatEndpoint(chatServiceResolver, requestParser, objectMapper, requestGate);
+          new StreamingChatEndpoint(chatServices, requestParser, objectMapper, requestGate);
     }
   }
 
@@ -138,6 +162,14 @@ public final class ApiServer implements AutoCloseable {
                                     200,
                                     java.util.Map.of(
                                         "enabled", ragEnabled, "uploadsEnabled", false),
+                                    objectMapper))
+                        .get(
+                            "/api/agent/status",
+                            context ->
+                                ApiResponseWriter.write(
+                                    context,
+                                    200,
+                                    java.util.Map.of("enabled", agentModeEnabled),
                                     objectMapper))
                         .post("/api/chat", this::handleChat)
                         .post("/api/chat/stream", this::handleStreamingChat);

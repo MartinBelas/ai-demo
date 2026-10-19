@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
 
@@ -22,7 +23,11 @@ public final class AppConfigLoader {
     this(System::getenv);
   }
 
-  AppConfigLoader(UnaryOperator<String> environment) {
+  /**
+   * @param environment resolves environment overrides, e.g. the system environment with a local
+   *     {@code .env} fallback ({@link EnvironmentConfigLoader#get})
+   */
+  public AppConfigLoader(UnaryOperator<String> environment) {
     this.environment = environment;
   }
 
@@ -84,7 +89,8 @@ public final class AppConfigLoader {
           appInterface,
           server,
           loadDemoLimits(properties),
-          loadRag(properties));
+          loadRag(properties),
+          loadAgentLab(properties));
     } catch (IllegalArgumentException e) {
       throw new ConfigurationException(e.getMessage(), e);
     }
@@ -110,6 +116,20 @@ public final class AppConfigLoader {
         intValue(properties, "rag.max-query-bytes", "RAG_MAX_QUERY_BYTES", 4000),
         intValue(properties, MAX_RAG_CHUNKS_PROPERTY, MAX_RAG_CHUNKS_VARIABLE, 5),
         Double.parseDouble(value(properties, "rag.minimum-score", "RAG_MINIMUM_SCORE", "0.2")));
+  }
+
+  private AgentLabConfig loadAgentLab(Properties properties) {
+    return new AgentLabConfig(
+        booleanValue(properties, "agent-lab.enabled", "AGENT_LAB_ENABLED"),
+        value(properties, "agent-lab.base-url", "AGENT_LAB_BASE_URL", null),
+        Duration.ofSeconds(
+            intValue(properties, "agent-lab.timeout-seconds", "AGENT_LAB_TIMEOUT_SECONDS", 70)),
+        AgentLabAuthentication.from(
+            value(
+                properties,
+                "agent-lab.authentication",
+                "AGENT_LAB_AUTHENTICATION",
+                AgentLabAuthentication.NONE.name())));
   }
 
   private AppInterface appInterface(Properties properties) {

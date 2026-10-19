@@ -1,5 +1,7 @@
 package ai.demo.api;
 
+import ai.demo.exception.AgentModeDisabledException;
+import ai.demo.exception.AgentServiceException;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmException;
@@ -15,17 +17,17 @@ import org.slf4j.LoggerFactory;
 final class ChatEndpoint {
 
   private static final Logger log = LoggerFactory.getLogger(ChatEndpoint.class);
-  private final ChatServiceResolver serviceResolver;
+  private final ChatServiceSelector serviceSelector;
   private final ChatRequestParser requestParser;
   private final ObjectMapper objectMapper;
   private final DemoRequestGate requestGate;
 
   ChatEndpoint(
-      ChatServiceResolver serviceResolver,
+      ChatServiceSelector serviceSelector,
       ChatRequestParser requestParser,
       ObjectMapper objectMapper,
       DemoRequestGate requestGate) {
-    this.serviceResolver = serviceResolver;
+    this.serviceSelector = serviceSelector;
     this.requestParser = requestParser;
     this.objectMapper = objectMapper;
     this.requestGate = requestGate;
@@ -39,7 +41,7 @@ final class ChatEndpoint {
     try {
       request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
-      ChatService chatService = serviceResolver.resolve(request.provider());
+      ChatService chatService = serviceSelector.select(request);
       if (request.rag()) chatService.validateRag(request.conversation());
       reservation = requestGate.reserve(context, false);
       ChatResponse response =
@@ -55,6 +57,12 @@ final class ChatEndpoint {
           400,
           "RAG_DISABLED",
           "Retrieval-augmented generation is not enabled in this deployment.");
+    } catch (AgentModeDisabledException e) {
+      writeError(context, 400, AgentModeErrors.DISABLED_CODE, AgentModeErrors.DISABLED_MESSAGE);
+    } catch (AgentServiceException e) {
+      log.warn("Agent mode request failed", e);
+      writeError(
+          context, 502, AgentModeErrors.UNAVAILABLE_CODE, AgentModeErrors.UNAVAILABLE_MESSAGE);
     } catch (ai.demo.exception.RagException e) {
       log.warn("RAG request failed", e);
       writeError(

@@ -68,6 +68,10 @@ button:disabled { cursor:not-allowed; opacity:.45; }
 .rag-toggle-hint a { color:var(--blue); text-decoration:underline; text-underline-offset:3px; }
 .rag-toggle-hint a:hover { color:var(--ink); }
 @media (max-width:780px) { .rag-toggle { padding:14px 20px; } }
+.web-sources ul { margin:8px 0 0; padding-left:18px; }
+.web-sources li { margin:4px 0; }
+.web-sources a { color:var(--blue); text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+.web-sources a:hover { color:var(--ink); }
 .thread { display:grid; grid-template-rows:auto minmax(0,1fr); min-height:0; }
 .message-list { min-height:0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; scrollbar-color:var(--blue) rgba(49,94,209,.09); scrollbar-width:thin; }
 .message-list::-webkit-scrollbar { width:8px; }.message-list::-webkit-scrollbar-track { background:rgba(49,94,209,.07); border-left:1px solid rgba(49,94,209,.12); }.message-list::-webkit-scrollbar-thumb { background:var(--blue); border:2px solid var(--paper); }

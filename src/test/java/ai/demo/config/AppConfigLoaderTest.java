@@ -188,6 +188,44 @@ class AppConfigLoaderTest {
   }
 
   @Test
+  void shouldDisableAgentLabByDefault() throws IOException {
+    AppConfig config = loader.loadFromResource("app-config/valid.properties");
+
+    assertFalse(config.agentLab().enabled());
+  }
+
+  @Test
+  void shouldLoadAgentLabFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "AGENT_LAB_ENABLED" -> "true";
+                  case "AGENT_LAB_BASE_URL" -> "http://localhost:8081/";
+                  case "AGENT_LAB_TIMEOUT_SECONDS" -> "90";
+                  case "AGENT_LAB_AUTHENTICATION" -> "google_id_token";
+                  default -> null;
+                });
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
+
+    assertTrue(config.agentLab().enabled());
+    assertEquals("http://localhost:8081", config.agentLab().baseUrl());
+    assertEquals(java.time.Duration.ofSeconds(90), config.agentLab().timeout());
+    assertEquals(AgentLabAuthentication.GOOGLE_ID_TOKEN, config.agentLab().authentication());
+  }
+
+  @Test
+  void shouldFailWhenAgentLabIsEnabledWithoutBaseUrl() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "AGENT_LAB_ENABLED".equals(key) ? "true" : null);
+
+    assertThrows(
+        ConfigurationException.class,
+        () -> environmentLoader.loadFromResource("app-config/valid.properties"));
+  }
+
+  @Test
   void shouldFailWhenRequiredPropertyIsMissing() {
 
     assertThrows(

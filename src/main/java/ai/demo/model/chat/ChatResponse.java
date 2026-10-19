@@ -7,13 +7,24 @@ public record ChatResponse(
     String model,
     TokenUsage tokenUsage,
     long durationMs,
-    java.util.List<ai.demo.model.rag.RagSource> sources) {
+    java.util.List<ai.demo.model.rag.RagSource> sources,
+    java.util.List<WebSource> webSources) {
   public ChatResponse(String answer, String model, TokenUsage tokenUsage, long durationMs) {
     this(answer, model, tokenUsage, durationMs, java.util.List.of());
   }
 
+  public ChatResponse(
+      String answer,
+      String model,
+      TokenUsage tokenUsage,
+      long durationMs,
+      java.util.List<ai.demo.model.rag.RagSource> sources) {
+    this(answer, model, tokenUsage, durationMs, sources, java.util.List.of());
+  }
+
   public ChatResponse {
     sources = java.util.List.copyOf(sources);
+    webSources = java.util.List.copyOf(webSources);
 
     if (answer == null || answer.isBlank()) {
       throw new IllegalArgumentException("answer must not be blank");

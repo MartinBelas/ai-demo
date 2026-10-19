@@ -15,6 +15,13 @@ services:
       RAG_ENABLED: ${RAG_ENABLED:-true}
       RAG_EMBEDDING_BASE_URL: http://ollama:11434
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-nomic-embed-text}
+      AGENT_LAB_ENABLED: ${AGENT_LAB_ENABLED:-false}
+      AGENT_LAB_BASE_URL: ${AGENT_LAB_BASE_URL:-http://host.docker.internal:8081}
+      AGENT_LAB_TIMEOUT_SECONDS: ${AGENT_LAB_TIMEOUT_SECONDS:-70}
+      AGENT_LAB_AUTHENTICATION: ${AGENT_LAB_AUTHENTICATION:-NONE}
+    extra_hosts:
+      # Lets the container reach an ai-agent-lab service running on the host (also on Linux).
+      - "host.docker.internal:host-gateway"
 
   ollama:
     image: ollama/ollama:latest

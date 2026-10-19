@@ -14,7 +14,35 @@ public record AppConfig(
     AppInterface appInterface,
     ServerConfig server,
     DemoLimitsConfig demoLimits,
-    RagConfig rag) {
+    RagConfig rag,
+    AgentLabConfig agentLab) {
+
+  public AppConfig(
+      LlmProvider provider,
+      GenerationConfig generation,
+      OllamaConfig ollama,
+      OpenAiConfig openAi,
+      GroqConfig groq,
+      GeminiConfig gemini,
+      Path conversationFile,
+      AppInterface appInterface,
+      ServerConfig server,
+      DemoLimitsConfig demoLimits,
+      RagConfig rag) {
+    this(
+        provider,
+        generation,
+        ollama,
+        openAi,
+        groq,
+        gemini,
+        conversationFile,
+        appInterface,
+        server,
+        demoLimits,
+        rag,
+        AgentLabConfig.disabled());
+  }
 
   public AppConfig(
       LlmProvider provider,
@@ -79,6 +107,7 @@ public record AppConfig(
     requireNonNull(server, "server");
     requireNonNull(demoLimits, "demoLimits");
     requireNonNull(rag, "rag");
+    requireNonNull(agentLab, "agentLab");
     validateProviderConfiguration(provider, ollama, openAi, groq, gemini);
     validateOutputLimit(generation, demoLimits);
   }

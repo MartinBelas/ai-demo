@@ -3,17 +3,20 @@ package ai.demo;
 import ai.demo.agent.Agent;
 import ai.demo.agent.AgentLlmGateway;
 import ai.demo.agent.DefaultAgentLlmGateway;
+import ai.demo.agent.RemoteAgent;
 import ai.demo.agent.ToolCallingAgent;
 import ai.demo.agent.tool.CalculatorTool;
 import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.api.ApiServer;
 import ai.demo.api.ChatServiceResolver;
+import ai.demo.api.ChatServiceSelector;
 import ai.demo.api.DemoProtection;
 import ai.demo.client.EmbeddingClientFactory;
 import ai.demo.client.LlmClient;
 import ai.demo.client.LlmClientFactory;
 import ai.demo.client.LoggingLlmClient;
 import ai.demo.client.SwitchableLlmClient;
+import ai.demo.client.agentlab.AgentLabClient;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.client.http.JdkHttpTransport;
 import ai.demo.config.AppConfig;
@@ -131,6 +134,7 @@ public class App {
               clientFactory,
               objectMapper,
               createRagService(config, transport, objectMapper, environment::get));
+      ChatService agentChatService = createAgentChatService(config, transport, objectMapper);
       String ipHashSalt = environment.get(config.demoLimits().ipHashSaltEnvironmentVariable());
       if (config.demoLimits().enabled() && (ipHashSalt == null || ipHashSalt.isBlank())) {
         throw new ConfigurationException(
@@ -141,6 +145,7 @@ public class App {
           config,
           providerAvailability,
           chatServiceResolver,
+          agentChatService,
           objectMapper,
           httpClient,
           demoProtection);
@@ -154,6 +159,7 @@ public class App {
       AppConfig config,
       LlmProviderAvailability providerAvailability,
       ChatServiceResolver chatServiceResolver,
+      ChatService agentChatService,
       ObjectMapper objectMapper,
       HttpClient httpClient,
       DemoProtection demoProtection) {
@@ -162,7 +168,7 @@ public class App {
             new ApiServer(
                 config.server().port(),
                 providerAvailability,
-                chatServiceResolver,
+                new ChatServiceSelector(chatServiceResolver, agentChatService),
                 config.provider(),
                 objectMapper,
                 demoProtection,
@@ -195,6 +201,17 @@ public class App {
         new BundledRagDocuments(config.rag())::load);
   }
 
+  /** Agent mode is served by the external agent service; {@code null} when it is disabled. */
+  private ChatService createAgentChatService(
+      AppConfig config, HttpTransport transport, ObjectMapper objectMapper) {
+    if (!config.agentLab().enabled()) {
+      return null;
+    }
+    log.info("Agent mode enabled (agent service: {})", config.agentLab().baseUrl());
+    return new ChatService(
+        new RemoteAgent(new AgentLabClient(config.agentLab(), transport, objectMapper)));
+  }
+
   private ChatServiceResolver createChatServiceResolver(
       AppConfig config, LlmClientFactory clientFactory, ObjectMapper objectMapper, RagService rag) {
     ConcurrentMap<LlmProvider, ChatService> services = new ConcurrentHashMap<>();
@@ -210,7 +227,11 @@ public class App {
   }
 
   private AppConfig loadConfig() throws IOException {
-    return new AppConfigLoader().load();
+    // Configuration overrides come from the system environment with a local .env fallback, the
+    // same source as the API keys.
+    EnvironmentConfigLoader environment =
+        new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
+    return new AppConfigLoader(environment::get).load();
   }
 
   private HttpClient createHttpClient() {

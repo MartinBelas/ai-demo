@@ -6,7 +6,7 @@ import ai.demo.model.chat.Conversation;
 import ai.demo.model.chat.Role;
 import java.util.List;
 
-record ChatRequest(String provider, List<ApiChatMessage> messages, boolean rag) {
+record ChatRequest(String provider, List<ApiChatMessage> messages, boolean rag, boolean agent) {
 
   LlmProvider selectedProvider(LlmProvider defaultProvider) {
     if (provider == null || provider.isBlank()) {

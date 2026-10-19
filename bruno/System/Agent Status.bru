@@ -1,0 +1,22 @@
+meta {
+  name: Agent Status
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/agent/status
+  body: none
+  auth: none
+}
+
+tests {
+  test("returns HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("reports agent mode availability", function () {
+    expect(res.getBody()).to.have.all.keys("enabled");
+    expect(res.getBody().enabled).to.be.a("boolean");
+  });
+}

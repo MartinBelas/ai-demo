@@ -1,4 +1,4 @@
-import type { ChatMessage, Completion, LlmProvider, StreamEvent, TokenUsage, ToolActivity } from "./types";
+import type { ChatMessage, Completion, LlmProvider, StreamEvent, TokenUsage, ToolActivity, WebSource } from "./types";
 
 export async function fetchProviders(): Promise<LlmProvider[]> {
   const response = await fetch("/api/llm/providers");
@@ -14,11 +14,19 @@ export async function fetchRagStatus(): Promise<boolean> {
   return isRecord(body) && body.enabled === true;
 }
 
-export async function streamChat(provider: string, messages: ChatMessage[], signal: AbortSignal, onEvent: (event: StreamEvent) => void, rag = false): Promise<void> {
+export async function fetchAgentStatus(): Promise<boolean> {
+  const response = await fetch("/api/agent/status");
+  if (!response.ok) throw new Error("Agent mode is unavailable.");
+  const body: unknown = await response.json();
+  return isRecord(body) && body.enabled === true;
+}
+
+export async function streamChat(provider: string, messages: ChatMessage[], signal: AbortSignal, onEvent: (event: StreamEvent) => void, rag = false, agent = false): Promise<void> {
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ provider, messages: messages.slice(-10).map(({ role, content }) => ({ role, content })), ...(rag ? { rag: true } : {}) }),
+    // Agent mode does not use the provider, so it is not sent (it may be empty).
+    body: JSON.stringify({ ...(agent ? {} : { provider }), messages: messages.slice(-10).map(({ role, content }) => ({ role, content })), ...(rag ? { rag: true } : {}), ...(agent ? { agent: true } : {}) }),
     signal,
   });
   if (!response.ok) throw new Error(await publicError(response, "Unable to start the response."));
@@ -65,7 +73,7 @@ function toStreamEvent(eventName: string, value: unknown): StreamEvent | null {
     return isRecord(value) && typeof value.content === "string" ? { type: eventName, content: value.content } : null;
   }
   if (eventName === "tool") return isToolActivity(value) ? { type: "tool", tool: value } : null;
-  if (eventName === "completion") return isCompletion(value) ? { type: "completion", completion: value } : null;
+  if (eventName === "completion") return isCompletion(value) ? { type: "completion", completion: withSafeWebSources(value) } : null;
   if (eventName === "error") {
     const message = isRecord(value) && typeof value.message === "string" ? value.message : "The response failed.";
     return { type: "error", message };
@@ -90,7 +98,30 @@ function isLlmProvider(value: unknown): value is LlmProvider {
 
 function isCompletion(value: unknown): value is Completion {
   return isRecord(value) && typeof value.model === "string" && isTokenUsage(value.tokenUsage) && typeof value.durationMs === "number"
-    && (value.sources === undefined || (Array.isArray(value.sources) && value.sources.every(isRagSource)));
+    && (value.sources === undefined || (Array.isArray(value.sources) && value.sources.every(isRagSource)))
+    && (value.webSources === undefined || Array.isArray(value.webSources));
+}
+
+/** Keeps only valid web sources, so one bad link never discards the whole answer. */
+function withSafeWebSources(completion: Completion): Completion {
+  const { webSources: rawWebSources, ...rest } = completion;
+  if (rawWebSources === undefined) return completion;
+  const webSources = (rawWebSources as unknown[]).filter(isWebSource);
+  return webSources.length ? { ...rest, webSources } : rest;
+}
+
+export function isWebSource(value: unknown): value is WebSource {
+  return isRecord(value) && typeof value.title === "string" && value.title.trim().length > 0
+    && typeof value.url === "string" && isWebUrl(value.url);
+}
+
+function isWebUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function isRagSource(value: unknown): value is import("./types").RagSource {

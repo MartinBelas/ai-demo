@@ -63,6 +63,10 @@ function Message({ message }: { message: ChatMessage }) {
       <p>Passages supplied to the model for this answer.</p>
       {message.sources!.map(source => <section key={source.id}><strong>[{source.id}]</strong><p>{source.text}</p></section>)}
     </details>}
+    {message.role === "ASSISTANT" && Boolean(message.webSources?.length) && <details class="rag-sources web-sources"><summary>Web sources ({message.webSources!.length})</summary>
+      <p>Pages the agent found while answering.</p>
+      <ul>{message.webSources!.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}</ul>
+    </details>}
   </article>;
 }
 

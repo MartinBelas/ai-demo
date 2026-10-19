@@ -17,6 +17,7 @@ The supported providers are local Ollama, OpenAI, GroqCloud, and Gemini API. App
 - Persistent conversation history
 - Agent-based tool calling
 - Built-in calculator tool
+- Optional agent mode backed by the separate ai-agent-lab service (web search)
 - Prompt templates
 - Token usage and response-duration reporting
 - Application-specific exceptions
@@ -115,6 +116,63 @@ Unsupported syntax includes exponentiation and unary operators such as:
 ```
 
 Invalid expressions and division by zero are returned as tool failures rather than crashing the application.
+
+## Agent Mode
+
+Agent mode is an optional second way to answer a chat request in the HTTP interface. Instead of the
+built-in agent and the selected LLM provider, the request is answered by the separate
+[ai-agent-lab](https://github.com/MartinBelas/ai-agent-lab) service: a Python agent that runs its
+own model and read-only tools (currently web search) in a bounded loop.
+
+```text
+browser → POST /api/chat/stream {"agent": true}
+    → validation, rate limiting, quota reservation (same as chat)
+    → RemoteAgent → AgentLabClient → POST {agent-lab.base-url}/api/chat
+    → one content event + completion with webSources
+```
+
+- Disabled by default (`agent-lab.enabled=false`); `GET /api/agent/status` reports whether it is
+  enabled, and the web interface shows the **Agent mode** checkbox only then.
+- Independent of `llm.provider`: the agent service chooses its own model, reported as `agent-lab`.
+- Cannot be combined with RAG; the console does not offer it.
+- The latest message may contain at most 4000 characters. Earlier turns are sent as history and
+  shortened or dropped to fit the agent service limits (20 messages, 16 000 characters).
+- Token usage of all agent steps is reconciled against the quota reservation. Web searches are
+  limited per request by the agent service, not by the token quota.
+- Web pages the agent found are returned as `webSources` (`title`, `url`), separately from RAG
+  `sources`. Only absolute `http`/`https` URLs are accepted.
+- Agent service failures, timeouts, and invalid responses return `AGENT_UNAVAILABLE` without
+  internal details. Each call carries a short `X-Request-ID` that the application logs; chat
+  content is never logged.
+
+To try it locally, start ai-agent-lab on port 8081 and enable agent mode:
+
+```powershell
+# in the ai-agent-lab directory
+uvicorn app.main:app --port 8081
+
+# in this project, before starting it in HTTP mode (or AGENT_LAB_ENABLED=true in .env)
+$env:AGENT_LAB_ENABLED = "true"
+```
+
+With Docker Compose, set `AGENT_LAB_ENABLED=true` in `.env`; the container reaches the lab on the
+host through `http://host.docker.internal:8081` by default.
+
+| Property                   | Environment variable        | Default                 |
+|----------------------------|-----------------------------|-------------------------|
+| `agent-lab.enabled`        | `AGENT_LAB_ENABLED`         | `false`                 |
+| `agent-lab.base-url`       | `AGENT_LAB_BASE_URL`        | `http://localhost:8081` |
+| `agent-lab.timeout-seconds`| `AGENT_LAB_TIMEOUT_SECONDS` | `70`                    |
+| `agent-lab.authentication` | `AGENT_LAB_AUTHENTICATION`  | `NONE`                  |
+
+The timeout must be longer than the agent service's own `AGENT_TIMEOUT_SECONDS` (60 s by default).
+
+On Cloud Run the agent service must stay private (`--no-allow-unauthenticated`), so set
+`AGENT_LAB_AUTHENTICATION=GOOGLE_ID_TOKEN`. Each call then carries a Google-signed identity token
+of this application's service account, fetched from the metadata server for the agent service URL
+as the audience and cached until shortly before it expires. Cloud Run verifies the token; grant
+this application's service account `roles/run.invoker` on the agent service only. The deployment
+script does not enable agent mode yet.
 
 ## Requirements
 
@@ -253,6 +311,7 @@ HTTP mode currently exposes:
 ```text
 GET /api/health
 GET /api/llm/providers
+GET /api/agent/status
 POST /api/chat
 POST /api/chat/stream
 GET /openapi.yaml
@@ -263,7 +322,8 @@ serves the same document through `/openapi.yaml`, and automated tests validate i
 
 `POST /api/chat` is stateless. Its request contains the complete conversation as `USER` and
 `ASSISTANT` messages, ending with a `USER` message. The optional `provider` field selects an
-available LLM provider; when omitted, the configured `llm.provider` is used. The server does not
+available LLM provider; when omitted, the configured `llm.provider` is used. The optional `agent`
+field answers through the agent service instead (see [Agent Mode](#agent-mode)). The server does not
 save HTTP conversation history.
 
 `POST /api/chat/stream` accepts the same request and returns `text/event-stream`. It emits typed
@@ -310,7 +370,7 @@ GROQ_API_KEY=your-api-key
 GEMINI_API_KEY=your-api-key
 ```
 
-The `.env` file is ignored by Git and must never be committed. A value already defined in the system environment takes precedence over `.env`.
+The `.env` file is ignored by Git and must never be committed. A value already defined in the system environment takes precedence over `.env`. Besides API keys, `.env` can hold the environment overrides of `application.properties` (for example `AGENT_LAB_ENABLED`); an empty value keeps the property.
 
 For the current PowerShell session, set the key before starting the application:
 
@@ -461,7 +521,9 @@ Covered areas include:
 ## Current Limitations
 
 - Ollama, OpenAI, GroqCloud, and Gemini API are the implemented LLM providers.
-- Only the calculator tool is available.
+- Only the calculator tool is available in the built-in agent; web search is available only in
+  agent mode, which needs a running ai-agent-lab service.
+- Agent mode returns the complete answer as one event; intermediate agent steps are not streamed.
 - Calculator results can be returned directly; deterministic routing needs no LLM call, while
   model-based routing needs a decision call (and may retry or repair the decision).
 - The agent supports a single tool execution before the final response.
@@ -806,6 +868,10 @@ verified in this review.
 - [x] OpenAPI specification foundation
 - [ ] Interactive API documentation
 - [x] REST and SSE tests with embedded server and mocked application services
+- [x] Optional agent mode through the separate ai-agent-lab service (Python agent with web search)
+- [x] Authenticated agent service call on Cloud Run (Google identity token)
+- [ ] Agent mode in the Cloud Run deployment script
+- [ ] Streaming of intermediate agent-mode steps
 - [x] Web chat, Q&A, Status, and shared project/author links
 - [x] Multi-stage Docker build
 - [x] Docker Compose

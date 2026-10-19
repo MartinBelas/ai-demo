@@ -5,6 +5,7 @@ import ai.demo.agent.AgentEvent;
 import ai.demo.agent.AgentResult;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -61,7 +62,13 @@ public class ChatService {
 
     long durationMs = System.currentTimeMillis() - start;
 
-    return new ChatResponse(result.answer(), result.model(), result.tokenUsage(), durationMs);
+    return new ChatResponse(
+        result.answer(),
+        result.model(),
+        result.tokenUsage(),
+        durationMs,
+        List.of(),
+        result.webSources());
   }
 
   private void validateConversation(Conversation conversation) {

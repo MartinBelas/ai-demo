@@ -16,14 +16,7 @@ class OpenApiSpecificationTest {
 
   @Test
   void shouldContainValidApiContract() throws IOException {
-    String specification;
-    try (var inputStream = getClass().getResourceAsStream("/openapi.yaml")) {
-      assertNotNull(inputStream);
-      specification = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-    }
-
-    SwaggerParseResult result =
-        new OpenAPIV3Parser().readContents(specification, null, new ParseOptions());
+    SwaggerParseResult result = parseSpecification();
 
     assertNotNull(result.getOpenAPI());
     assertTrue(result.getMessages().isEmpty(), () -> String.join(", ", result.getMessages()));
@@ -47,5 +40,28 @@ class OpenApiSpecificationTest {
     assertEquals("streamChatResponse", streamingOperation.getOperationId());
     assertEquals(List.of("Chat"), streamingOperation.getTags());
     assertNotNull(result.getOpenAPI().getComponents().getSchemas().get("SseCompletionEvent"));
+  }
+
+  @Test
+  void shouldDescribeAgentMode() throws IOException {
+    SwaggerParseResult result = parseSpecification();
+
+    var agentStatusOperation = result.getOpenAPI().getPaths().get("/api/agent/status").getGet();
+    assertNotNull(agentStatusOperation);
+    assertEquals("getAgentStatus", agentStatusOperation.getOperationId());
+    var schemas = result.getOpenAPI().getComponents().getSchemas();
+    assertNotNull(schemas.get("WebSource"));
+    assertNotNull(schemas.get("ChatRequest").getProperties().get("agent"));
+    assertNotNull(schemas.get("ChatResponse").getProperties().get("webSources"));
+    assertNotNull(schemas.get("SseCompletionEvent").getProperties().get("webSources"));
+  }
+
+  private SwaggerParseResult parseSpecification() throws IOException {
+    String specification;
+    try (var inputStream = getClass().getResourceAsStream("/openapi.yaml")) {
+      assertNotNull(inputStream);
+      specification = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    return new OpenAPIV3Parser().readContents(specification, null, new ParseOptions());
   }
 }

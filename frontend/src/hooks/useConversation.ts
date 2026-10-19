@@ -5,7 +5,7 @@ import type { ChatMessage, Completion, StreamEvent, ToolActivity } from "../type
 
 export type StreamState = "idle" | "connecting" | "thinking" | "tooling" | "answering" | "complete" | "error";
 
-export function useConversation(providerId: string, rag = false) {
+export function useConversation(providerId: string, rag = false, agent = false) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialHistory);
   const [thinking, setThinking] = useState("");
   const [partial, setPartial] = useState("");
@@ -38,7 +38,7 @@ export function useConversation(providerId: string, rag = false) {
   }, []);
 
   const submit = useCallback(async (content: string) => {
-    if (!content || isStreaming(streamState) || !providerId) return;
+    if (!content || isStreaming(streamState) || (!providerId && !agent)) return;
     const requestMessages = [...messages, { role: "USER", content } satisfies ChatMessage];
     const requestId = ++requestSequence.current;
     const abortController = new AbortController();
@@ -47,7 +47,7 @@ export function useConversation(providerId: string, rag = false) {
     resetResponse(setThinking, setPartial, setCompletion, setToolActivity, setError, setStreamState);
     setStreamState("connecting");
     await runStream(providerId, requestMessages, requestId, abortController);
-  }, [messages, providerId, streamState, rag]);
+  }, [messages, providerId, streamState, rag, agent]);
 
   async function runStream(
     selectedProvider: string,
@@ -65,12 +65,14 @@ export function useConversation(providerId: string, rag = false) {
       completed = result.completed || completed;
       if (result.completed && answer.trim()) {
         const sources = event.type === "completion" ? event.completion.sources : undefined;
-        setMessages((value) => [...value, { role: "ASSISTANT", content: answer, ...(sources?.length ? { sources } : {}) }]);
+        const webSources = event.type === "completion" ? event.completion.webSources : undefined;
+        setMessages((value) => [...value, { role: "ASSISTANT", content: answer,
+          ...(sources?.length ? { sources } : {}), ...(webSources?.length ? { webSources } : {}) }]);
       }
     };
 
     try {
-      await streamChat(selectedProvider, requestMessages, abortController.signal, handleEvent, rag);
+      await streamChat(selectedProvider, requestMessages, abortController.signal, handleEvent, rag, agent);
     } catch (reason) {
       if (current()) handleStreamFailure(reason, abortController.signal.aborted, setError, setStreamState);
     } finally {
