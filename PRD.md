@@ -4,7 +4,7 @@
 
 AI Demo is an educational Java 21 LLM application that demonstrates provider-independent AI integration without hiding its core behavior behind an AI framework. It provides a console interface for local experimentation and a stateless REST and web interface for a public multi-user demo.
 
-The application supports streaming responses, agent-based tool calling, retrieval-augmented generation (RAG), configurable thinking output, Docker-based local execution, and deployment to Google Cloud Run. Ollama is available only when explicitly enabled for local use. OpenAI, GroqCloud, and Gemini API can be used locally and in the cloud.
+The application supports streaming responses, agent-based tool calling, retrieval-augmented generation (RAG), configurable thinking output, Docker-based local execution, and deployment to Google Cloud Run. An optional agent mode forwards web and REST chat requests to a separate agent service with web search. Ollama is available only when explicitly enabled for local use. OpenAI, GroqCloud, and Gemini API can be used locally and in the cloud.
 
 ## Target users
 
@@ -69,6 +69,7 @@ The application supports streaming responses, agent-based tool calling, retrieva
 - Firestore-backed global usage counters for the cloud deployment
 - Configurable request, concurrency, input, retrieval, and LLM token limits
 - Public demo metrics/status page containing non-sensitive aggregate metrics
+- Optional agent mode backed by a separate agent service (ai-agent-lab), disabled by default
 
 ## Runtime modes and provider availability
 
@@ -183,6 +184,19 @@ GET    /openapi.yaml
 - Invalid tool input returns a tool failure instead of terminating the application.
 - Successful calculator results use a compact equation with spaces around operators, for example `2 + 3 = 5`.
 - If a decision stream exhausts its output on reasoning before producing content, the agent retries once with an explicit decision-only instruction.
+
+### Agent mode
+
+- Agent mode forwards a REST or web chat request to a separate agent service (ai-agent-lab) instead of the built-in Java agent. It is not available in the console.
+- Agent mode is disabled by default and enabled through configuration. A public status endpoint reports whether it is enabled; the web interface shows the agent mode option only when it is.
+- Agent mode is selected per request and is independent of the LLM provider. The agent service runs its own model; the selected provider is not used for agent-mode requests.
+- The agent service runs read-only tools (currently web search) in a bounded loop: it limits steps, tool calls, web searches, and total time per request.
+- Agent-mode requests pass through the same validation, rate limiting, and quota reservation as chat requests. The token usage the agent service reports for all of its steps is reconciled against the reservation.
+- Agent mode cannot be combined with RAG in the same request.
+- The first version returns the complete agent answer as a single content event; intermediate agent steps are not streamed.
+- Web pages found by the agent are returned as web sources with title and URL, separately from RAG sources. Only absolute `http` and `https` URLs are accepted.
+- Agent service failures, timeouts, and invalid responses return a dedicated, provider-independent error without exposing internal details.
+- The agent service is called with a request identifier that both services log. Chat content is not logged.
 
 ### RAG
 
@@ -341,7 +355,10 @@ Content-Type: application/json
 - Distributed conversation persistence
 - Unbounded autonomous agent loops
 - Arbitrary code execution
-- Multiple tool calls per agent request
+- Multiple tool calls per request in the built-in Java agent
+- Streaming of intermediate agent-mode steps
+- Agent mode combined with RAG
+- An agent service reachable directly from the public internet
 - Local Ollama access from the cloud deployment
 - Cloudflare Tunnel or another tunnel to a user's Ollama
 - Guaranteed zero-cost operation
@@ -357,6 +374,8 @@ Content-Type: application/json
 - Only the calculator tool is currently registered.
 - Tool-based answers require multiple LLM calls and normally use more time and tokens.
 - The agent supports one tool execution before the final response.
+- Agent mode requires a running agent service; its model is chosen by the agent service, not by `llm.provider`.
+- Web search results are untrusted content. Web search cost is limited per request by the agent service, not by the token quota.
 - Small local models may return invalid structured output.
 - Localized calculator routing does not cover every language or every regional phrasing; the matching implementation is documented in `AGENTS.md`.
 - Provider-specific generation settings differ and unsupported settings are not forwarded.
@@ -373,6 +392,7 @@ Content-Type: application/json
 - Console, REST, and web chat requests complete without leaking provider-specific models.
 - Multiple anonymous web clients can stream independent responses without server-side conversation history.
 - A RAG answer includes relevant source attribution.
+- Agent mode tests run without a live agent service.
 - Configured demo limits prevent a new paid request before quota is consumed and return the documented error.
 - The same Docker image runs locally and on Cloud Run with different configuration.
 - The Cloud Run deployment exposes a working health endpoint, web UI, streaming API, and status page.
