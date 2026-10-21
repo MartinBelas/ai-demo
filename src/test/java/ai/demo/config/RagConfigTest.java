@@ -82,6 +82,18 @@ class RagConfigTest {
   }
 
   @Test
+  void shouldRejectMissingBaseUrl() {
+    assertThrows(ConfigurationException.class, () -> valid(EmbeddingProvider.OLLAMA, null, null));
+  }
+
+  @Test
+  void shouldRejectMalformedBaseUrl() {
+    assertThrows(
+        ConfigurationException.class,
+        () -> valid(EmbeddingProvider.OLLAMA, "http://local host", null));
+  }
+
+  @Test
   void shouldRejectBaseUrlWithQuery() {
     assertThrows(
         ConfigurationException.class,

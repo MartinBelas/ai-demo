@@ -290,7 +290,7 @@ public final class AppConfigLoader {
     try {
       return Integer.parseInt(value);
     } catch (NumberFormatException e) {
-      throw new ConfigurationException("Property '" + key + "' must be a valid integer", e);
+      throw invalidProperty(key, "must be a valid integer", e);
     }
   }
 
@@ -301,7 +301,7 @@ public final class AppConfigLoader {
     try {
       return Double.parseDouble(value);
     } catch (NumberFormatException e) {
-      throw new ConfigurationException("Property '" + key + "' must be a valid number", e);
+      throw invalidProperty(key, "must be a valid number", e);
     }
   }
 
@@ -312,6 +312,11 @@ public final class AppConfigLoader {
     if ("false".equalsIgnoreCase(value)) {
       return false;
     }
-    throw new ConfigurationException("Property '" + key + "' must be true or false");
+    throw invalidProperty(key, "must be true or false", null);
+  }
+
+  private static ConfigurationException invalidProperty(
+      String key, String problem, Throwable cause) {
+    return new ConfigurationException("Property '" + key + "' " + problem, cause);
   }
 }

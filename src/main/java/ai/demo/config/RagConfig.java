@@ -30,15 +30,8 @@ public record RagConfig(
       throw new ConfigurationException(
           "RAG embedding API key environment variable is required for provider " + provider);
     }
-    try {
-      URI uri = URI.create(baseUrl);
-      if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
-          || uri.getHost() == null
-          || uri.getUserInfo() != null
-          || uri.getQuery() != null
-          || uri.getFragment() != null) throw new IllegalArgumentException();
-    } catch (IllegalArgumentException | NullPointerException e) {
-      throw new ConfigurationException("Invalid RAG embedding base URL", e);
+    if (!isValidBaseUrl(baseUrl)) {
+      throw new ConfigurationException("Invalid RAG embedding base URL");
     }
     if (maxDocumentBytes < 1
         || maxDocuments < 1
@@ -52,6 +45,24 @@ public record RagConfig(
         || minimumScore > 1) {
       throw new ConfigurationException("Invalid RAG size or similarity limits");
     }
+  }
+
+  /** An absolute http(s) URL without credentials, query or fragment. */
+  private static boolean isValidBaseUrl(String baseUrl) {
+    if (baseUrl == null) {
+      return false;
+    }
+    URI uri;
+    try {
+      uri = URI.create(baseUrl);
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+    return ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
+        && uri.getHost() != null
+        && uri.getUserInfo() == null
+        && uri.getQuery() == null
+        && uri.getFragment() == null;
   }
 
   public static RagConfig disabled() {
