@@ -1,0 +1,50 @@
+meta {
+  name: Agent Answer With Web Search
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is the current EUR to CZK exchange rate?"
+      }
+    ]
+  }
+}
+
+docs {
+  Uses one Tavily web search credit. Needs TAVILY_API_KEY in the lab.
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("answers through the agent service", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().model).to.equal("agent-lab");
+    expect(res.getBody().answer).to.be.a("string").and.not.empty;
+  });
+
+  test("returns the web pages the agent searched", function () {
+    const sources = res.getBody().webSources;
+    expect(sources).to.be.an("array").that.is.not.empty;
+    sources.forEach(function (source) {
+      expect(source).to.have.all.keys("title", "url");
+      expect(source.url).to.match(/^https?:\/\//);
+    });
+  });
+}

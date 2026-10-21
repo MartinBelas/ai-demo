@@ -2,7 +2,6 @@ package ai.demo.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -109,8 +108,29 @@ class AgentModeEndToEndTest {
       assertEquals("And today exactly?", labRequest.path("message").asText());
       assertEquals(2, labRequest.path("history").size());
       assertEquals("assistant", labRequest.path("history").path(1).path("role").asText());
-      assertNotNull(labRequestIds.getFirst());
+      // The ID of this API request is the one the lab receives (and logs).
+      assertEquals(
+          response.headers().firstValue("X-Request-ID").orElseThrow(), labRequestIds.getFirst());
       verifyNoInteractions(providerServices);
+    }
+  }
+
+  @Test
+  void shouldPassCallerRequestIdToTheAgentService() throws Exception {
+    try (ApiServer server = server(agentChatService())) {
+      server.start();
+
+      HttpResponse<String> response =
+          httpClient.send(
+              HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/chat/stream"))
+                  .header("Content-Type", "application/json")
+                  .header("X-Request-ID", "bruno-a1b2c3d4")
+                  .POST(HttpRequest.BodyPublishers.ofString(AGENT_REQUEST))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertEquals("bruno-a1b2c3d4", response.headers().firstValue("X-Request-ID").orElseThrow());
+      assertEquals(List.of("bruno-a1b2c3d4"), labRequestIds);
     }
   }
 

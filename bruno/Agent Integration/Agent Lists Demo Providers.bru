@@ -1,0 +1,50 @@
+meta {
+  name: Agent Lists Demo Providers
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "Which LLM providers does this AI-Demo application currently offer? List their IDs."
+      }
+    ]
+  }
+}
+
+docs {
+  The other direction: the lab's get_ai_demo_providers tool calls GET /api/llm/providers of this
+  application. Needs AI_DEMO_BASE_URL=http://localhost:8080 in the lab.
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("answers through the agent service", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().model).to.equal("agent-lab");
+  });
+
+  test("mentions a provider this application really offers", function () {
+    const providerIds = JSON.parse(bru.getVar("providerIds") || "[]");
+    const answer = res.getBody().answer.toUpperCase();
+    if (providerIds.length === 0) {
+      return;
+    }
+    expect(providerIds.some(function (id) { return answer.includes(id); })).to.equal(true);
+  });
+}

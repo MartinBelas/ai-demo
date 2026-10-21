@@ -1,0 +1,46 @@
+meta {
+  name: Reject Oversized Agent Message
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "replaced by the pre-request script"
+      }
+    ]
+  }
+}
+
+docs {
+  The lab accepts at most 4000 characters per message, so AI-Demo must reject longer ones itself
+  (400) instead of passing them on and failing with the lab's 422.
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+  const body = req.getBody();
+  body.messages[0].content = "x".repeat(4001);
+  req.setBody(body);
+}
+
+tests {
+  test("rejects the message before calling the agent service", function () {
+    expect(res.getStatus()).to.equal(400);
+    const body = res.getBody();
+    expect(body.code).to.equal("INVALID_REQUEST");
+    expect(body.details[0].field).to.equal("messages[0].content");
+  });
+}

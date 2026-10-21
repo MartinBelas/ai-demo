@@ -39,6 +39,7 @@ ai.demo
 ├── config       Application configuration
 ├── console      Console user interface and commands
 ├── exception    Application-specific exceptions
+├── logging      Request IDs for log correlation
 ├── model        Provider-independent domain models
 ├── persistence  Conversation storage
 ├── prompt       Prompt composition and templates
@@ -142,8 +143,8 @@ browser → POST /api/chat/stream {"agent": true}
 - Web pages the agent found are returned as `webSources` (`title`, `url`), separately from RAG
   `sources`. Only absolute `http`/`https` URLs are accepted.
 - Agent service failures, timeouts, and invalid responses return `AGENT_UNAVAILABLE` without
-  internal details. Each call carries a short `X-Request-ID` that the application logs; chat
-  content is never logged.
+  internal details. Each call carries the request's `X-Request-ID` (see Request IDs), which the
+  agent service logs too; chat content is never logged.
 
 To try it locally, start ai-agent-lab on port 8081 and enable agent mode:
 
@@ -258,6 +259,22 @@ properties. Cloud deployments should select `OPENAI`, `GROQ`, or `GEMINI`; API k
 from the provider's configured environment variable. Do not put API keys into properties, images,
 deployment environment files, or source control.
 
+### Request IDs
+
+Every `/api/` request gets a request ID: the caller's `X-Request-ID` header when it is 1-64
+characters of `A-Z a-z 0-9 . _ -`, otherwise a new 8-character ID (an invalid value is replaced
+and never logged). The ID is returned in the `X-Request-ID` response header, kept in the SLF4J
+MDC while the request runs, and printed in every log line of that request, including the
+request line and the LLM and agent service calls:
+
+```text
+17:53:24.499 [JettyServerThreadPool-33] INFO  [8ff9efad] a.d.client.agentlab.AgentLabClient - Sending agent lab request (history=2)
+17:53:30.712 [JettyServerThreadPool-33] INFO  [8ff9efad] ai.demo.api.ApiRequestLogger - POST /api/chat/stream -> 200 (6214 ms)
+```
+
+In agent mode the same ID is sent to ai-agent-lab, which logs it as well, so one request can be
+followed through both services. Log lines outside an API request show `[-]`.
+
 ### Public demo limits
 
 Public limits are disabled for local development by default. Cloud Run must enable both limit and
@@ -351,6 +368,20 @@ bru run bruno --env Local
 
 The local environment uses `http://localhost:8080` and `OLLAMA` by default. Change `baseUrl` or
 `llmProvider` in `bruno/environments/Local.bru` when using another port or provider.
+
+The `Agent Integration` folder checks agent mode end to end against a real ai-agent-lab service:
+agent status, answers with and without web search, `webSources`, the agent reading this
+application's providers back, the streaming path used by the web interface, and the validation
+that happens before the lab is called. Its requests run only with the `LocalAgent` environment
+and are skipped in collection runs with any other environment. Start the lab on port 8081 and
+this application with `AGENT_LAB_ENABLED=true`, then run the folder:
+
+```shell
+cd bruno
+bru run "Agent Integration" --env LocalAgent
+```
+
+Each run calls the real OpenAI API through the lab and uses one Tavily web search credit.
 
 All configured Ollama generation options are forwarded inside the provider's `options` object.
 

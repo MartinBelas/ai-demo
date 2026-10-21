@@ -1,0 +1,34 @@
+meta {
+  name: List Providers For Agent
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/llm/providers
+  body: none
+  auth: none
+}
+
+docs {
+  Remembers the provider IDs, so "Agent Lists Demo Providers" can check that the agent really
+  read them from this application (the lab calls GET /api/llm/providers back).
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+script:post-response {
+  const providers = (res.getBody() && res.getBody().providers) || [];
+  bru.setVar("providerIds", JSON.stringify(providers.map(function (provider) { return provider.id; })));
+}
+
+tests {
+  test("returns the providers", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().providers).to.be.an("array");
+  });
+}

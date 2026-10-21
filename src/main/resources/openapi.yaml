@@ -2,7 +2,11 @@ openapi: 3.1.0
 info:
   title: AI Demo API
   version: 1.0.0
-  description: Provider-independent API for the AI Demo application.
+  description: >-
+    Provider-independent API for the AI Demo application.
+    Every /api/ request may send an X-Request-ID header (1-64 characters of A-Z a-z 0-9 . _ -);
+    the same value, or a new 8-character ID when it is missing or invalid, is returned in the
+    X-Request-ID response header and appears in the server logs of that request.
 
 tags:
   - name: System

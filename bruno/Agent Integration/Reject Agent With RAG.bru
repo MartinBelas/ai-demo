@@ -1,0 +1,39 @@
+meta {
+  name: Reject Agent With RAG
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "rag": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is in the project documents?"
+      }
+    ]
+  }
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("rejects the combination before calling the agent service", function () {
+    expect(res.getStatus()).to.equal(400);
+    const body = res.getBody();
+    expect(body.code).to.equal("INVALID_REQUEST");
+    expect(body.details[0].field).to.equal("rag");
+  });
+}

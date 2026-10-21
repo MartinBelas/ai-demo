@@ -1,0 +1,51 @@
+meta {
+  name: Stream Agent Answer
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/chat/stream
+  body: json
+  auth: none
+}
+
+headers {
+  Accept: text/event-stream
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is 2 + 2? Answer with the number only."
+      }
+    ]
+  }
+}
+
+docs {
+  The path the web interface uses. Unlike the plain "Stream Chat Response" check, an error
+  event fails this request.
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("returns an SSE stream", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getHeader("content-type")).to.contain("text/event-stream");
+  });
+
+  test("completes without an error event", function () {
+    const body = res.getBody();
+    expect(body).to.include("event: completion");
+    expect(body).to.not.include("event: error");
+  });
+}

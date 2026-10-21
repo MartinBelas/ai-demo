@@ -136,7 +136,8 @@ public final class ApiServer implements AutoCloseable {
           Javalin.create(
                   config -> {
                     config.staticFiles.add("/public", Location.CLASSPATH);
-                    config.requestLogger.http(ApiRequestLogger::log);
+                    config.requestLogger.http(RequestIdHandler::logAndClear);
+                    config.routes.before("/api/*", RequestIdHandler::assign);
                     config
                         .routes
                         .get(

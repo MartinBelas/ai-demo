@@ -1,0 +1,14 @@
+meta {
+  name: Agent Integration
+  seq: 4
+}
+
+docs {
+  Strict end-to-end checks of agent mode against a real, running ai-agent-lab service
+  (AI-Demo on 8080 with AGENT_LAB_ENABLED=true, the lab on 8081).
+
+  The requests run only with the LocalAgent environment; with any other environment they are
+  skipped in collection runs, so `bru run --env Local` keeps working without the lab.
+
+  Each run calls the real OpenAI API through the lab and uses one Tavily web search credit.
+}

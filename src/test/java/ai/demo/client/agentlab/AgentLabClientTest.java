@@ -12,10 +12,12 @@ import static org.mockito.Mockito.when;
 import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AgentLabConfig;
 import ai.demo.exception.AgentServiceException;
+import ai.demo.logging.RequestId;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.ConnectException;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
@@ -83,6 +85,15 @@ class AgentLabClientTest {
   }
 
   @Test
+  void shouldUseHttp11BecauseTheLabDoesNotSupportH2cUpgrade() throws Exception {
+    respond(200, REPLY);
+
+    client.chat(HI);
+
+    assertEquals(Optional.of(HttpClient.Version.HTTP_1_1), sentRequest().version());
+  }
+
+  @Test
   void shouldSendShortRequestId() throws Exception {
     respond(200, REPLY);
 
@@ -91,6 +102,21 @@ class AgentLabClientTest {
     String requestId =
         sentRequest().headers().firstValue(AgentLabClient.REQUEST_ID_HEADER).orElseThrow();
     assertEquals(8, requestId.length());
+  }
+
+  @Test
+  void shouldSendIdOfCurrentApiRequest() throws Exception {
+    respond(200, REPLY);
+    RequestId.set("8ff9efad");
+    try {
+      client.chat(HI);
+    } finally {
+      RequestId.clear();
+    }
+
+    assertEquals(
+        "8ff9efad",
+        sentRequest().headers().firstValue(AgentLabClient.REQUEST_ID_HEADER).orElseThrow());
   }
 
   @Test

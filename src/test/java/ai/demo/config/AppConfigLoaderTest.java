@@ -13,7 +13,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class AppConfigLoaderTest {
 
-  private final AppConfigLoader loader = new AppConfigLoader();
+  // No environment at all: the real one (e.g. AGENT_LAB_ENABLED set in the developer's shell)
+  // must not change what these tests load.
+  private final AppConfigLoader loader = new AppConfigLoader(variable -> null);
 
   @Test
   void shouldLoadConfiguration() throws IOException {

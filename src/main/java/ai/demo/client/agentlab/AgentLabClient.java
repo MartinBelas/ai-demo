@@ -4,14 +4,15 @@ import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AgentLabAuthentication;
 import ai.demo.config.AgentLabConfig;
 import ai.demo.exception.AgentServiceException;
+import ai.demo.logging.RequestId;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,10 +20,11 @@ import org.slf4j.LoggerFactory;
  * HTTP client for the ai-agent-lab service ({@code POST /api/chat}, contract v1, no streaming).
  *
  * <p>Separate from {@code LlmClient}: the agent lab is not an LLM provider but an agent that runs
- * its own model and tools. Each call gets a short request ID that is logged here and sent as the
- * {@value #REQUEST_ID_HEADER} header, so one request can be traced in both services. Neither the
- * message nor the reply is logged, and error responses are reported only by their HTTP status.
- * Calls are authenticated as configured ({@link AgentLabAuthentication}).
+ * its own model and tools. Each call sends the ID of the current API request ({@link RequestId}) as
+ * the {@value #REQUEST_ID_HEADER} header, so one request can be traced in both services; the ID is
+ * in every log line through the MDC. Neither the message nor the reply is logged, and error
+ * responses are reported only by their HTTP status. Calls are authenticated as configured ({@link
+ * AgentLabAuthentication}).
  */
 public final class AgentLabClient {
 
@@ -32,7 +34,7 @@ public final class AgentLabClient {
   @SuppressWarnings("java:S1075")
   private static final String CHAT_PATH = "/api/chat";
 
-  static final String REQUEST_ID_HEADER = "X-Request-ID";
+  static final String REQUEST_ID_HEADER = RequestId.HEADER;
   private static final String JSON = "application/json";
 
   private final AgentLabConfig config;
@@ -75,17 +77,16 @@ public final class AgentLabClient {
   }
 
   public AgentLabResponse chat(AgentLabRequest request) {
-    String requestId = UUID.randomUUID().toString().substring(0, 8);
+    String requestId = RequestId.currentOrGenerate();
     long start = System.nanoTime();
-    log.info("[{}] Sending agent lab request (history={})", requestId, request.history().size());
+    log.info("Sending agent lab request (history={})", request.history().size());
     try {
       HttpResponse<String> response = transport.send(httpRequest(request, requestId));
       AgentLabResponse result = parse(response);
       AgentLabUsage usage = result.usage();
       log.info(
-          "[{}] Agent lab replied in {} ms (modelCalls={}, toolCalls={}, webSearches={}, "
+          "Agent lab replied in {} ms (modelCalls={}, toolCalls={}, webSearches={}, "
               + "tokens={}/{}, sources={})",
-          requestId,
           elapsedMillis(start),
           usage.modelCalls(),
           usage.toolCalls(),
@@ -95,15 +96,14 @@ public final class AgentLabClient {
           result.sources().size());
       return result;
     } catch (AgentServiceException e) {
-      throw logged(requestId, start, e);
+      throw logged(start, e);
     } catch (HttpTimeoutException e) {
-      throw logged(requestId, start, new AgentServiceException("Agent lab request timed out", e));
+      throw logged(start, new AgentServiceException("Agent lab request timed out", e));
     } catch (IOException e) {
-      throw logged(requestId, start, new AgentServiceException("Unable to reach the agent lab", e));
+      throw logged(start, new AgentServiceException("Unable to reach the agent lab", e));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw logged(
-          requestId, start, new AgentServiceException("Agent lab request was interrupted", e));
+      throw logged(start, new AgentServiceException("Agent lab request was interrupted", e));
     }
   }
 
@@ -111,6 +111,9 @@ public final class AgentLabClient {
       throws JsonProcessingException {
     HttpRequest.Builder builder =
         HttpRequest.newBuilder(chatUri)
+            // The shared client defaults to HTTP/2, which over plain http:// (the local lab) is
+            // an h2c upgrade request; uvicorn does not support it and answers HTTP 400.
+            .version(HttpClient.Version.HTTP_1_1)
             .timeout(config.timeout())
             .header("Content-Type", JSON)
             .header("Accept", JSON)
@@ -139,9 +142,8 @@ public final class AgentLabClient {
     return result;
   }
 
-  private static AgentServiceException logged(
-      String requestId, long start, AgentServiceException exception) {
-    log.warn("[{}] {} after {} ms", requestId, exception.getMessage(), elapsedMillis(start));
+  private static AgentServiceException logged(long start, AgentServiceException exception) {
+    log.warn("{} after {} ms", exception.getMessage(), elapsedMillis(start));
     return exception;
   }
 

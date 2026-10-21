@@ -66,7 +66,7 @@ too (marked `CLOSED`).
 
 - `ConsoleChat` — `@SuppressWarnings("java:S106")`: it's a console UI, `System.out` is its job.
 - `App` — `@SuppressWarnings("java:S6539")`: composition root, wiring many collaborators is expected.
-- `LoggingLlmClient` — S2245 (pseudorandom request-id, not security-sensitive) and S2139 x4
+- `LoggingLlmClient` — S2139 x4
   (logs then rethrows) left as-is: the duplicate log line this produces alongside the API
   endpoint's own log was a deliberate trade-off for keeping per-request timing/correlation-id
   diagnostics, decided on 2026-09-07.

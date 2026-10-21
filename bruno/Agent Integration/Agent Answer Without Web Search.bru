@@ -1,0 +1,48 @@
+meta {
+  name: Agent Answer Without Web Search
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "What is 7 times 6? Answer with the number only."
+      }
+    ]
+  }
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("answers through the agent service", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.model).to.equal("agent-lab");
+    expect(body.answer).to.contain("42");
+  });
+
+  test("reports the token usage of the agent", function () {
+    const usage = res.getBody().tokenUsage;
+    expect(usage.promptTokens).to.be.above(0);
+    expect(usage.completionTokens).to.be.above(0);
+  });
+
+  test("does not search the web for simple math", function () {
+    expect(res.getBody().webSources || []).to.be.empty;
+  });
+}
