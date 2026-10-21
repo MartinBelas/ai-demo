@@ -1,0 +1,45 @@
+meta {
+  name: Agent Answer Using Demo Providers
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "agent": true,
+    "messages": [
+      {
+        "role": "USER",
+        "content": "Which LLM providers does this AI-Demo application currently offer?"
+      }
+    ]
+  }
+}
+
+docs {
+  Usually makes the lab call GET /api/llm/providers of this application (get_ai_demo_providers;
+  needs AI_DEMO_BASE_URL=http://localhost:8080 in the lab). That call carries the same
+  X-Request-ID, so it shows up in this application's log under the ID of this request.
+}
+
+script:pre-request {
+  if (bru.getEnvName() !== "LocalAgent") {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("answers through the agent service", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.model).to.equal("agent-lab");
+    expect(body.answer).to.be.a("string").and.not.empty;
+    expect(body).to.not.have.property("sources");
+  });
+}

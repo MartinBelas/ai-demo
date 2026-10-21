@@ -1,7 +1,7 @@
 meta {
-  name: Agent Answer Without Web Search
+  name: Agent Answer
   type: http
-  seq: 3
+  seq: 2
 }
 
 post {
@@ -16,7 +16,7 @@ body:json {
     "messages": [
       {
         "role": "USER",
-        "content": "What is 7 times 6? Answer with the number only."
+        "content": "What is 7 times 6?"
       }
     ]
   }
@@ -33,16 +33,21 @@ tests {
     expect(res.getStatus()).to.equal(200);
     const body = res.getBody();
     expect(body.model).to.equal("agent-lab");
-    expect(body.answer).to.contain("42");
+    expect(body.answer).to.be.a("string").and.not.empty;
+    expect(body).to.not.have.property("sources");
   });
 
-  test("reports the token usage of the agent", function () {
+  test("reports the token usage of all agent steps", function () {
     const usage = res.getBody().tokenUsage;
     expect(usage.promptTokens).to.be.above(0);
     expect(usage.completionTokens).to.be.above(0);
+    expect(usage.totalTokens).to.equal(usage.promptTokens + usage.completionTokens);
   });
 
-  test("does not search the web for simple math", function () {
-    expect(res.getBody().webSources || []).to.be.empty;
+  test("returns web sources only as http(s) links", function () {
+    (res.getBody().webSources || []).forEach(function (source) {
+      expect(source).to.have.all.keys("title", "url");
+      expect(source.url).to.match(/^https?:\/\//);
+    });
   });
 }

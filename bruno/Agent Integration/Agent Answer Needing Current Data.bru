@@ -1,7 +1,7 @@
 meta {
-  name: Agent Answer With Web Search
+  name: Agent Answer Needing Current Data
   type: http
-  seq: 4
+  seq: 3
 }
 
 post {
@@ -23,7 +23,8 @@ body:json {
 }
 
 docs {
-  Uses one Tavily web search credit. Needs TAVILY_API_KEY in the lab.
+  Usually makes the agent search the web (one Tavily credit). Whether it searches is the
+  model's decision, so the checks hold either way; the found pages are in webSources.
 }
 
 script:pre-request {
@@ -35,14 +36,14 @@ script:pre-request {
 tests {
   test("answers through the agent service", function () {
     expect(res.getStatus()).to.equal(200);
-    expect(res.getBody().model).to.equal("agent-lab");
-    expect(res.getBody().answer).to.be.a("string").and.not.empty;
+    const body = res.getBody();
+    expect(body.model).to.equal("agent-lab");
+    expect(body.answer).to.be.a("string").and.not.empty;
+    expect(body).to.not.have.property("sources");
   });
 
-  test("returns the web pages the agent searched", function () {
-    const sources = res.getBody().webSources;
-    expect(sources).to.be.an("array").that.is.not.empty;
-    sources.forEach(function (source) {
+  test("returns web sources only as http(s) links", function () {
+    (res.getBody().webSources || []).forEach(function (source) {
       expect(source).to.have.all.keys("title", "url");
       expect(source.url).to.match(/^https?:\/\//);
     });

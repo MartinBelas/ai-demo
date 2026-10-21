@@ -370,10 +370,12 @@ The local environment uses `http://localhost:8080` and `OLLAMA` by default. Chan
 `llmProvider` in `bruno/environments/Local.bru` when using another port or provider.
 
 The `Agent Integration` folder checks agent mode end to end against a real ai-agent-lab service:
-agent status, answers with and without web search, `webSources`, the agent reading this
-application's providers back, the streaming path used by the web interface, and the validation
-that happens before the lab is called. Its requests run only with the `LocalAgent` environment
-and are skipped in collection runs with any other environment. Start the lab on port 8081 and
+agent status, answers (including ones that usually need a web search or this application's
+provider list), `webSources`, token usage, the streaming path used by the web interface, and the
+validation that happens before the lab is called. The model decides what to answer and whether
+to search, so the checks cover only what the services guarantee, never the wording. Its requests
+run only with the `LocalAgent` environment and are skipped in collection runs with any other
+environment. Start the lab on port 8081 and
 this application with `AGENT_LAB_ENABLED=true`, then run the folder:
 
 ```shell
@@ -381,7 +383,7 @@ cd bruno
 bru run "Agent Integration" --env LocalAgent
 ```
 
-Each run calls the real OpenAI API through the lab and uses one Tavily web search credit.
+Each run calls the real OpenAI API through the lab and usually uses one Tavily web search credit.
 
 All configured Ollama generation options are forwarded inside the provider's `options` object.
 
