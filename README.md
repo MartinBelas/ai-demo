@@ -253,10 +253,28 @@ Invalid or missing configuration results in a `ConfigurationException`.
 `server.port` locally. The `APP_INTERFACE` and `PORT` environment variables override these values,
 which allows the same configuration and artifact to run on Cloud Run.
 
-`LLM_PROVIDER`, `APP_INTERFACE`, `PORT`, `OLLAMA_ENABLED`, `OLLAMA_MODEL`, and `OLLAMA_BASE_URL`
-override their corresponding
-properties. Cloud deployments should select `OPENAI`, `GROQ`, or `GEMINI`; API keys are read only
-from the provider's configured environment variable. Do not put API keys into properties, images,
+The following environment variables override their corresponding properties:
+
+| Property                           | Environment variable               |
+|------------------------------------|------------------------------------|
+| `llm.provider`                     | `LLM_PROVIDER`                     |
+| `llm.temperature`                  | `LLM_TEMPERATURE`                  |
+| `llm.max-output-tokens`            | `LLM_MAX_OUTPUT_TOKENS`            |
+| `app.interface`                    | `APP_INTERFACE`                    |
+| `server.port`                      | `PORT`                             |
+| `ollama.enabled`                   | `OLLAMA_ENABLED`                   |
+| `ollama.model` / `ollama.base-url` | `OLLAMA_MODEL` / `OLLAMA_BASE_URL` |
+| `ollama.context-window`            | `OLLAMA_CONTEXT_WINDOW`            |
+| `ollama.repeat-penalty`            | `OLLAMA_REPEAT_PENALTY`            |
+| `openai.model` / `openai.base-url` | `OPENAI_MODEL` / `OPENAI_BASE_URL` |
+| `groq.model` / `groq.base-url`     | `GROQ_MODEL` / `GROQ_BASE_URL`     |
+| `gemini.model` / `gemini.base-url` | `GEMINI_MODEL` / `GEMINI_BASE_URL` |
+
+A provider section is configured only when its `<provider>.model` property is present in the
+properties file; a model environment variable alone does not add a provider.
+
+Cloud deployments should select `OPENAI`, `GROQ`, or `GEMINI`; API keys are read only from the
+provider's configured environment variable. Do not put API keys into properties, images,
 deployment environment files, or source control.
 
 ### Request IDs
@@ -589,6 +607,10 @@ docker run --rm -p 8080:8080 `
 Docker Compose starts the published application image, an Ollama server, and a one-time model
 download. The model is stored in the named `ollama-data` volume and is reused after restarts.
 
+`compose.yaml` uses nested variable defaults (`RAG_ENABLED` falls back to `OLLAMA_ENABLED`), which
+requires Docker Compose v2 (`docker compose`); the legacy `docker-compose` v1 binary does not
+support them.
+
 ```powershell
 docker compose --profile ollama pull
 docker compose --profile ollama up -d
@@ -649,6 +671,16 @@ provider instead of the `ollama.*` config used locally. It defaults `-EmbeddingP
 (GroqCloud has no embeddings API), and if that differs from `-Provider` it also needs its own
 `-EmbeddingApiKeySecret` pointing at a second Secret Manager secret, granted to the service account
 alongside the chat key. Pass `-DisableRag` to deploy without project-document search at all.
+
+Startup fails with a `ConfigurationException` when RAG is enabled with the `OLLAMA` embedding
+provider while Ollama is disabled (`OLLAMA_ENABLED=false`), and when the bundled RAG documents do
+not fit the configured limits. The documents are only loaded and validated at startup; embedding
+them stays lazy until the first RAG request. The container image therefore defaults to
+`RAG_ENABLED=false`; enable RAG there together with `RAG_EMBEDDING_PROVIDER=OPENAI` or `GEMINI`.
+
+If the embedding provider is down when the index is first built, RAG requests fail with
+`RAG_UNAVAILABLE`. The index is retried by a later request, at most once every 60 seconds, so a
+provider outage heals without a restart but is not hit on every request.
 
 The deployment uses request-based billing, zero minimum instances, one maximum instance, bounded
 concurrency, and Secret Manager environment mounts. The script runs read-only smoke checks against

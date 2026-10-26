@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import ai.demo.exception.ConfigurationException;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,12 +59,12 @@ class AgentLabConfigTest {
         "http://"
       })
   void shouldRejectInvalidBaseUrlWhenEnabled(String baseUrl) {
-    assertThrows(ConfigurationException.class, () -> new AgentLabConfig(true, baseUrl, TIMEOUT));
+    assertThrows(IllegalArgumentException.class, () -> new AgentLabConfig(true, baseUrl, TIMEOUT));
   }
 
   @Test
   void shouldRejectMissingBaseUrlWhenEnabled() {
-    assertThrows(ConfigurationException.class, () -> new AgentLabConfig(true, null, TIMEOUT));
+    assertThrows(IllegalArgumentException.class, () -> new AgentLabConfig(true, null, TIMEOUT));
   }
 
   @ParameterizedTest
@@ -74,12 +73,12 @@ class AgentLabConfigTest {
     Duration timeout = Duration.ofSeconds(seconds);
 
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () -> new AgentLabConfig(true, "http://localhost:8081", timeout));
   }
 
   @Test
   void shouldRejectMissingTimeout() {
-    assertThrows(ConfigurationException.class, () -> new AgentLabConfig(false, null, null));
+    assertThrows(IllegalArgumentException.class, () -> new AgentLabConfig(false, null, null));
   }
 }

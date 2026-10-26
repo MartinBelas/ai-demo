@@ -10,10 +10,9 @@ import ai.demo.agent.tool.ToolDescriptionFormatter;
 import ai.demo.client.LlmResponse;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.TokenUsage;
-import ai.demo.config.AppConfig;
-import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.OllamaConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.model.chat.ChatChunk;
@@ -52,12 +51,10 @@ class ConsoleChatEndToEndTest {
     var service = new ChatService(agent);
     var dispatcher = new ConsoleCommandDispatcher(new CommandRegistry().commands());
     var config =
-        new AppConfig(
-            LlmProvider.OLLAMA,
-            new GenerationConfig(0.4, 300, "Be helpful."),
-            new OllamaConfig("fake-model", "http://localhost:11434", 4096, 1.18),
-            null,
-            conversationFile);
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .ollama(new OllamaConfig("fake-model", "http://localhost:11434", 4096, 1.18))
+            .conversationFile(conversationFile)
+            .build();
     InputStream originalIn = System.in;
     PrintStream originalOut = System.out;
     ByteArrayOutputStream output = new ByteArrayOutputStream();

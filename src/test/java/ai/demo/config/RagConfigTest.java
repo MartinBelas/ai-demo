@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import ai.demo.exception.ConfigurationException;
 import org.junit.jupiter.api.Test;
 
 class RagConfigTest {
@@ -28,10 +27,10 @@ class RagConfigTest {
   @Test
   void shouldRequireApiKeyEnvironmentVariableForOpenAi() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () -> valid(EmbeddingProvider.OPENAI, "https://api.openai.com/v1", null));
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () -> valid(EmbeddingProvider.OPENAI, "https://api.openai.com/v1", " "));
   }
 
@@ -47,7 +46,7 @@ class RagConfigTest {
   @Test
   void shouldRejectNullProvider() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () ->
             new RagConfig(
                 true, null, "http://localhost:11434", "model", null, 1, 1, 1, 4, 4, 1, 1, 0));
@@ -56,7 +55,7 @@ class RagConfigTest {
   @Test
   void shouldRejectBlankModel() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () ->
             new RagConfig(
                 true,
@@ -77,33 +76,33 @@ class RagConfigTest {
   @Test
   void shouldRejectNonHttpBaseUrl() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () -> valid(EmbeddingProvider.OLLAMA, "ftp://localhost", null));
   }
 
   @Test
   void shouldRejectMissingBaseUrl() {
-    assertThrows(ConfigurationException.class, () -> valid(EmbeddingProvider.OLLAMA, null, null));
+    assertThrows(IllegalArgumentException.class, () -> valid(EmbeddingProvider.OLLAMA, null, null));
   }
 
   @Test
   void shouldRejectMalformedBaseUrl() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () -> valid(EmbeddingProvider.OLLAMA, "http://local host", null));
   }
 
   @Test
   void shouldRejectBaseUrlWithQuery() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () -> valid(EmbeddingProvider.OLLAMA, "http://localhost:11434?x=1", null));
   }
 
   @Test
   void shouldRejectChunkSizeBelowMinimum() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () ->
             new RagConfig(
                 true,
@@ -124,7 +123,7 @@ class RagConfigTest {
   @Test
   void shouldRejectContextSizeSmallerThanChunkSize() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () ->
             new RagConfig(
                 true,
@@ -145,7 +144,7 @@ class RagConfigTest {
   @Test
   void shouldRejectMinimumScoreOutOfRange() {
     assertThrows(
-        ConfigurationException.class,
+        IllegalArgumentException.class,
         () ->
             new RagConfig(
                 true,

@@ -21,6 +21,7 @@ import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.LlmProviderAvailability;
 import ai.demo.config.OllamaConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatResponse;
@@ -38,7 +39,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -122,12 +122,10 @@ class ApiServerTest {
   @Test
   void shouldExposeAvailableProviders() throws IOException, InterruptedException {
     AppConfig config =
-        new AppConfig(
-            LlmProvider.OLLAMA,
-            new GenerationConfig(0.4, 1000, "Be helpful."),
-            new OllamaConfig(OLLAMA_MODEL, "http://localhost:11434", 4096, 1.18),
-            null,
-            Path.of("conversation.json"));
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .generation(new GenerationConfig(0.4, 1000, "Be helpful."))
+            .ollama(new OllamaConfig(OLLAMA_MODEL, "http://localhost:11434", 4096, 1.18))
+            .build();
     LlmProviderAvailability availability = new LlmProviderAvailability(config, key -> null);
     try (ApiServer server = new ApiServer(0, availability, new ObjectMapper());
         HttpClient client = HttpClient.newHttpClient()) {

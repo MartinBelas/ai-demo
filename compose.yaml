@@ -12,7 +12,8 @@ services:
       OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
-      RAG_ENABLED: ${RAG_ENABLED:-true}
+      # Compose only wires Ollama embeddings, so RAG follows OLLAMA_ENABLED unless set explicitly.
+      RAG_ENABLED: ${RAG_ENABLED:-${OLLAMA_ENABLED:-true}}
       RAG_EMBEDDING_BASE_URL: http://ollama:11434
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-nomic-embed-text}
       AGENT_LAB_ENABLED: ${AGENT_LAB_ENABLED:-false}

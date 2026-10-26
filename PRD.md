@@ -212,6 +212,8 @@ GET    /openapi.yaml
 - RAG answers include source attribution.
 - PDF, Word, crawling, reranking, user document upload, and persistent document storage are outside the MVP.
 - The corpus is fixed at build time from documents bundled with the application image; there is no runtime document upload or deletion in this release.
+- With RAG enabled, startup fails on configuration that cannot work: Ollama embeddings while Ollama is disabled in the deployment, or bundled documents that exceed the configured limits. Startup validates documents without calling the embedding provider; the index is still built on the first RAG request.
+- If the embedding provider fails while the index is being built, the RAG request fails with `RAG_UNAVAILABLE` and indexing is retried by a later request, but at most once every 60 seconds. An interrupted request does not start that wait. A bundled corpus that fails validation is not retried until the process restarts.
 - `GET /api/rag/status` reports whether RAG is enabled in the current deployment so the web interface can show or hide the retrieval option.
 - A chat request with `rag: true` while `rag.enabled=false` is rejected with HTTP `400` and:
 

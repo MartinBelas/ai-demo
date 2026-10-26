@@ -1,6 +1,5 @@
 package ai.demo.config;
 
-import ai.demo.exception.ConfigurationException;
 import java.net.URI;
 import java.time.Duration;
 
@@ -25,12 +24,13 @@ public record AgentLabConfig(
 
   public AgentLabConfig {
     if (authentication == null) {
-      throw new ConfigurationException("Agent lab authentication must be set");
+      throw new IllegalArgumentException("Agent lab authentication must be set");
     }
     if (timeout == null
         || timeout.compareTo(MIN_TIMEOUT) < 0
         || timeout.compareTo(MAX_TIMEOUT) > 0) {
-      throw new ConfigurationException("Agent lab timeout must be between 1 second and 5 minutes");
+      throw new IllegalArgumentException(
+          "Agent lab timeout must be between 1 second and 5 minutes");
     }
     if (enabled) {
       baseUrl = validatedBaseUrl(baseUrl);
@@ -43,7 +43,8 @@ public record AgentLabConfig(
 
   private static String validatedBaseUrl(String baseUrl) {
     if (baseUrl == null || baseUrl.isBlank()) {
-      throw new ConfigurationException("Agent lab base URL is required when agent mode is enabled");
+      throw new IllegalArgumentException(
+          "Agent lab base URL is required when agent mode is enabled");
     }
     String normalized = baseUrl.strip();
     while (normalized.endsWith("/")) {
@@ -59,7 +60,7 @@ public record AgentLabConfig(
         throw new IllegalArgumentException("Unsupported agent lab base URL");
       }
     } catch (IllegalArgumentException e) {
-      throw new ConfigurationException("Invalid agent lab base URL", e);
+      throw new IllegalArgumentException("Invalid agent lab base URL", e);
     }
     return normalized;
   }

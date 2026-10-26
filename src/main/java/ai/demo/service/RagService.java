@@ -17,29 +17,47 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /** One shared, immutable corpus per process. Embeddings are prepared once, on first retrieval. */
 public final class RagService {
   private static final Pattern DOCUMENT_NAME_PATTERN = Pattern.compile("[A-Za-z0-9_-]+\\.(txt|md)");
+  static final long EMBEDDING_RETRY_DELAY_NANOS = TimeUnit.SECONDS.toNanos(60);
 
   private final RagConfig config;
   private final EmbeddingClient embeddings;
   private final VectorStore store;
   private final Supplier<List<RagDocument>> documents;
+  private final LongSupplier nanoTime;
   private volatile boolean indexed;
-  private RagException indexingFailure;
+  private RagException corpusFailure;
+  private RagException embeddingFailure;
+  private long embeddingRetryAt;
+  private List<RagDocument> corpus;
 
   public RagService(
       RagConfig config,
       EmbeddingClient embeddings,
       VectorStore store,
       Supplier<List<RagDocument>> documents) {
+    this(config, embeddings, store, documents, System::nanoTime);
+  }
+
+  /** Package-private for tests: lets them control the clock behind the embedding retry delay. */
+  RagService(
+      RagConfig config,
+      EmbeddingClient embeddings,
+      VectorStore store,
+      Supplier<List<RagDocument>> documents,
+      LongSupplier nanoTime) {
     this.config = config;
     this.embeddings = embeddings;
     this.store = store;
     this.documents = documents;
+    this.nanoTime = nanoTime;
   }
 
   public boolean enabled() {
@@ -52,6 +70,16 @@ public final class RagService {
       throw new ApiRequestException(
           "messages", "The RAG question exceeds the configured size limit or is empty.");
     }
+  }
+
+  /**
+   * Loads and validates the corpus without calling the embedding provider, so a broken document set
+   * or too tight limits fail at startup instead of on the first RAG request. Indexing itself stays
+   * lazy to keep startup fast and free of provider costs.
+   */
+  public synchronized void verifyDocuments() {
+    if (!enabled()) return;
+    loadCorpus();
   }
 
   public List<RagSource> retrieve(String query) {
@@ -72,17 +100,43 @@ public final class RagService {
 
   private synchronized void ensureIndexed() {
     if (indexed) return;
-    // Do not repeatedly spend provider calls on a broken corpus on every public request.
-    if (indexingFailure != null) throw indexingFailure;
+    // A broken corpus cannot heal at runtime, so its failure is kept for the process lifetime.
+    if (corpusFailure != null) throw corpusFailure;
+    // Embedding provider outages are usually transient: retry, but not on every public request,
+    // so a down provider is not hit with a full re-index per request.
+    if (embeddingFailure != null && nanoTime.getAsLong() - embeddingRetryAt < 0) {
+      throw embeddingFailure;
+    }
+    List<RagDocument> loaded;
     try {
-      List<RagDocument> corpus = documents.get();
-      validateCorpus(corpus);
-      store.replaceAll(embedAll(toSources(corpus)));
-      indexed = true;
+      loaded = loadCorpus();
     } catch (RagException e) {
-      indexingFailure = e;
+      corpusFailure = e;
       throw e;
     }
+    try {
+      store.replaceAll(embedAll(toSources(loaded)));
+      embeddingFailure = null;
+      indexed = true;
+    } catch (RagException e) {
+      // An interrupt (client gone, shutdown) says nothing about the provider, so it must not
+      // block the next request.
+      if (!Thread.currentThread().isInterrupted()) {
+        embeddingFailure = e;
+        embeddingRetryAt = nanoTime.getAsLong() + EMBEDDING_RETRY_DELAY_NANOS;
+      }
+      throw e;
+    }
+  }
+
+  /** Loads and validates the corpus once; startup verification and indexing share the result. */
+  private List<RagDocument> loadCorpus() {
+    if (corpus == null) {
+      List<RagDocument> loaded = documents.get();
+      validateCorpus(loaded);
+      corpus = loaded;
+    }
+    return corpus;
   }
 
   private List<RagSource> toSources(List<RagDocument> corpus) {
@@ -99,19 +153,17 @@ public final class RagService {
 
   /** Embeds every chunk concurrently so one slow provider call does not serialize the rest. */
   private List<EmbeddedChunk> embedAll(List<RagSource> sources) {
-    List<Future<EmbeddedChunk>> futures = new ArrayList<>();
+    List<Future<EmbeddedChunk>> futures;
     try (ExecutorService virtualThreads = Executors.newVirtualThreadPerTaskExecutor()) {
-      for (RagSource source : sources) {
-        futures.add(
-            virtualThreads.submit(
-                () -> new EmbeddedChunk(source, embeddings.embed(source.text()))));
-      }
+      futures =
+          sources.stream()
+              .map(
+                  source ->
+                      virtualThreads.submit(
+                          () -> new EmbeddedChunk(source, embeddings.embed(source.text()))))
+              .toList();
     }
-    List<EmbeddedChunk> index = new ArrayList<>();
-    for (Future<EmbeddedChunk> future : futures) {
-      index.add(resolve(future));
-    }
-    return index;
+    return futures.stream().map(this::resolve).toList();
   }
 
   private EmbeddedChunk resolve(Future<EmbeddedChunk> future) {

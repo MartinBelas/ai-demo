@@ -15,7 +15,7 @@ public record OllamaConfig(
       throw new IllegalArgumentException("Ollama baseUrl must not be blank");
     }
     if (contextWindow < 1) throw new IllegalArgumentException("contextWindow must be positive");
-    if (repeatPenalty < 1.0) {
+    if (!Double.isFinite(repeatPenalty) || repeatPenalty < 1.0) {
       throw new IllegalArgumentException("repeatPenalty must be at least 1.0");
     }
   }

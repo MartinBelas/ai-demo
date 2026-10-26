@@ -30,6 +30,7 @@ import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.RagException;
 import ai.demo.exception.ServerException;
 import ai.demo.persistence.BundledRagDocuments;
 import ai.demo.persistence.ConversationRepository;
@@ -71,17 +72,21 @@ public class App {
 
   public int run() {
 
+    // Configuration overrides and API keys share one source: the system environment with a local
+    // .env fallback, read once for the whole application.
+    UnaryOperator<String> environment;
     AppConfig config;
 
     try {
-      config = loadConfig();
+      environment = new EnvironmentConfigLoader(Path.of(".env"), System::getenv)::get;
+      config = new AppConfigLoader(environment).load();
     } catch (ConfigurationException | IOException e) {
       log.error(CONFIGURATION_ERROR_LOG, e.getMessage(), e);
       return 1;
     }
 
     if (config.appInterface() == AppInterface.HTTP) {
-      return startServer(config);
+      return startServer(config, environment);
     }
 
     HttpClient httpClient = createHttpClient();
@@ -89,7 +94,7 @@ public class App {
 
     SwitchableLlmClient providerClient;
     try {
-      providerClient = createLlmClient(config, httpClient, objectMapper);
+      providerClient = createLlmClient(config, httpClient, objectMapper, environment);
     } catch (ConfigurationException e) {
       httpClient.shutdownNow();
       log.error(CONFIGURATION_ERROR_LOG, e.getMessage(), e);
@@ -117,25 +122,22 @@ public class App {
     return startConsole(consoleChat);
   }
 
-  private int startServer(AppConfig config) {
-    try {
-      EnvironmentConfigLoader environment =
-          new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
+  // Package-private for tests (AppRagWiringTest); not part of the application's API.
+  int startServer(AppConfig config, UnaryOperator<String> environment) {
+    try (HttpClient httpClient = createHttpClient()) {
       LlmProviderAvailability providerAvailability =
-          new LlmProviderAvailability(config, environment::get);
+          new LlmProviderAvailability(config, environment);
       ObjectMapper objectMapper = new ObjectMapper();
-      HttpClient httpClient = createHttpClient();
       HttpTransport transport = new JdkHttpTransport(httpClient);
-      LlmClientFactory clientFactory =
-          new LlmClientFactory(transport, objectMapper, environment::get);
+      LlmClientFactory clientFactory = new LlmClientFactory(transport, objectMapper, environment);
       ChatServiceResolver chatServiceResolver =
           createChatServiceResolver(
               config,
               clientFactory,
               objectMapper,
-              createRagService(config, transport, objectMapper, environment::get));
+              createRagService(config, transport, objectMapper, environment));
       ChatService agentChatService = createAgentChatService(config, transport, objectMapper);
-      String ipHashSalt = environment.get(config.demoLimits().ipHashSaltEnvironmentVariable());
+      String ipHashSalt = environment.apply(config.demoLimits().ipHashSaltEnvironmentVariable());
       if (config.demoLimits().enabled() && (ipHashSalt == null || ipHashSalt.isBlank())) {
         throw new ConfigurationException(
             "Demo IP hash salt is required when public limits are enabled");
@@ -147,7 +149,6 @@ public class App {
           chatServiceResolver,
           agentChatService,
           objectMapper,
-          httpClient,
           demoProtection);
     } catch (ConfigurationException e) {
       log.error(CONFIGURATION_ERROR_LOG, e.getMessage(), e);
@@ -161,18 +162,16 @@ public class App {
       ChatServiceResolver chatServiceResolver,
       ChatService agentChatService,
       ObjectMapper objectMapper,
-      HttpClient httpClient,
       DemoProtection demoProtection) {
-    try (httpClient;
-        ApiServer server =
-            new ApiServer(
-                config.server().port(),
-                providerAvailability,
-                new ChatServiceSelector(chatServiceResolver, agentChatService),
-                config.provider(),
-                objectMapper,
-                demoProtection,
-                config.rag().enabled())) {
+    try (ApiServer server =
+        new ApiServer(
+            config.server().port(),
+            providerAvailability,
+            new ChatServiceSelector(chatServiceResolver, agentChatService),
+            config.provider(),
+            objectMapper,
+            demoProtection,
+            config.rag().enabled())) {
       server.start();
       Runtime.getRuntime().addShutdownHook(new Thread(server::close));
       log.info("HTTP server started on port {}", server.port());
@@ -184,7 +183,8 @@ public class App {
     }
   }
 
-  private RagService createRagService(
+  // Package-private for tests (AppRagWiringTest); not part of the application's API.
+  RagService createRagService(
       AppConfig config,
       HttpTransport transport,
       ObjectMapper objectMapper,
@@ -194,11 +194,18 @@ public class App {
     }
     EmbeddingClientFactory embeddingClientFactory =
         new EmbeddingClientFactory(transport, objectMapper, environment);
-    return new RagService(
-        config.rag(),
-        embeddingClientFactory.create(config.rag()),
-        new InMemoryVectorStore(),
-        new BundledRagDocuments(config.rag())::load);
+    RagService ragService =
+        new RagService(
+            config.rag(),
+            embeddingClientFactory.create(config.rag()),
+            new InMemoryVectorStore(),
+            new BundledRagDocuments(config.rag())::load);
+    try {
+      ragService.verifyDocuments();
+    } catch (RagException e) {
+      throw new ConfigurationException("Invalid RAG documents: " + e.getMessage(), e);
+    }
+    return ragService;
   }
 
   /** Agent mode is served by the external agent service; {@code null} when it is disabled. */
@@ -226,26 +233,20 @@ public class App {
             });
   }
 
-  private AppConfig loadConfig() throws IOException {
-    // Configuration overrides come from the system environment with a local .env fallback, the
-    // same source as the API keys.
-    EnvironmentConfigLoader environment =
-        new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
-    return new AppConfigLoader(environment::get).load();
-  }
-
-  private HttpClient createHttpClient() {
+  // Package-private so tests can substitute the client; not part of the application's API.
+  HttpClient createHttpClient() {
     return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
   }
 
   private SwitchableLlmClient createLlmClient(
-      AppConfig config, HttpClient httpClient, ObjectMapper objectMapper) {
+      AppConfig config,
+      HttpClient httpClient,
+      ObjectMapper objectMapper,
+      UnaryOperator<String> environment) {
 
     HttpTransport transport = new JdkHttpTransport(httpClient);
 
-    EnvironmentConfigLoader environment =
-        new EnvironmentConfigLoader(Path.of(".env"), System::getenv);
-    return new LlmClientFactory(transport, objectMapper, environment::get).createSwitchable(config);
+    return new LlmClientFactory(transport, objectMapper, environment).createSwitchable(config);
   }
 
   private PromptComposer createAgentPromptComposer(AppConfig config) {

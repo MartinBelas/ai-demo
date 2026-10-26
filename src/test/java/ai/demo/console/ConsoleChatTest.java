@@ -17,6 +17,7 @@ import ai.demo.config.AppConfig;
 import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.OllamaConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.console.command.CommandResult;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.model.chat.ChatResponse;
@@ -42,12 +43,11 @@ class ConsoleChatTest {
     var mockRepo = mock(ConversationRepository.class);
 
     AppConfig config =
-        new AppConfig(
-            LlmProvider.OLLAMA,
-            new GenerationConfig(0.7, 10, "Be helpful."),
-            new OllamaConfig("test-model", "http://localhost:11434", 100, 1.2),
-            null,
-            Path.of("conv.json"));
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .generation(new GenerationConfig(0.7, 10, "Be helpful."))
+            .ollama(new OllamaConfig("test-model", "http://localhost:11434", 100, 1.2))
+            .conversationFile(Path.of("conv.json"))
+            .build();
 
     var console = new ConsoleChat(mockService, config, mockDispatcher, mockRepo);
 
@@ -61,12 +61,11 @@ class ConsoleChatTest {
     ConsoleCommandDispatcher dispatcher = mock(ConsoleCommandDispatcher.class);
     ConversationRepository repository = mock(ConversationRepository.class);
     AppConfig config =
-        new AppConfig(
-            LlmProvider.OLLAMA,
-            new GenerationConfig(0.7, 10, "Be helpful."),
-            new OllamaConfig("configured-model", "http://localhost:11434", 100, 1.2),
-            null,
-            Path.of("conv.json"));
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .generation(new GenerationConfig(0.7, 10, "Be helpful."))
+            .ollama(new OllamaConfig("configured-model", "http://localhost:11434", 100, 1.2))
+            .conversationFile(Path.of("conv.json"))
+            .build();
     String thinking = "x".repeat(250);
 
     when(repository.load()).thenReturn(new Conversation());

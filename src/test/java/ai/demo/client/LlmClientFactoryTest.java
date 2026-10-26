@@ -12,14 +12,13 @@ import ai.demo.client.ollama.OllamaClient;
 import ai.demo.client.openai.OpenAiClient;
 import ai.demo.config.AppConfig;
 import ai.demo.config.GeminiConfig;
-import ai.demo.config.GenerationConfig;
 import ai.demo.config.GroqConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.OllamaConfig;
 import ai.demo.config.OpenAiConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.exception.ConfigurationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LlmClientFactoryTest {
@@ -36,15 +35,14 @@ class LlmClientFactoryTest {
   }
 
   private AppConfig cloudConfig() {
-    return new AppConfig(
-        LlmProvider.GROQ,
-        new GenerationConfig(0.4, 300, "Be helpful."),
-        null,
-        null,
-        new GroqConfig("groq-model", "https://api.groq.com/openai/v1", "GROQ_API_KEY"),
-        new GeminiConfig(
-            "gemini-model", "https://generativelanguage.googleapis.com/v1beta", "GEMINI_API_KEY"),
-        Path.of("conversation.json"));
+    return TestAppConfig.builder(LlmProvider.GROQ)
+        .groq(new GroqConfig("groq-model", "https://api.groq.com/openai/v1", "GROQ_API_KEY"))
+        .gemini(
+            new GeminiConfig(
+                "gemini-model",
+                "https://generativelanguage.googleapis.com/v1beta",
+                "GEMINI_API_KEY"))
+        .build();
   }
 
   @Test
@@ -63,12 +61,11 @@ class LlmClientFactoryTest {
     var factory =
         new LlmClientFactory(mock(HttpTransport.class), new ObjectMapper(), key -> "secret");
     AppConfig config =
-        new AppConfig(
-            LlmProvider.OPENAI,
-            new GenerationConfig(0.4, 300, "Be helpful."),
-            new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18, false),
-            new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
-            Path.of("conversation.json"));
+        TestAppConfig.builder(LlmProvider.OPENAI)
+            .ollama(new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18, false))
+            .openAi(
+                new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true))
+            .build();
 
     assertThrows(ConfigurationException.class, () -> factory.create(config, LlmProvider.OLLAMA));
   }
@@ -83,20 +80,14 @@ class LlmClientFactoryTest {
   }
 
   private AppConfig ollamaConfig() {
-    return new AppConfig(
-        LlmProvider.OLLAMA,
-        new GenerationConfig(0.4, 300, "Be helpful."),
-        new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18),
-        null,
-        Path.of("conversation.json"));
+    return TestAppConfig.builder(LlmProvider.OLLAMA)
+        .ollama(new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.18))
+        .build();
   }
 
   private AppConfig openAiConfig() {
-    return new AppConfig(
-        LlmProvider.OPENAI,
-        new GenerationConfig(0.4, 300, "Be helpful."),
-        null,
-        new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
-        Path.of("conversation.json"));
+    return TestAppConfig.builder(LlmProvider.OPENAI)
+        .openAi(new OpenAiConfig("test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true))
+        .build();
   }
 }

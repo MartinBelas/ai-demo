@@ -69,8 +69,8 @@ public final class AppConfigLoader {
       LlmProvider provider = LlmProvider.from(configuredProvider);
       GenerationConfig generation =
           new GenerationConfig(
-              requiredDouble(properties, "llm.temperature"),
-              requiredInt(properties, "llm.max-output-tokens"),
+              requiredDouble(properties, "llm.temperature", "LLM_TEMPERATURE"),
+              requiredInt(properties, "llm.max-output-tokens", "LLM_MAX_OUTPUT_TOKENS"),
               requiredProperty(properties, "llm.system-message"));
       OllamaConfig ollama = loadOllama(properties);
       OpenAiConfig openAi = loadOpenAi(properties);
@@ -92,6 +92,8 @@ public final class AppConfigLoader {
           loadRag(properties),
           loadAgentLab(properties));
     } catch (IllegalArgumentException e) {
+      // Configuration records reject invalid values with IllegalArgumentException; the loader is
+      // the single place that turns them into a ConfigurationException.
       throw new ConfigurationException(e.getMessage(), e);
     }
   }
@@ -115,7 +117,9 @@ public final class AppConfigLoader {
         intValue(properties, "rag.max-context-bytes", "RAG_MAX_CONTEXT_BYTES", 6000),
         intValue(properties, "rag.max-query-bytes", "RAG_MAX_QUERY_BYTES", 4000),
         intValue(properties, MAX_RAG_CHUNKS_PROPERTY, MAX_RAG_CHUNKS_VARIABLE, 5),
-        Double.parseDouble(value(properties, "rag.minimum-score", "RAG_MINIMUM_SCORE", "0.2")));
+        parseDouble(
+            value(properties, "rag.minimum-score", "RAG_MINIMUM_SCORE", "0.2"),
+            "rag.minimum-score"));
   }
 
   private AgentLabConfig loadAgentLab(Properties properties) {
@@ -133,16 +137,16 @@ public final class AppConfigLoader {
   }
 
   private AppInterface appInterface(Properties properties) {
-    String environmentInterface = environment.apply("APP_INTERFACE");
-    if (environmentInterface != null && !environmentInterface.isBlank()) {
+    String environmentInterface = environmentValue("APP_INTERFACE");
+    if (environmentInterface != null) {
       return AppInterface.from(environmentInterface);
     }
     return AppInterface.from(properties.getProperty("app.interface"));
   }
 
   private int serverPort(Properties properties) {
-    String environmentPort = environment.apply("PORT");
-    if (environmentPort != null && !environmentPort.isBlank()) {
+    String environmentPort = environmentValue("PORT");
+    if (environmentPort != null) {
       return parseInt(environmentPort, "PORT");
     }
     String configuredPort = properties.getProperty("server.port");
@@ -155,16 +159,16 @@ public final class AppConfigLoader {
   private GroqConfig loadGroq(Properties properties) {
     if (!properties.containsKey("groq.model")) return null;
     return new GroqConfig(
-        requiredProperty(properties, "groq.model"),
-        requiredProperty(properties, "groq.base-url"),
+        requiredValue(properties, "groq.model", "GROQ_MODEL"),
+        requiredValue(properties, "groq.base-url", "GROQ_BASE_URL"),
         requiredProperty(properties, "groq.api-key-env"));
   }
 
   private GeminiConfig loadGemini(Properties properties) {
     if (!properties.containsKey("gemini.model")) return null;
     return new GeminiConfig(
-        requiredProperty(properties, "gemini.model"),
-        requiredProperty(properties, "gemini.base-url"),
+        requiredValue(properties, "gemini.model", "GEMINI_MODEL"),
+        requiredValue(properties, "gemini.base-url", "GEMINI_BASE_URL"),
         requiredProperty(properties, "gemini.api-key-env"));
   }
 
@@ -173,14 +177,14 @@ public final class AppConfigLoader {
     return new OllamaConfig(
         value(properties, "ollama.model", "OLLAMA_MODEL", null),
         value(properties, "ollama.base-url", "OLLAMA_BASE_URL", null),
-        requiredInt(properties, "ollama.context-window"),
-        requiredDouble(properties, "ollama.repeat-penalty"),
+        requiredInt(properties, "ollama.context-window", "OLLAMA_CONTEXT_WINDOW"),
+        requiredDouble(properties, "ollama.repeat-penalty", "OLLAMA_REPEAT_PENALTY"),
         ollamaEnabled(properties));
   }
 
   private boolean ollamaEnabled(Properties properties) {
-    String environmentValue = environment.apply("OLLAMA_ENABLED");
-    if (environmentValue != null && !environmentValue.isBlank()) {
+    String environmentValue = environmentValue("OLLAMA_ENABLED");
+    if (environmentValue != null) {
       return parseBoolean(environmentValue, "OLLAMA_ENABLED");
     }
     String configuredValue = properties.getProperty("ollama.enabled");
@@ -193,8 +197,8 @@ public final class AppConfigLoader {
   private OpenAiConfig loadOpenAi(Properties properties) {
     if (!properties.containsKey("openai.model")) return null;
     return new OpenAiConfig(
-        requiredProperty(properties, "openai.model"),
-        requiredProperty(properties, "openai.base-url"),
+        requiredValue(properties, "openai.model", "OPENAI_MODEL"),
+        requiredValue(properties, "openai.base-url", "OPENAI_BASE_URL"),
         requiredProperty(properties, "openai.api-key-env"),
         booleanValue(
             properties, "openai.temperature-supported", "OPENAI_TEMPERATURE_SUPPORTED", true));
@@ -245,9 +249,14 @@ public final class AppConfigLoader {
   }
 
   private String value(Properties properties, String property, String variable, String fallback) {
+    String environmentValue = environmentValue(variable);
+    return environmentValue != null ? environmentValue : properties.getProperty(property, fallback);
+  }
+
+  /** Returns the environment override, or {@code null} when it is unset or blank. */
+  private String environmentValue(String variable) {
     String environmentValue = environment.apply(variable);
-    if (environmentValue != null && !environmentValue.isBlank()) return environmentValue;
-    return properties.getProperty(property, fallback);
+    return environmentValue == null || environmentValue.isBlank() ? null : environmentValue;
   }
 
   private Properties loadProperties(String resourceName) throws IOException {
@@ -278,11 +287,14 @@ public final class AppConfigLoader {
     return value;
   }
 
-  private int requiredInt(Properties properties, String key) {
+  private int requiredInt(Properties properties, String property, String variable) {
+    return parseInt(requiredValue(properties, property, variable), property);
+  }
 
-    String value = requiredProperty(properties, key);
-
-    return parseInt(value, key);
+  /** Returns the environment override if set, otherwise the required property value. */
+  private String requiredValue(Properties properties, String property, String variable) {
+    String environmentValue = environmentValue(variable);
+    return environmentValue != null ? environmentValue : requiredProperty(properties, property);
   }
 
   private int parseInt(String value, String key) {
@@ -294,9 +306,11 @@ public final class AppConfigLoader {
     }
   }
 
-  private double requiredDouble(Properties properties, String key) {
+  private double requiredDouble(Properties properties, String property, String variable) {
+    return parseDouble(requiredValue(properties, property, variable), property);
+  }
 
-    String value = requiredProperty(properties, key);
+  private double parseDouble(String value, String key) {
 
     try {
       return Double.parseDouble(value);

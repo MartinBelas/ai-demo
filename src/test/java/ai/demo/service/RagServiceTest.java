@@ -17,7 +17,10 @@ import ai.demo.model.rag.RagSource;
 import ai.demo.persistence.InMemoryVectorStore;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class RagServiceTest {
@@ -70,7 +73,7 @@ class RagServiceTest {
   }
 
   @Test
-  void shouldCacheIndexingFailureWithoutRetryingDocumentLoad() {
+  void shouldCacheCorpusFailureWithoutRetryingDocumentLoad() {
     AtomicInteger documentLoads = new AtomicInteger();
     RagConfig config = config(20, 4000, 4000, 4000);
     RagService service =
@@ -86,6 +89,159 @@ class RagServiceTest {
     assertThrows(RagException.class, () -> service.retrieve("question"));
     assertThrows(RagException.class, () -> service.retrieve("question"));
     assertEquals(1, documentLoads.get());
+  }
+
+  @Test
+  void shouldNotRetryIndexingWithinEmbeddingRetryDelay() {
+    AtomicLong now = new AtomicLong();
+    AtomicInteger embedCalls = new AtomicInteger();
+    RagService service =
+        new RagService(
+            config(20, 4000, 4000, 4000),
+            text -> {
+              embedCalls.incrementAndGet();
+              throw new RagException("provider down");
+            },
+            new InMemoryVectorStore(),
+            () -> List.of(document("a.txt", "hello world")),
+            now::get);
+
+    assertThrows(RagException.class, () -> service.retrieve("question"));
+    int callsAfterFailure = embedCalls.get();
+    now.addAndGet(RagService.EMBEDDING_RETRY_DELAY_NANOS - 1);
+    assertThrows(RagException.class, () -> service.retrieve("question"));
+
+    assertEquals(callsAfterFailure, embedCalls.get());
+  }
+
+  @Test
+  void shouldNotTreatInterruptedIndexingAsProviderOutage() {
+    AtomicLong now = new AtomicLong();
+    AtomicBoolean blockEmbeddings = new AtomicBoolean(true);
+    RagService service =
+        new RagService(
+            config(20, 4000, 4000, 4000),
+            text -> {
+              if (blockEmbeddings.get()) {
+                try {
+                  new CountDownLatch(1).await();
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  throw new RagException("interrupted", e);
+                }
+              }
+              return unitEmbedding();
+            },
+            new InMemoryVectorStore(),
+            () -> List.of(document("a.txt", "hello world")),
+            now::get);
+
+    Thread.currentThread().interrupt();
+    boolean interruptPreserved;
+    try {
+      assertThrows(RagException.class, () -> service.retrieve("question"));
+    } finally {
+      // Reading the status also clears it, so the interrupt cannot leak into later calls or tests.
+      interruptPreserved = Thread.interrupted();
+    }
+    blockEmbeddings.set(false);
+
+    assertTrue(interruptPreserved, "the interrupt status must survive the failed indexing");
+    assertFalse(service.retrieve("question").isEmpty());
+  }
+
+  @Test
+  void shouldRetryIndexingAfterEmbeddingRetryDelay() {
+    AtomicLong now = new AtomicLong();
+    AtomicBoolean providerDown = new AtomicBoolean(true);
+    AtomicInteger documentLoads = new AtomicInteger();
+    RagService service =
+        new RagService(
+            config(20, 4000, 4000, 4000),
+            text -> {
+              if (providerDown.get()) throw new RagException("provider down");
+              return unitEmbedding();
+            },
+            new InMemoryVectorStore(),
+            () -> {
+              documentLoads.incrementAndGet();
+              return List.of(document("a.txt", "hello world"));
+            },
+            now::get);
+
+    assertThrows(RagException.class, () -> service.retrieve("question"));
+    providerDown.set(false);
+    now.addAndGet(RagService.EMBEDDING_RETRY_DELAY_NANOS);
+
+    assertFalse(service.retrieve("question").isEmpty());
+    assertEquals(1, documentLoads.get());
+  }
+
+  @Test
+  void shouldVerifyValidDocumentsWithoutCallingEmbeddingProvider() {
+    AtomicInteger embedCalls = new AtomicInteger();
+    RagService service =
+        new RagService(
+            config(20, 4000, 4000, 4000),
+            text -> {
+              embedCalls.incrementAndGet();
+              return unitEmbedding();
+            },
+            new InMemoryVectorStore(),
+            () -> List.of(document("a.txt", "hello world")));
+
+    service.verifyDocuments();
+
+    assertEquals(0, embedCalls.get());
+  }
+
+  @Test
+  void shouldReuseVerifiedDocumentsForFirstRetrieval() {
+    AtomicInteger documentLoads = new AtomicInteger();
+    RagService service =
+        new RagService(
+            config(20, 4000, 4000, 4000),
+            text -> unitEmbedding(),
+            new InMemoryVectorStore(),
+            () -> {
+              documentLoads.incrementAndGet();
+              return List.of(document("a.txt", "hello world"));
+            });
+
+    service.verifyDocuments();
+    service.retrieve("question");
+
+    assertEquals(1, documentLoads.get());
+  }
+
+  @Test
+  void shouldRejectInvalidDocumentsDuringVerification() {
+    RagService service =
+        new RagService(
+            config(4, 4000, 4000, 4000),
+            text -> unitEmbedding(),
+            new InMemoryVectorStore(),
+            () -> List.of(document("a.txt", "this text is longer than four bytes")));
+
+    assertThrows(RagException.class, service::verifyDocuments);
+  }
+
+  @Test
+  void shouldSkipDocumentVerificationWhenDisabled() {
+    AtomicInteger documentLoads = new AtomicInteger();
+    RagService service =
+        new RagService(
+            RagConfig.disabled(),
+            text -> unitEmbedding(),
+            new InMemoryVectorStore(),
+            () -> {
+              documentLoads.incrementAndGet();
+              return List.of();
+            });
+
+    service.verifyDocuments();
+
+    assertEquals(0, documentLoads.get());
   }
 
   @Test

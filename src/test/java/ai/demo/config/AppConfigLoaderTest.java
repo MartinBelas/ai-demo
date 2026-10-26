@@ -2,10 +2,12 @@ package ai.demo.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import ai.demo.exception.ConfigurationException;
+import ai.demo.persistence.BundledRagDocuments;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -128,6 +130,8 @@ class AppConfigLoaderTest {
                 switch (key) {
                   case "OLLAMA_MODEL" -> "qwen3:8b";
                   case "OLLAMA_BASE_URL" -> "http://ollama:11434";
+                  case "OLLAMA_CONTEXT_WINDOW" -> "8192";
+                  case "OLLAMA_REPEAT_PENALTY" -> "1.05";
                   default -> null;
                 });
 
@@ -135,6 +139,129 @@ class AppConfigLoaderTest {
 
     assertEquals("qwen3:8b", config.ollama().model());
     assertEquals("http://ollama:11434", config.ollama().baseUrl());
+    assertEquals(8192, config.ollama().contextWindow());
+    assertEquals(1.05, config.ollama().repeatPenalty());
+  }
+
+  @Test
+  void shouldOverrideGenerationSettingsFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "LLM_TEMPERATURE" -> "0.1";
+                  case "LLM_MAX_OUTPUT_TOKENS" -> "512";
+                  default -> null;
+                });
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
+
+    assertEquals(0.1, config.generation().temperature());
+    assertEquals(512, config.generation().maxOutputTokens());
+  }
+
+  @Test
+  void shouldRejectInvalidTemperatureFromEnvironment() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "LLM_TEMPERATURE".equals(key) ? "warm" : null);
+
+    assertThrows(
+        ConfigurationException.class,
+        () -> environmentLoader.loadFromResource("app-config/valid.properties"));
+  }
+
+  @Test
+  void shouldOverrideCloudProviderConnectionsFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "OPENAI_MODEL" -> "gpt-override";
+                  case "OPENAI_BASE_URL" -> "http://openai-proxy/v1";
+                  case "GROQ_MODEL" -> "groq-override";
+                  case "GROQ_BASE_URL" -> "http://groq-proxy/v1";
+                  case "GEMINI_MODEL" -> "gemini-override";
+                  case "GEMINI_BASE_URL" -> "http://gemini-proxy/v1beta";
+                  default -> null;
+                });
+
+    AppConfig config =
+        environmentLoader.loadFromResource("app-config/valid-all-providers.properties");
+
+    assertEquals("gpt-override", config.openAi().model());
+    assertEquals("http://openai-proxy/v1", config.openAi().baseUrl());
+    assertEquals("groq-override", config.groq().model());
+    assertEquals("http://groq-proxy/v1", config.groq().baseUrl());
+    assertEquals("gemini-override", config.gemini().model());
+    assertEquals("http://gemini-proxy/v1beta", config.gemini().baseUrl());
+  }
+
+  @Test
+  void shouldKeepProviderPropertiesWithoutEnvironmentOverrides() throws IOException {
+    AppConfig config = loader.loadFromResource("app-config/valid-all-providers.properties");
+
+    assertEquals("openai-test-model", config.openAi().model());
+    assertEquals("groq-test-model", config.groq().model());
+    assertEquals("gemini-test-model", config.gemini().model());
+  }
+
+  @Test
+  void shouldRejectOllamaEmbeddingWhenOllamaIsDisabled() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "OLLAMA_ENABLED" -> "false";
+                  case "RAG_ENABLED" -> "true";
+                  default -> null;
+                });
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> environmentLoader.loadFromResource("app-config/valid-openai.properties"));
+    assertTrue(exception.getMessage().contains("RAG embedding provider OLLAMA"));
+  }
+
+  @Test
+  void shouldAllowCloudEmbeddingWhenOllamaIsDisabled() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(
+            key ->
+                switch (key) {
+                  case "OLLAMA_ENABLED" -> "false";
+                  case "RAG_ENABLED" -> "true";
+                  case "RAG_EMBEDDING_PROVIDER" -> "OPENAI";
+                  case "RAG_EMBEDDING_BASE_URL" -> "https://api.openai.com/v1";
+                  case "RAG_EMBEDDING_MODEL" -> "text-embedding-3-small";
+                  case "RAG_EMBEDDING_API_KEY_ENV" -> "OPENAI_API_KEY";
+                  default -> null;
+                });
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid-openai.properties");
+
+    assertTrue(config.rag().enabled());
+    assertEquals(EmbeddingProvider.OPENAI, config.rag().provider());
+  }
+
+  @Test
+  void shouldAllowOllamaEmbeddingWhenRagIsDisabled() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "OLLAMA_ENABLED".equals(key) ? "false" : null);
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid-openai.properties");
+
+    assertFalse(config.rag().enabled());
+  }
+
+  @Test
+  void shouldNotConfigureProviderFromEnvironmentModelAlone() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "GROQ_MODEL".equals(key) ? "groq-override" : null);
+
+    AppConfig config = environmentLoader.loadFromResource("app-config/valid.properties");
+
+    assertNull(config.groq());
   }
 
   @Test
@@ -245,5 +372,35 @@ class AppConfigLoaderTest {
   void shouldFailForInvalidNumericProperty(String resource, String propertyName) {
 
     assertThrows(ConfigurationException.class, () -> loader.loadFromResource(resource));
+  }
+
+  @Test
+  void shouldNameTheRagMinimumScorePropertyWhenEnvironmentValueIsInvalid() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "RAG_MINIMUM_SCORE".equals(key) ? "high" : null);
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> environmentLoader.loadFromResource("app-config/valid.properties"));
+    assertTrue(exception.getMessage().contains("rag.minimum-score"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"LLM_TEMPERATURE,NaN", "LLM_TEMPERATURE,Infinity", "OLLAMA_REPEAT_PENALTY,NaN"})
+  void shouldRejectNonFiniteNumbersFromEnvironment(String variable, String value) {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> variable.equals(key) ? value : null);
+
+    assertThrows(
+        ConfigurationException.class,
+        () -> environmentLoader.loadFromResource("app-config/valid.properties"));
+  }
+
+  @Test
+  void shouldShipBundledRagDocumentsThatFitTheShippedLimits() throws IOException {
+    AppConfig config = loader.loadFromResource("application.properties");
+
+    assertFalse(new BundledRagDocuments(config.rag()).load().isEmpty());
   }
 }

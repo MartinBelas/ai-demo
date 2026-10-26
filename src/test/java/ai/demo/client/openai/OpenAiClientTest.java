@@ -10,9 +10,9 @@ import static org.mockito.Mockito.when;
 
 import ai.demo.client.http.HttpTransport;
 import ai.demo.config.AppConfig;
-import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.OpenAiConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
@@ -25,7 +25,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -53,13 +52,11 @@ class OpenAiClientTest {
   }
 
   private AppConfig openAiConfig(boolean temperatureSupported) {
-    return new AppConfig(
-        LlmProvider.OPENAI,
-        new GenerationConfig(0.4, 300, "Be helpful."),
-        null,
-        new OpenAiConfig(
-            "test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", temperatureSupported),
-        Path.of("conversation.json"));
+    return TestAppConfig.builder(LlmProvider.OPENAI)
+        .openAi(
+            new OpenAiConfig(
+                "test-model", "https://api.openai.com/v1", "OPENAI_API_KEY", temperatureSupported))
+        .build();
   }
 
   @Test

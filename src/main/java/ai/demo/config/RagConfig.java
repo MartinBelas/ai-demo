@@ -1,6 +1,5 @@
 package ai.demo.config;
 
-import ai.demo.exception.ConfigurationException;
 import java.net.URI;
 
 /**
@@ -23,15 +22,16 @@ public record RagConfig(
     int maxChunks,
     double minimumScore) {
   public RagConfig {
-    if (provider == null) throw new ConfigurationException("RAG embedding provider is required");
-    if (model == null || model.isBlank()) throw new ConfigurationException("RAG model is required");
+    if (provider == null) throw new IllegalArgumentException("RAG embedding provider is required");
+    if (model == null || model.isBlank())
+      throw new IllegalArgumentException("RAG model is required");
     if (provider != EmbeddingProvider.OLLAMA
         && (apiKeyEnvironmentVariable == null || apiKeyEnvironmentVariable.isBlank())) {
-      throw new ConfigurationException(
+      throw new IllegalArgumentException(
           "RAG embedding API key environment variable is required for provider " + provider);
     }
     if (!isValidBaseUrl(baseUrl)) {
-      throw new ConfigurationException("Invalid RAG embedding base URL");
+      throw new IllegalArgumentException("Invalid RAG embedding base URL");
     }
     if (maxDocumentBytes < 1
         || maxDocuments < 1
@@ -43,7 +43,7 @@ public record RagConfig(
         || !Double.isFinite(minimumScore)
         || minimumScore < -1
         || minimumScore > 1) {
-      throw new ConfigurationException("Invalid RAG size or similarity limits");
+      throw new IllegalArgumentException("Invalid RAG size or similarity limits");
     }
   }
 

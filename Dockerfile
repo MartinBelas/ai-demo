@@ -11,7 +11,10 @@ COPY pom.xml ./
 RUN mvn -B -DskipTests dependency:go-offline
 COPY src/ src/
 COPY --from=frontend /workspace/frontend/dist/ frontend/dist/
-RUN mvn -B -DskipTests package org.apache.maven.plugins:maven-dependency-plugin:3.7.0:copy-dependencies -DoutputDirectory=target/lib -DincludeScope=runtime
+RUN mvn -B -DskipTests package \
+    org.apache.maven.plugins:maven-dependency-plugin:3.7.0:copy-dependencies \
+    -DoutputDirectory=target/lib \
+    -DincludeScope=runtime
 
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S app && adduser -S -G app app
@@ -19,8 +22,11 @@ WORKDIR /app
 COPY --from=build /workspace/target/ai-demo-1.0-SNAPSHOT.jar /app/ai-demo.jar
 COPY --from=build /workspace/target/lib/ /app/lib/
 USER app
+# The image has no Ollama, so RAG (Ollama embeddings by default) stays off unless a cloud
+# embedding provider is configured; startup rejects RAG with Ollama embeddings while Ollama is off.
 ENV APP_INTERFACE=http \
     PORT=8080 \
-    OLLAMA_ENABLED=false
+    OLLAMA_ENABLED=false \
+    RAG_ENABLED=false
 EXPOSE 8080
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/ai-demo.jar"]

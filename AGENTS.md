@@ -304,6 +304,10 @@ Application components
 
 Configuration validation belongs inside configuration classes.
 
+Configuration records reject invalid values with `IllegalArgumentException`. `AppConfigLoader` is
+the single place that converts it into `ConfigurationException`, so loading invalid configuration
+always ends in `ConfigurationException`.
+
 Invalid configuration should result in:
 
 ```text

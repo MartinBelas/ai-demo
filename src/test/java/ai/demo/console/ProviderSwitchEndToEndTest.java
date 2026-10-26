@@ -14,11 +14,10 @@ import ai.demo.client.LlmResponse;
 import ai.demo.client.StreamingResult;
 import ai.demo.client.SwitchableLlmClient;
 import ai.demo.client.TokenUsage;
-import ai.demo.config.AppConfig;
-import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.OllamaConfig;
 import ai.demo.config.OpenAiConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.console.command.CommandRegistry;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.model.chat.ChatChunk;
@@ -64,12 +63,13 @@ class ProviderSwitchEndToEndTest {
     Path conversationFile = tempDir.resolve("conversation.json");
     var repository = new FileConversationRepository(conversationFile, new ObjectMapper());
     var config =
-        new AppConfig(
-            LlmProvider.OLLAMA,
-            new GenerationConfig(0.4, 300, "Be helpful."),
-            new OllamaConfig("ollama-model", "http://localhost:11434", 4096, 1.18),
-            new OpenAiConfig("openai-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true),
-            conversationFile);
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .ollama(new OllamaConfig("ollama-model", "http://localhost:11434", 4096, 1.18))
+            .openAi(
+                new OpenAiConfig(
+                    "openai-model", "https://api.openai.com/v1", "OPENAI_API_KEY", true))
+            .conversationFile(conversationFile)
+            .build();
     var dispatcher = new ConsoleCommandDispatcher(new CommandRegistry(switchable).commands());
     InputStream originalIn = System.in;
     PrintStream originalOut = System.out;

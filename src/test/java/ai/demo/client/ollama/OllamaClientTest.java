@@ -15,6 +15,7 @@ import ai.demo.config.AppConfig;
 import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
 import ai.demo.config.OllamaConfig;
+import ai.demo.config.TestAppConfig;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
@@ -29,7 +30,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,12 +47,10 @@ class OllamaClientTest {
   void setUp() {
 
     AppConfig config =
-        new AppConfig(
-            LlmProvider.OLLAMA,
-            new GenerationConfig(0.7, 100, "Be helpful."),
-            new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.2),
-            null,
-            Path.of("conversation.json"));
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .generation(new GenerationConfig(0.7, 100, "Be helpful."))
+            .ollama(new OllamaConfig("qwen3:4b", "http://localhost:11434", 4096, 1.2))
+            .build();
 
     httpTransport = mock(HttpTransport.class);
 

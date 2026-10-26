@@ -9,10 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ai.demo.client.http.HttpTransport;
-import ai.demo.config.AppConfig;
 import ai.demo.config.GeminiConfig;
-import ai.demo.config.GenerationConfig;
 import ai.demo.config.LlmProvider;
+import ai.demo.config.TestAppConfig;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -24,7 +23,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -43,17 +41,13 @@ class GeminiClientTest {
   void setUp() {
     transport = mock(HttpTransport.class);
     var config =
-        new AppConfig(
-            LlmProvider.GEMINI,
-            new GenerationConfig(0.4, 300, "Be helpful."),
-            null,
-            null,
-            null,
-            new GeminiConfig(
-                "gemini-test",
-                "https://generativelanguage.googleapis.com/v1beta",
-                "GEMINI_API_KEY"),
-            Path.of("conversation.json"));
+        TestAppConfig.builder(LlmProvider.GEMINI)
+            .gemini(
+                new GeminiConfig(
+                    "gemini-test",
+                    "https://generativelanguage.googleapis.com/v1beta",
+                    "GEMINI_API_KEY"))
+            .build();
     client = new GeminiClient(config, "secret", transport, new ObjectMapper());
   }
 
