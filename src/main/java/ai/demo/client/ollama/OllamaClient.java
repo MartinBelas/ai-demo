@@ -11,12 +11,14 @@ import ai.demo.client.ollama.dto.OllamaRequest;
 import ai.demo.client.ollama.dto.OllamaResponse;
 import ai.demo.config.AppConfig;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.LlmErrorCategory;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Role;
 import ai.demo.model.prompt.Prompt;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -25,6 +27,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -33,6 +36,8 @@ import org.slf4j.LoggerFactory;
 public class OllamaClient implements LlmClient {
 
   private static final String CHAT_ENDPOINT = "/api/chat";
+  private static final int MAX_ERROR_BODY_BYTES = 8192;
+  private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
 
   private static final Logger log = LoggerFactory.getLogger(OllamaClient.class);
 
@@ -63,7 +68,7 @@ public class OllamaClient implements LlmClient {
           httpTransport.sendStreaming(createHttpRequest(ollamaRequest));
 
       if (response.statusCode() != 200) {
-        throw new LlmCommunicationException("Ollama returned HTTP status " + response.statusCode());
+        throw httpError(response.statusCode(), readErrorBody(response.body()));
       }
 
       return readStreamingResponse(response.body(), consumer);
@@ -83,7 +88,8 @@ public class OllamaClient implements LlmClient {
     Integer evalCount = null;
     String model = null;
 
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(responseBody))) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(responseBody, StandardCharsets.UTF_8))) {
       String line;
 
       while ((line = reader.readLine()) != null) {
@@ -148,8 +154,7 @@ public class OllamaClient implements LlmClient {
       HttpResponse<String> httpResponse = httpTransport.send(httpRequest);
 
       if (httpResponse.statusCode() != 200) {
-        throw new LlmCommunicationException(
-            "Ollama returned HTTP status " + httpResponse.statusCode());
+        throw httpError(httpResponse.statusCode(), httpResponse.body());
       }
 
       return objectMapper.readValue(httpResponse.body(), OllamaResponse.class);
@@ -161,6 +166,55 @@ public class OllamaClient implements LlmClient {
       Thread.currentThread().interrupt();
 
       throw new LlmCommunicationException("Communication with Ollama was interrupted", e);
+    }
+  }
+
+  private LlmCommunicationException httpError(int statusCode, String body) {
+    return new LlmCommunicationException(
+        "Ollama returned HTTP status " + statusCode + ": " + extractErrorMessage(body),
+        LlmErrorCategory.fromHttpStatus(statusCode));
+  }
+
+  /**
+   * Ollama reports errors as {@code {"error": "..."}}; other bodies are returned as they are. The
+   * result is truncated so an unexpected payload (e.g. a proxy's HTML page) cannot flood the logs.
+   */
+  private String extractErrorMessage(String body) {
+    if (body == null) {
+      return "response body could not be read";
+    }
+    if (body.isBlank()) {
+      return "no response body";
+    }
+    return truncate(errorMessageOrBody(body));
+  }
+
+  private String errorMessageOrBody(String body) {
+    try {
+      JsonNode error = objectMapper.readTree(body).path("error");
+      if (error.isTextual()) {
+        return error.asText();
+      }
+      JsonNode nestedMessage = error.path("message");
+      return nestedMessage.isTextual() ? nestedMessage.asText() : body;
+    } catch (JsonProcessingException e) {
+      return body;
+    }
+  }
+
+  private static String truncate(String message) {
+    return message.length() <= MAX_ERROR_MESSAGE_LENGTH
+        ? message
+        : message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + "...";
+  }
+
+  /** Reads at most {@link #MAX_ERROR_BODY_BYTES} of the body and always closes it. */
+  private String readErrorBody(InputStream body) {
+    try (body) {
+      return new String(body.readNBytes(MAX_ERROR_BODY_BYTES), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      log.warn("Failed to read Ollama error response body", e);
+      return null;
     }
   }
 

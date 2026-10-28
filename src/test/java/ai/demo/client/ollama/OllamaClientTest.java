@@ -17,6 +17,7 @@ import ai.demo.config.LlmProvider;
 import ai.demo.config.OllamaConfig;
 import ai.demo.config.TestAppConfig;
 import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.LlmErrorCategory;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
@@ -28,12 +29,17 @@ import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.LoggerFactory;
 
 class OllamaClientTest {
@@ -71,7 +77,7 @@ class OllamaClientTest {
     ByteArrayInputStream inputStream =
         new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
 
-    HttpResponse<java.io.InputStream> httpResponse = mock();
+    HttpResponse<InputStream> httpResponse = mock();
 
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body()).thenReturn(inputStream);
@@ -98,8 +104,8 @@ class OllamaClientTest {
       assertEquals(3, chunks.size());
 
       assertEquals("Let me think...", chunks.getFirst().content());
-      assertEquals(ChatChunkType.THINKING, chunks.get(0).type());
-      assertFalse(chunks.get(0).finished());
+      assertEquals(ChatChunkType.THINKING, chunks.getFirst().type());
+      assertFalse(chunks.getFirst().finished());
 
       assertEquals("Hel", chunks.get(1).content());
       assertEquals(ChatChunkType.CONTENT, chunks.get(1).type());
@@ -138,7 +144,7 @@ class OllamaClientTest {
     ByteArrayInputStream inputStream =
         new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
 
-    HttpResponse<java.io.InputStream> httpResponse = mock();
+    HttpResponse<InputStream> httpResponse = mock();
 
     when(httpResponse.statusCode()).thenReturn(200);
     when(httpResponse.body()).thenReturn(inputStream);
@@ -153,8 +159,8 @@ class OllamaClientTest {
     assertEquals(2, chunks.size());
 
     assertEquals("Thinking...", chunks.getFirst().content());
-    assertEquals(ChatChunkType.THINKING, chunks.get(0).type());
-    assertFalse(chunks.get(0).finished());
+    assertEquals(ChatChunkType.THINKING, chunks.getFirst().type());
+    assertFalse(chunks.getFirst().finished());
 
     assertEquals("Answer", chunks.get(1).content());
     assertEquals(ChatChunkType.CONTENT, chunks.get(1).type());
@@ -235,6 +241,131 @@ class OllamaClientTest {
     assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
   }
 
+  static Stream<Arguments> chatErrorBodies() {
+    return Stream.of(
+        Arguments.of(
+            404,
+            "{\"error\":\"model 'qwen3:4b' not found\"}",
+            "Ollama returned HTTP status 404: model 'qwen3:4b' not found"),
+        Arguments.of(
+            500,
+            "{\"error\":{\"message\":\"boom\",\"code\":1}}",
+            "Ollama returned HTTP status 500: boom"),
+        Arguments.of(
+            500,
+            "{\"error\":{\"code\":1}}",
+            "Ollama returned HTTP status 500: {\"error\":{\"code\":1}}"),
+        Arguments.of(502, "Bad Gateway", "Ollama returned HTTP status 502: Bad Gateway"),
+        Arguments.of(
+            502, "x".repeat(2000), "Ollama returned HTTP status 502: " + "x".repeat(500) + "..."));
+  }
+
+  @ParameterizedTest
+  @MethodSource("chatErrorBodies")
+  void shouldReportOllamaErrorBodyWhenChatFails(int statusCode, String body, String expected)
+      throws IOException, InterruptedException {
+    stubChatError(statusCode, body);
+
+    assertEquals(expected, chatFailureMessage());
+  }
+
+  @Test
+  void shouldCloseStreamingBodyAndReportErrorWhenOllamaReturnsHttpError()
+      throws IOException, InterruptedException {
+    TrackingInputStream body = new TrackingInputStream("{\"error\":\"server overloaded\"}");
+    HttpResponse<InputStream> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(503);
+    when(httpResponse.body()).thenReturn(body);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    Prompt prompt = createPrompt();
+
+    LlmCommunicationException exception =
+        assertThrows(
+            LlmCommunicationException.class, () -> ollamaClient.stream(prompt, chunk -> {}));
+
+    assertEquals("Ollama returned HTTP status 503: server overloaded", exception.getMessage());
+    assertTrue(body.closed, "error response body must be closed to release the connection");
+  }
+
+  @Test
+  void shouldCategorizeOllamaRateLimit() throws IOException, InterruptedException {
+    HttpResponse<InputStream> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(429);
+    when(httpResponse.body()).thenReturn(new ByteArrayInputStream(new byte[0]));
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    Prompt prompt = createPrompt();
+
+    LlmCommunicationException exception =
+        assertThrows(
+            LlmCommunicationException.class, () -> ollamaClient.stream(prompt, chunk -> {}));
+
+    assertEquals(LlmErrorCategory.RATE_LIMIT, exception.category());
+    assertEquals("Ollama returned HTTP status 429: no response body", exception.getMessage());
+  }
+
+  @Test
+  void shouldCloseStreamingBodyAfterSuccessfulStream() throws IOException, InterruptedException {
+    TrackingInputStream body =
+        new TrackingInputStream(
+            "{\"model\":\"qwen3:4b\",\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},"
+                + "\"done\":true}\n");
+    HttpResponse<InputStream> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body()).thenReturn(body);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+
+    ollamaClient.stream(createPrompt(), chunk -> {});
+
+    assertTrue(body.closed);
+  }
+
+  @Test
+  void shouldCategorizeOllamaAuthenticationFailure() throws IOException, InterruptedException {
+    stubChatError(401, "{\"error\":\"unauthorized\"}");
+
+    Prompt prompt = createPrompt();
+
+    LlmCommunicationException exception =
+        assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt));
+
+    assertEquals(LlmErrorCategory.AUTHENTICATION, exception.category());
+  }
+
+  @Test
+  void shouldReportUnreadableErrorBodyAndCloseIt() throws IOException, InterruptedException {
+    FailingInputStream body = new FailingInputStream();
+    HttpResponse<InputStream> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(503);
+    when(httpResponse.body()).thenReturn(body);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    Prompt prompt = createPrompt();
+
+    LlmCommunicationException exception =
+        assertThrows(
+            LlmCommunicationException.class, () -> ollamaClient.stream(prompt, chunk -> {}));
+
+    assertEquals(
+        "Ollama returned HTTP status 503: response body could not be read", exception.getMessage());
+    assertTrue(body.closed);
+  }
+
+  @Test
+  void shouldDecodeStreamedContentAsUtf8() throws IOException, InterruptedException {
+    TrackingInputStream body =
+        new TrackingInputStream(
+            "{\"model\":\"qwen3:4b\",\"message\":{\"role\":\"assistant\",\"content\":\"Příliš"
+                + " žluťoučký kůň\"},\"done\":true}\n");
+    HttpResponse<InputStream> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(200);
+    when(httpResponse.body()).thenReturn(body);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    List<ChatChunk> chunks = new ArrayList<>();
+
+    ollamaClient.stream(createPrompt(), chunks::add);
+
+    assertEquals("Příliš žluťoučký kůň", chunks.getFirst().content());
+  }
+
   @Test
   void shouldThrowExceptionWhenCommunicationFails() throws IOException, InterruptedException {
 
@@ -265,7 +396,48 @@ class OllamaClientTest {
     assertEquals("Failed to communicate with Ollama", exception.getMessage());
   }
 
+  private void stubChatError(int statusCode, String body) throws IOException, InterruptedException {
+    HttpResponse<String> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(statusCode);
+    when(httpResponse.body()).thenReturn(body);
+    when(httpTransport.send(any())).thenReturn(httpResponse);
+  }
+
+  private String chatFailureMessage() {
+    Prompt prompt = createPrompt();
+    return assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt))
+        .getMessage();
+  }
+
   private static Prompt createPrompt() {
     return new Prompt(List.of(ChatMessage.user("Hi")));
+  }
+
+  private static final class TrackingInputStream extends ByteArrayInputStream {
+    private boolean closed;
+
+    private TrackingInputStream(String content) {
+      super(content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public void close() throws IOException {
+      closed = true;
+      super.close();
+    }
+  }
+
+  private static final class FailingInputStream extends InputStream {
+    private boolean closed;
+
+    @Override
+    public int read() throws IOException {
+      throw new IOException("connection reset");
+    }
+
+    @Override
+    public void close() {
+      closed = true;
+    }
   }
 }

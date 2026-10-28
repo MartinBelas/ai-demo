@@ -88,7 +88,8 @@ public final class GeminiClient implements LlmClient {
   private StreamingResult readStream(InputStream body, Consumer<ChatChunk> consumer)
       throws IOException {
     TokenUsage tokenUsage = new TokenUsage(0, 0);
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(body))) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.startsWith("data:")) {
@@ -219,7 +220,7 @@ public final class GeminiClient implements LlmClient {
         // Body isn't a parseable Gemini error payload; fall back to status-based categorization.
       }
     }
-    return categorizeStatus(statusCode);
+    return LlmErrorCategory.fromHttpStatus(statusCode);
   }
 
   private LlmErrorCategory categorize(String status, String message) {
@@ -240,12 +241,6 @@ public final class GeminiClient implements LlmClient {
       }
       return LlmErrorCategory.RATE_LIMIT;
     }
-    return LlmErrorCategory.OTHER;
-  }
-
-  private LlmErrorCategory categorizeStatus(int statusCode) {
-    if (statusCode == 429) return LlmErrorCategory.RATE_LIMIT;
-    if (statusCode == 401 || statusCode == 403) return LlmErrorCategory.AUTHENTICATION;
     return LlmErrorCategory.OTHER;
   }
 }

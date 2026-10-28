@@ -48,17 +48,16 @@ public final class OpenAiClient implements LlmClient {
 
   public OpenAiClient(
       AppConfig config, String apiKey, HttpTransport transport, ObjectMapper objectMapper) {
-    this.providerName = "OpenAI";
-    this.model = config.openAi().model();
-    this.baseUrl = config.openAi().baseUrl();
-    this.generation = config.generation();
-    this.temperatureSupported = config.openAi().temperatureSupported();
-    if (apiKey == null || apiKey.isBlank()) {
-      throw new IllegalArgumentException("OpenAI API key must not be blank");
-    }
-    this.apiKey = apiKey;
-    this.transport = transport;
-    this.objectMapper = objectMapper;
+    this(
+        new OpenAiCompatibleSettings(
+            "OpenAI",
+            config.openAi().model(),
+            config.openAi().baseUrl(),
+            config.openAi().temperatureSupported()),
+        config.generation(),
+        apiKey,
+        transport,
+        objectMapper);
   }
 
   public OpenAiClient(
@@ -119,7 +118,8 @@ public final class OpenAiClient implements LlmClient {
       throws IOException {
     String responseModel = model;
     TokenUsage usage = new TokenUsage(0, 0);
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(body))) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.startsWith("data:")) {
@@ -279,9 +279,9 @@ public final class OpenAiClient implements LlmClient {
   }
 
   private LlmErrorCategory categorizeStatus(int statusCode) {
-    if (statusCode == 429) return LlmErrorCategory.RATE_LIMIT;
-    if (statusCode == 401 || statusCode == 403) return LlmErrorCategory.AUTHENTICATION;
-    if (statusCode == 402) return LlmErrorCategory.QUOTA_EXHAUSTED;
-    return LlmErrorCategory.OTHER;
+    if (statusCode == 402) {
+      return LlmErrorCategory.QUOTA_EXHAUSTED;
+    }
+    return LlmErrorCategory.fromHttpStatus(statusCode);
   }
 }
