@@ -7,12 +7,13 @@ import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import ai.demo.model.chat.Role;
 import ai.demo.model.rag.RagSource;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RagPromptComposerTest {
 
-  private final RagPromptComposer composer = new RagPromptComposer();
+  private final RagPromptComposer composer = new RagPromptComposer(new ObjectMapper());
 
   @Test
   void shouldInsertSystemInstructionWithSourcesBeforeQuestion() {
@@ -35,7 +36,7 @@ class RagPromptComposerTest {
     assertTrue(instructions.content().contains("The calculator tool evaluates arithmetic."));
     assertTrue(instructions.content().contains("agents.md:3"));
 
-    assertEquals("Hi", composed.messages().get(0).content());
+    assertEquals("Hi", composed.messages().getFirst().content());
     assertEquals("Hello", composed.messages().get(1).content());
   }
 

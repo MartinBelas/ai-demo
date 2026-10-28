@@ -37,6 +37,7 @@ import ai.demo.persistence.ConversationRepository;
 import ai.demo.persistence.FileConversationRepository;
 import ai.demo.persistence.InMemoryVectorStore;
 import ai.demo.prompt.PromptComposer;
+import ai.demo.prompt.RagPromptComposer;
 import ai.demo.prompt.template.PromptTemplateLoader;
 import ai.demo.prompt.template.PromptTemplateRenderer;
 import ai.demo.prompt.template.PromptTemplateType;
@@ -223,13 +224,15 @@ public class App {
       AppConfig config, LlmClientFactory clientFactory, ObjectMapper objectMapper, RagService rag) {
     ConcurrentMap<LlmProvider, ChatService> services = new ConcurrentHashMap<>();
     PromptComposer promptComposer = createAgentPromptComposer(config);
+    RagPromptComposer ragPromptComposer = new RagPromptComposer(objectMapper);
     return provider ->
         services.computeIfAbsent(
             provider,
             selectedProvider -> {
               LlmClient client =
                   new LoggingLlmClient(clientFactory.create(config, selectedProvider));
-              return new ChatService(createAgent(client, promptComposer, objectMapper), rag);
+              return new ChatService(
+                  createAgent(client, promptComposer, objectMapper), rag, ragPromptComposer);
             });
   }
 

@@ -34,6 +34,10 @@ import java.util.function.Consumer;
 public final class GeminiClient implements LlmClient {
 
   private static final String PARTS_FIELD = "parts";
+  private static final String TEXT_FIELD = "text";
+  private static final String ROLE_FIELD = "role";
+  private static final String USER_ROLE = "user";
+  private static final String MODEL_ROLE = "model";
 
   private final AppConfig config;
   private final String apiKey;
@@ -115,7 +119,7 @@ public final class GeminiClient implements LlmClient {
                     .path(PARTS_FIELD)
                     .forEach(
                         part -> {
-                          String value = part.path("text").asText();
+                          String value = part.path(TEXT_FIELD).asText();
                           if (!value.isBlank()) {
                             ChatChunkType type =
                                 part.path("thought").asBoolean(false)
@@ -138,8 +142,8 @@ public final class GeminiClient implements LlmClient {
                     .forEach(
                         part -> {
                           if (!part.path("thought").asBoolean(false)
-                              && !part.path("text").asText().isBlank()) {
-                            parts.add(part.path("text").asText());
+                              && !part.path(TEXT_FIELD).asText().isBlank()) {
+                            parts.add(part.path(TEXT_FIELD).asText());
                           }
                         }));
     if (parts.isEmpty()) {
@@ -169,28 +173,77 @@ public final class GeminiClient implements LlmClient {
   private ObjectNode body(Prompt prompt) {
     ObjectNode request = objectMapper.createObjectNode();
     ArrayNode contents = request.putArray("contents");
-    ArrayNode systemParts = null;
-    for (ChatMessage message : prompt.messages()) {
-      if (message.role() == Role.SYSTEM) {
-        // Gemini has a single systemInstruction; multiple system messages become extra parts
-        // in it instead of each overwriting the previous one.
-        if (systemParts == null) {
-          systemParts = request.putObject("systemInstruction").putArray(PARTS_FIELD);
-        }
-        systemParts.addObject().put("text", message.content());
-      } else {
-        ObjectNode content = contents.addObject();
-        content.put("role", message.role() == Role.ASSISTANT ? "model" : "user");
-        String text =
-            message.role() == Role.TOOL ? "Tool result:\n" + message.content() : message.content();
-        content.putArray(PARTS_FIELD).addObject().put("text", text);
-      }
-    }
+    List<ChatMessage> messages = prompt.messages();
+    int conversationStart = firstNonSystemIndex(messages);
+    addSystemInstruction(request, messages.subList(0, conversationStart));
+    addContents(contents, messages.subList(conversationStart, messages.size()));
     request
         .putObject("generationConfig")
         .put("temperature", config.generation().temperature())
         .put("maxOutputTokens", config.generation().maxOutputTokens());
     return request;
+  }
+
+  private static int firstNonSystemIndex(List<ChatMessage> messages) {
+    int index = 0;
+    while (index < messages.size() && messages.get(index).role() == Role.SYSTEM) {
+      index++;
+    }
+    return index;
+  }
+
+  /**
+   * Gemini has a single systemInstruction: every system message before the first conversation
+   * message (including RAG sources on the first turn) becomes a part of it.
+   */
+  private static void addSystemInstruction(ObjectNode request, List<ChatMessage> systemMessages) {
+    if (systemMessages.isEmpty()) {
+      return;
+    }
+    ArrayNode parts = request.putObject("systemInstruction").putArray(PARTS_FIELD);
+    systemMessages.forEach(message -> parts.addObject().put(TEXT_FIELD, message.content()));
+  }
+
+  /**
+   * A system message inside the conversation (e.g. RAG sources on a later turn) cannot go into the
+   * systemInstruction without moving away from its question, so it is kept in place as the first
+   * part of the next user turn. System messages with no user turn after them are appended to the
+   * last user turn, or form a user turn of their own when the conversation ends with the model.
+   */
+  private static void addContents(ArrayNode contents, List<ChatMessage> messages) {
+    List<String> pendingSystemTexts = new ArrayList<>();
+    for (ChatMessage message : messages) {
+      if (message.role() == Role.SYSTEM) {
+        pendingSystemTexts.add(message.content());
+      } else if (message.role() == Role.ASSISTANT) {
+        addContent(contents, MODEL_ROLE, List.of(message.content()));
+      } else {
+        List<String> texts = new ArrayList<>(pendingSystemTexts);
+        pendingSystemTexts.clear();
+        texts.add(
+            message.role() == Role.TOOL ? "Tool result:\n" + message.content() : message.content());
+        addContent(contents, USER_ROLE, texts);
+      }
+    }
+    if (!pendingSystemTexts.isEmpty()) {
+      appendToLastUserContent(contents, pendingSystemTexts);
+    }
+  }
+
+  private static void appendToLastUserContent(ArrayNode contents, List<String> texts) {
+    JsonNode last = contents.path(contents.size() - 1);
+    if (USER_ROLE.equals(last.path(ROLE_FIELD).asText())) {
+      ArrayNode parts = (ArrayNode) last.get(PARTS_FIELD);
+      texts.forEach(text -> parts.addObject().put(TEXT_FIELD, text));
+    } else {
+      addContent(contents, USER_ROLE, texts);
+    }
+  }
+
+  private static void addContent(ArrayNode contents, String role, List<String> texts) {
+    ObjectNode content = contents.addObject().put(ROLE_FIELD, role);
+    ArrayNode parts = content.putArray(PARTS_FIELD);
+    texts.forEach(text -> parts.addObject().put(TEXT_FIELD, text));
   }
 
   private void requireSuccess(int statusCode, String body) {

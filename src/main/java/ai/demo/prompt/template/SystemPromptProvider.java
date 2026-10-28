@@ -23,10 +23,6 @@ public class SystemPromptProvider {
     }
   }
 
-  public String getSystemPrompt() {
-    return getSystemPrompt(Map.of());
-  }
-
   public String getSystemPrompt(Map<String, String> variables) {
     return renderer.render(template, variables);
   }

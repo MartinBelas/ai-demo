@@ -8,13 +8,18 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Inserts retrieved evidence as a system instruction ahead of the user's question, leaving the
  * question itself and the rest of the conversation untouched.
  */
 public final class RagPromptComposer {
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper;
+
+  public RagPromptComposer(ObjectMapper mapper) {
+    this.mapper = Objects.requireNonNull(mapper);
+  }
 
   public Conversation compose(Conversation original, List<RagSource> sources) {
     var messages = new ArrayList<>(original.messages());

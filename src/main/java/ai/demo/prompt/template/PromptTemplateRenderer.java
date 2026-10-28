@@ -1,12 +1,18 @@
 package ai.demo.prompt.template;
 
+import ai.demo.exception.PromptTemplateException;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/**
+ * Replaces {@code {{name}}} placeholders in a single pass: substituted values are never scanned
+ * again, so a value containing {@code {{tools}}} stays literal. Every placeholder must have a
+ * value, otherwise rendering fails instead of sending the raw placeholder to the model.
+ */
 public class PromptTemplateRenderer {
 
-  public String render(PromptTemplate template) {
-    return render(template, Map.of());
-  }
+  private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{([^{}]*)}}");
 
   public String render(PromptTemplate template, Map<String, String> variables) {
 
@@ -18,12 +24,17 @@ public class PromptTemplateRenderer {
       throw new IllegalArgumentException("variables must not be null");
     }
 
-    String result = template.text();
-
-    for (Map.Entry<String, String> variable : variables.entrySet()) {
-      result = result.replace("{{" + variable.getKey() + "}}", variable.getValue());
+    Matcher matcher = PLACEHOLDER.matcher(template.text());
+    StringBuilder result = new StringBuilder();
+    while (matcher.find()) {
+      String name = matcher.group(1);
+      String value = variables.get(name);
+      if (value == null) {
+        throw new PromptTemplateException("Prompt template variable '" + name + "' has no value");
+      }
+      matcher.appendReplacement(result, Matcher.quoteReplacement(value));
     }
-
-    return result;
+    matcher.appendTail(result);
+    return result.toString();
   }
 }

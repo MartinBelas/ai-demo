@@ -12,9 +12,7 @@ public class PromptTemplateLoader {
   public PromptTemplate load(PromptTemplateType templateType) throws IOException {
 
     if (templateType == null) {
-      // Keep behavior expected by tests: translate null into missing template
-      throw new ai.demo.exception.ConfigurationException(
-          "Prompt template 'prompts/missing.md' not found");
+      throw new IllegalArgumentException("templateType must not be null");
     }
 
     return loadFromResource(TEMPLATE_DIRECTORY + templateType.getTemplateName());

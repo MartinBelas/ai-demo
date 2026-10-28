@@ -5,6 +5,7 @@ import ai.demo.agent.AgentEvent;
 import ai.demo.agent.AgentResult;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
+import ai.demo.prompt.RagPromptComposer;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -13,14 +14,23 @@ public class ChatService {
 
   private final Agent agent;
   private final RagService rag;
+  private final RagPromptComposer ragPromptComposer;
 
   public ChatService(Agent agent) {
-    this(agent, null);
+    this(agent, null, null);
   }
 
-  public ChatService(Agent agent, RagService rag) {
+  /**
+   * @param rag retrieval service, or {@code null} when RAG is disabled
+   * @param ragPromptComposer required when {@code rag} is set
+   */
+  public ChatService(Agent agent, RagService rag, RagPromptComposer ragPromptComposer) {
     this.agent = Objects.requireNonNull(agent);
+    if (rag != null) {
+      Objects.requireNonNull(ragPromptComposer, "ragPromptComposer");
+    }
     this.rag = rag;
+    this.ragPromptComposer = ragPromptComposer;
   }
 
   public void validateRag(Conversation conversation) {
@@ -33,7 +43,7 @@ public class ChatService {
     validateRag(conversation);
     long started = System.currentTimeMillis();
     var sources = rag.retrieve(conversation.messages().getLast().content());
-    Conversation enriched = new ai.demo.prompt.RagPromptComposer().compose(conversation, sources);
+    Conversation enriched = ragPromptComposer.compose(conversation, sources);
     ChatResponse response = ask(enriched, eventConsumer);
     return new ChatResponse(
         response.answer(),

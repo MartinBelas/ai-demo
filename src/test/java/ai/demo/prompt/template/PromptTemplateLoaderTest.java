@@ -2,6 +2,7 @@ package ai.demo.prompt.template;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import ai.demo.exception.ConfigurationException;
 import java.io.IOException;
@@ -12,26 +13,27 @@ class PromptTemplateLoaderTest {
   private final PromptTemplateLoader loader = new PromptTemplateLoader();
 
   @Test
-  void shouldLoadTemplate() throws IOException {
+  void shouldLoadAgentTemplate() throws IOException {
 
-    PromptTemplate template = loader.load(PromptTemplateType.CHAT);
+    PromptTemplate template = loader.load(PromptTemplateType.AGENT);
 
-    String expected =
-        """
-                You are a helpful assistant.
-
-                {{conversation}}
-                """;
-
-    assertEquals(expected.trim(), template.text().trim());
+    assertTrue(template.text().startsWith("{{systemMessage}}"));
+    assertTrue(template.text().contains("{{tools}}"));
   }
 
   @Test
   void shouldThrowWhenTemplateDoesNotExist() {
 
     ConfigurationException exception =
-        assertThrows(ConfigurationException.class, () -> loader.load(null));
+        assertThrows(
+            ConfigurationException.class, () -> loader.loadFromResource("prompts/missing.md"));
 
     assertEquals("Prompt template 'prompts/missing.md' not found", exception.getMessage());
+  }
+
+  @Test
+  void shouldRejectMissingTemplateType() {
+
+    assertThrows(IllegalArgumentException.class, () -> loader.load(null));
   }
 }

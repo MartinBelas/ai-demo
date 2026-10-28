@@ -120,6 +120,122 @@ class GeminiClientTest {
     assertEquals(1, body.path("contents").size());
   }
 
+  @Test
+  void shouldKeepLaterSystemMessageNextToTheFollowingUserMessage() throws Exception {
+    HttpResponse<String> response = mock();
+    when(response.statusCode()).thenReturn(200);
+    when(response.body())
+        .thenReturn(
+            """
+            {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}],"usageMetadata":{}}
+            """);
+    ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+    when(transport.send(captor.capture())).thenReturn(response);
+
+    client.chat(
+        new Prompt(
+            List.of(
+                ChatMessage.system("General rules"),
+                ChatMessage.user("First question"),
+                ChatMessage.assistant("First answer"),
+                ChatMessage.system("RAG sources"),
+                ChatMessage.user("Second question"))));
+
+    JsonNode body = new ObjectMapper().readTree(bodyOf(captor.getValue()));
+    JsonNode systemParts = body.path("systemInstruction").path("parts");
+    assertEquals(1, systemParts.size());
+    assertEquals("General rules", systemParts.get(0).path("text").asText());
+    JsonNode contents = body.path("contents");
+    assertEquals(3, contents.size());
+    JsonNode last = contents.get(2);
+    assertEquals("user", last.path("role").asText());
+    assertEquals("RAG sources", last.path("parts").get(0).path("text").asText());
+    assertEquals("Second question", last.path("parts").get(1).path("text").asText());
+  }
+
+  @Test
+  void shouldAttachLaterSystemMessageToFollowingToolTurn() throws Exception {
+    JsonNode contents =
+        chatRequestBody(
+                ChatMessage.user("Question"),
+                ChatMessage.assistant("Calling tool"),
+                ChatMessage.system("Extra rules"),
+                ChatMessage.tool("calculator", "4"))
+            .path("contents");
+
+    assertEquals(3, contents.size());
+    JsonNode last = contents.get(2);
+    assertEquals("user", last.path("role").asText());
+    assertEquals("Extra rules", last.path("parts").get(0).path("text").asText());
+    assertEquals("Tool result:\n4", last.path("parts").get(1).path("text").asText());
+  }
+
+  @Test
+  void shouldAppendTrailingSystemMessageToLastUserTurn() throws Exception {
+    JsonNode contents =
+        chatRequestBody(ChatMessage.user("Question"), ChatMessage.system("Late rules"))
+            .path("contents");
+
+    assertEquals(1, contents.size());
+    JsonNode parts = contents.get(0).path("parts");
+    assertEquals("Question", parts.get(0).path("text").asText());
+    assertEquals("Late rules", parts.get(1).path("text").asText());
+  }
+
+  @Test
+  void shouldAddTrailingSystemMessageAsUserTurnAfterModelTurn() throws Exception {
+    JsonNode contents =
+        chatRequestBody(
+                ChatMessage.user("Question"),
+                ChatMessage.assistant("Answer"),
+                ChatMessage.system("Late rules"))
+            .path("contents");
+
+    assertEquals(3, contents.size());
+    assertEquals("model", contents.get(1).path("role").asText());
+    assertEquals("user", contents.get(2).path("role").asText());
+    assertEquals("Late rules", contents.get(2).path("parts").get(0).path("text").asText());
+  }
+
+  @Test
+  void shouldKeepLaterSystemMessageNextToQuestionWhenStreaming() throws Exception {
+    HttpResponse<java.io.InputStream> response = mock();
+    when(response.statusCode()).thenReturn(200);
+    when(response.body()).thenReturn(new ByteArrayInputStream(new byte[0]));
+    ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+    when(transport.sendStreaming(captor.capture())).thenReturn(response);
+
+    client.stream(
+        new Prompt(
+            List.of(
+                ChatMessage.user("First question"),
+                ChatMessage.assistant("First answer"),
+                ChatMessage.system("RAG sources"),
+                ChatMessage.user("Second question"))),
+        chunk -> {});
+
+    JsonNode contents = new ObjectMapper().readTree(bodyOf(captor.getValue())).path("contents");
+    assertEquals(3, contents.size());
+    assertEquals("RAG sources", contents.get(2).path("parts").get(0).path("text").asText());
+    assertEquals("Second question", contents.get(2).path("parts").get(1).path("text").asText());
+  }
+
+  private JsonNode chatRequestBody(ChatMessage... messages) throws Exception {
+    HttpResponse<String> response = mock();
+    when(response.statusCode()).thenReturn(200);
+    when(response.body())
+        .thenReturn(
+            """
+            {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}],"usageMetadata":{}}
+            """);
+    ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
+    when(transport.send(captor.capture())).thenReturn(response);
+
+    client.chat(new Prompt(List.of(messages)));
+
+    return new ObjectMapper().readTree(bodyOf(captor.getValue()));
+  }
+
   private static String bodyOf(HttpRequest request) throws Exception {
     CompletableFuture<String> collected = new CompletableFuture<>();
     request

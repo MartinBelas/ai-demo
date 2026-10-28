@@ -1,6 +1,8 @@
 package ai.demo.prompt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -19,7 +21,8 @@ class PromptComposerTest {
   private final PromptComposer promptComposer =
       new PromptComposer(
           new SystemPromptProvider(
-              PromptTemplateType.CHAT, new PromptTemplateLoader(), new PromptTemplateRenderer()));
+              PromptTemplateType.AGENT, new PromptTemplateLoader(), new PromptTemplateRenderer()),
+          Map.of("systemMessage", "Be helpful."));
 
   @Test
   void shouldAddSystemPromptBeforeConversation() {
@@ -27,13 +30,15 @@ class PromptComposerTest {
     Conversation conversation = new Conversation();
     conversation.add(ChatMessage.user("Hello"));
 
-    var prompt = promptComposer.compose(conversation);
+    var prompt = promptComposer.compose(conversation, Map.of("tools", "calculator: Calculates."));
 
     assertEquals(2, prompt.messages().size());
 
-    assertEquals(Role.SYSTEM, prompt.messages().get(0).role());
-    assertEquals(
-        "You are a helpful assistant.\n\n{{conversation}}", prompt.messages().get(0).content());
+    assertEquals(Role.SYSTEM, prompt.messages().getFirst().role());
+    String systemPrompt = prompt.messages().getFirst().content();
+    assertTrue(systemPrompt.startsWith("Be helpful."));
+    assertTrue(systemPrompt.contains("calculator: Calculates."));
+    assertFalse(systemPrompt.contains("{{"));
 
     assertEquals(Role.USER, prompt.messages().get(1).role());
     assertEquals("Hello", prompt.messages().get(1).content());

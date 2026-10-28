@@ -33,7 +33,7 @@ class FileConversationRepositoryTest {
 
     assertNotNull(loaded);
     assertEquals(2, loaded.messages().size());
-    assertEquals("Hello", loaded.messages().get(0).content());
+    assertEquals("Hello", loaded.messages().getFirst().content());
     assertEquals("Hi there", loaded.messages().get(1).content());
   }
 
