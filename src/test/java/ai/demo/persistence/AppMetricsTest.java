@@ -1,6 +1,6 @@
 package ai.demo.persistence;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import ai.demo.config.DemoLimitsConfig;
 import ai.demo.model.app.AppOutcome;

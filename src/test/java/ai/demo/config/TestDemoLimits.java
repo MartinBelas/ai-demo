@@ -6,6 +6,9 @@ package ai.demo.config;
  */
 public final class TestDemoLimits {
 
+  private static final int MAX_HISTORY_MESSAGES = 10;
+  private static final int MAX_RAG_CHUNKS = 5;
+
   private boolean firestoreEnabled;
   private String firestoreProjectId = "";
   private String firestoreDatabaseId = "(default)";
@@ -60,8 +63,6 @@ public final class TestDemoLimits {
   }
 
   public DemoLimitsConfig build() {
-    int maxHistoryMessages = 10;
-    int maxRagChunks = 5;
     return new DemoLimitsConfig(
         true,
         firestoreEnabled,
@@ -72,8 +73,8 @@ public final class TestDemoLimits {
         hourlyRequestsPerIp,
         concurrentStreams,
         maxInputCharacters,
-        maxHistoryMessages,
-        maxRagChunks,
+        MAX_HISTORY_MESSAGES,
+        MAX_RAG_CHUNKS,
         maxOutputTokensPerCall);
   }
 }

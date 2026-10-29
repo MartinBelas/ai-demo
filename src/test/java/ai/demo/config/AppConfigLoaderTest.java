@@ -96,8 +96,7 @@ class AppConfigLoaderTest {
         new AppConfigLoader(
             key ->
                 switch (key) {
-                  case "DEMO_LIMITS_ENABLED" -> "true";
-                  case "DEMO_LIMITS_FIRESTORE_ENABLED" -> "true";
+                  case "DEMO_LIMITS_ENABLED", "DEMO_LIMITS_FIRESTORE_ENABLED" -> "true";
                   case "DEMO_LIMITS_DAILY_REQUESTS" -> "73";
                   case "DEMO_LIMITS_HOURLY_REQUESTS_PER_IP" -> "11";
                   case "DEMO_LIMITS_CONCURRENT_STREAMS" -> "2";

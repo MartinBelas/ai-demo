@@ -332,21 +332,7 @@ class RagServiceTest {
 
   @Test
   void shouldRetrieveOnlyTheRelevantDocumentAmongUnrelatedCandidates() {
-    RagConfig config =
-        new RagConfig(
-            true,
-            EmbeddingProvider.OLLAMA,
-            "http://localhost:11434",
-            "embeddinggemma",
-            null,
-            4000,
-            20,
-            4000,
-            4000,
-            4000,
-            4000,
-            5,
-            0.5);
+    RagConfig config = config(4000, 4000, 4000, 4000, 4000, 0.5);
     EmbeddingClient directional =
         text -> new Embedding(text.contains("cat") ? List.of(1.0, 0.0) : List.of(0.0, 1.0));
     RagService service =
@@ -368,6 +354,16 @@ class RagServiceTest {
 
   private RagConfig config(
       int maxDocumentBytes, int maxCorpusBytes, int maxContextBytes, int maxQueryBytes) {
+    return config(maxDocumentBytes, maxCorpusBytes, 4, maxContextBytes, maxQueryBytes, -1);
+  }
+
+  private RagConfig config(
+      int maxDocumentBytes,
+      int maxCorpusBytes,
+      int maxChunkBytes,
+      int maxContextBytes,
+      int maxQueryBytes,
+      double minimumScore) {
     return new RagConfig(
         true,
         EmbeddingProvider.OLLAMA,
@@ -377,11 +373,11 @@ class RagServiceTest {
         maxDocumentBytes,
         20,
         maxCorpusBytes,
-        4,
+        maxChunkBytes,
         maxContextBytes,
         maxQueryBytes,
         5,
-        -1);
+        minimumScore);
   }
 
   private RagDocument document(String name, String text) {

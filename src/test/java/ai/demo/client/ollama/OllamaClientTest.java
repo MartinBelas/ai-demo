@@ -74,14 +74,7 @@ class OllamaClientTest {
             {"model":"qwen3:4b","message":{"role":"assistant","content":"lo"},"done":true}
             """;
 
-    ByteArrayInputStream inputStream =
-        new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
-
-    HttpResponse<InputStream> httpResponse = mock();
-
-    when(httpResponse.statusCode()).thenReturn(200);
-    when(httpResponse.body()).thenReturn(inputStream);
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSuccessfulStream(streamResponse);
 
     Logger logger = (Logger) LoggerFactory.getLogger(OllamaClient.class);
 
@@ -141,14 +134,7 @@ class OllamaClientTest {
             {"model":"qwen3:4b","message":{"role":"assistant","thinking":"Thinking...","content":"Answer"},"done":true}
             """;
 
-    ByteArrayInputStream inputStream =
-        new ByteArrayInputStream(streamResponse.getBytes(StandardCharsets.UTF_8));
-
-    HttpResponse<InputStream> httpResponse = mock();
-
-    when(httpResponse.statusCode()).thenReturn(200);
-    when(httpResponse.body()).thenReturn(inputStream);
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSuccessfulStream(streamResponse);
 
     List<ChatChunk> chunks = new ArrayList<>();
 
@@ -273,10 +259,7 @@ class OllamaClientTest {
   void shouldCloseStreamingBodyAndReportErrorWhenOllamaReturnsHttpError()
       throws IOException, InterruptedException {
     TrackingInputStream body = new TrackingInputStream("{\"error\":\"server overloaded\"}");
-    HttpResponse<InputStream> httpResponse = mock();
-    when(httpResponse.statusCode()).thenReturn(503);
-    when(httpResponse.body()).thenReturn(body);
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSendStreaming(503, body);
     Prompt prompt = createPrompt();
 
     LlmCommunicationException exception =
@@ -289,10 +272,7 @@ class OllamaClientTest {
 
   @Test
   void shouldCategorizeOllamaRateLimit() throws IOException, InterruptedException {
-    HttpResponse<InputStream> httpResponse = mock();
-    when(httpResponse.statusCode()).thenReturn(429);
-    when(httpResponse.body()).thenReturn(new ByteArrayInputStream(new byte[0]));
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSendStreaming(429, new ByteArrayInputStream(new byte[0]));
     Prompt prompt = createPrompt();
 
     LlmCommunicationException exception =
@@ -309,10 +289,7 @@ class OllamaClientTest {
         new TrackingInputStream(
             "{\"model\":\"qwen3:4b\",\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},"
                 + "\"done\":true}\n");
-    HttpResponse<InputStream> httpResponse = mock();
-    when(httpResponse.statusCode()).thenReturn(200);
-    when(httpResponse.body()).thenReturn(body);
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSendStreaming(200, body);
 
     ollamaClient.stream(createPrompt(), chunk -> {});
 
@@ -334,10 +311,7 @@ class OllamaClientTest {
   @Test
   void shouldReportUnreadableErrorBodyAndCloseIt() throws IOException, InterruptedException {
     FailingInputStream body = new FailingInputStream();
-    HttpResponse<InputStream> httpResponse = mock();
-    when(httpResponse.statusCode()).thenReturn(503);
-    when(httpResponse.body()).thenReturn(body);
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSendStreaming(503, body);
     Prompt prompt = createPrompt();
 
     LlmCommunicationException exception =
@@ -355,10 +329,7 @@ class OllamaClientTest {
         new TrackingInputStream(
             "{\"model\":\"qwen3:4b\",\"message\":{\"role\":\"assistant\",\"content\":\"Příliš"
                 + " žluťoučký kůň\"},\"done\":true}\n");
-    HttpResponse<InputStream> httpResponse = mock();
-    when(httpResponse.statusCode()).thenReturn(200);
-    when(httpResponse.body()).thenReturn(body);
-    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
+    stubSendStreaming(200, body);
     List<ChatChunk> chunks = new ArrayList<>();
 
     ollamaClient.stream(createPrompt(), chunks::add);
@@ -407,6 +378,18 @@ class OllamaClientTest {
     Prompt prompt = createPrompt();
     return assertThrows(LlmCommunicationException.class, () -> ollamaClient.chat(prompt))
         .getMessage();
+  }
+
+  private void stubSuccessfulStream(String body) throws IOException, InterruptedException {
+    stubSendStreaming(200, new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private void stubSendStreaming(int statusCode, InputStream body)
+      throws IOException, InterruptedException {
+    HttpResponse<InputStream> httpResponse = mock();
+    when(httpResponse.statusCode()).thenReturn(statusCode);
+    when(httpResponse.body()).thenReturn(body);
+    when(httpTransport.sendStreaming(any())).thenReturn(httpResponse);
   }
 
   private static Prompt createPrompt() {
