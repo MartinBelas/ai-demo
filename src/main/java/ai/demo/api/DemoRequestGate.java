@@ -43,6 +43,16 @@ final class DemoRequestGate {
     if (reservation != null) quotaStore.recordUsage(reservation, totalTokens);
   }
 
+  /** Charges tokens a failed request already used; a quota problem must not mask that failure. */
+  void recordUsageAfterFailure(DemoQuotaStore.Reservation reservation, int totalTokens) {
+    if (reservation == null || totalTokens <= 0) return;
+    try {
+      quotaStore.recordUsage(reservation, totalTokens);
+    } catch (RuntimeException e) {
+      log.warn("Unable to record token usage of a failed request", e);
+    }
+  }
+
   void release(DemoQuotaStore.Reservation reservation) {
     if (reservation != null) quotaStore.release(reservation);
   }

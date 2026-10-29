@@ -23,6 +23,13 @@ public record Conversation(@JsonProperty("messages") List<ChatMessage> messages)
     messages.add(message);
   }
 
+  /** Returns a copy of this conversation with the message appended; this conversation is kept. */
+  public Conversation withMessage(ChatMessage message) {
+    Conversation copy = new Conversation(messages);
+    copy.add(message);
+    return copy;
+  }
+
   @Override
   public List<ChatMessage> messages() {
     return List.copyOf(messages);

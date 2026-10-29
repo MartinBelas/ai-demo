@@ -6,7 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ai.demo.agent.AgentEvent;
@@ -20,6 +24,10 @@ import ai.demo.config.OllamaConfig;
 import ai.demo.config.TestAppConfig;
 import ai.demo.console.command.CommandResult;
 import ai.demo.console.command.ConsoleCommandDispatcher;
+import ai.demo.exception.AgentDecisionException;
+import ai.demo.exception.LlmCommunicationException;
+import ai.demo.exception.PersistenceException;
+import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.persistence.ConversationRepository;
@@ -31,6 +39,8 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
@@ -108,6 +118,116 @@ class ConsoleChatTest {
     assertTrue(consoleOutput.contains(" Total tokens:      20"));
     assertTrue(consoleOutput.contains(" Duration:          01:02.345"));
     assertTrue(consoleOutput.contains(" Response:          Full answer"));
+  }
+
+  @Test
+  void shouldKeepRunningAfterInvalidAgentDecisionAndNotKeepUnansweredQuestion() throws IOException {
+    ChatService service = mock(ChatService.class);
+    ConsoleCommandDispatcher dispatcher = mock(ConsoleCommandDispatcher.class);
+    ConversationRepository repository = mock(ConversationRepository.class);
+    AppConfig config =
+        TestAppConfig.builder(LlmProvider.OLLAMA)
+            .ollama(new OllamaConfig("configured-model", "http://localhost:11434", 100, 1.2))
+            .build();
+    Conversation history = new Conversation();
+    List<List<ChatMessage>> askedWith = new ArrayList<>();
+
+    when(repository.load()).thenReturn(history);
+    when(dispatcher.dispatch(eq("/exit"), any())).thenReturn(CommandResult.exit());
+    when(service.ask(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              Conversation asked = invocation.getArgument(0);
+              askedWith.add(asked.messages());
+              if (askedWith.size() == 1) {
+                throw new AgentDecisionException("Failed to parse agent decision");
+              }
+              return new ChatResponse("Second answer", "model", new TokenUsage(1, 1), 10L);
+            });
+
+    String consoleOutput =
+        runConsole(
+            service, config, dispatcher, repository, "First question\nSecond question\n/exit\n");
+
+    assertTrue(consoleOutput.contains("The AI model returned an invalid response"), consoleOutput);
+    assertFalse(consoleOutput.contains("invalid response ("), consoleOutput);
+    assertEquals(List.of(ChatMessage.user("Second question")), askedWith.get(1));
+    assertEquals(
+        List.of(ChatMessage.user("Second question"), ChatMessage.assistant("Second answer")),
+        history.messages());
+    verify(repository, times(1)).save(history);
+  }
+
+  @Test
+  void shouldNotKeepOrPersistUnansweredQuestionWhenLlmCommunicationFails() throws IOException {
+    ChatService service = mock(ChatService.class);
+    ConsoleCommandDispatcher dispatcher = mock(ConsoleCommandDispatcher.class);
+    ConversationRepository repository = mock(ConversationRepository.class);
+    Conversation history = new Conversation();
+
+    when(repository.load()).thenReturn(history);
+    when(dispatcher.dispatch(eq("/exit"), any())).thenReturn(CommandResult.exit());
+    when(service.ask(any(), any())).thenThrow(new LlmCommunicationException("down"));
+
+    String consoleOutput =
+        runConsole(service, testConfig(), dispatcher, repository, "Question\n/exit\n");
+
+    assertTrue(consoleOutput.contains("Unable to communicate with the AI model"), consoleOutput);
+    assertTrue(history.isEmpty());
+    verify(repository, never()).save(any());
+  }
+
+  @Test
+  void shouldKeepRunningAndKeepAnswerWhenSavingConversationFails() throws IOException {
+    ChatService service = mock(ChatService.class);
+    ConsoleCommandDispatcher dispatcher = mock(ConsoleCommandDispatcher.class);
+    ConversationRepository repository = mock(ConversationRepository.class);
+    Conversation history = new Conversation();
+
+    when(repository.load()).thenReturn(history);
+    when(dispatcher.dispatch(eq("/exit"), any())).thenReturn(CommandResult.exit());
+    when(service.ask(any(), any()))
+        .thenReturn(new ChatResponse("Answer", "model", new TokenUsage(1, 1), 10L));
+    doThrow(new PersistenceException("disk full", new IOException("disk full")))
+        .when(repository)
+        .save(any());
+
+    String consoleOutput =
+        runConsole(service, testConfig(), dispatcher, repository, "Question\n/exit\n");
+
+    assertTrue(consoleOutput.contains("Unable to save the conversation"), consoleOutput);
+    assertTrue(consoleOutput.contains(" Response:          Answer"), consoleOutput);
+    assertEquals(
+        List.of(ChatMessage.user("Question"), ChatMessage.assistant("Answer")), history.messages());
+  }
+
+  private static AppConfig testConfig() {
+    return TestAppConfig.builder(LlmProvider.OLLAMA)
+        .ollama(new OllamaConfig("configured-model", "http://localhost:11434", 100, 1.2))
+        .build();
+  }
+
+  private static String runConsole(
+      ChatService service,
+      AppConfig config,
+      ConsoleCommandDispatcher dispatcher,
+      ConversationRepository repository,
+      String inputText)
+      throws IOException {
+    InputStream originalIn = System.in;
+    PrintStream originalOut = System.out;
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    try (ByteArrayInputStream input =
+            new ByteArrayInputStream(inputText.getBytes(StandardCharsets.UTF_8));
+        PrintStream consoleOut = new PrintStream(output, true, StandardCharsets.UTF_8)) {
+      System.setIn(input);
+      System.setOut(consoleOut);
+      new ConsoleChat(service, config, dispatcher, repository).start();
+    } finally {
+      System.setIn(originalIn);
+      System.setOut(originalOut);
+    }
+    return output.toString(StandardCharsets.UTF_8);
   }
 
   private int countOccurrences(String text, String value) {

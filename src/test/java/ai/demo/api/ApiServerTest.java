@@ -5,13 +5,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ai.demo.agent.AgentEvent;
 import ai.demo.agent.ContentEvent;
 import ai.demo.agent.ThinkingEvent;
+import ai.demo.agent.TokenUsageEvent;
 import ai.demo.agent.ToolCallEvent;
 import ai.demo.agent.ToolResultEvent;
 import ai.demo.client.TokenUsage;
@@ -22,6 +27,8 @@ import ai.demo.config.LlmProvider;
 import ai.demo.config.LlmProviderAvailability;
 import ai.demo.config.OllamaConfig;
 import ai.demo.config.TestAppConfig;
+import ai.demo.config.TestDemoLimits;
+import ai.demo.exception.AgentDecisionException;
 import ai.demo.exception.ConfigurationException;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.model.chat.ChatResponse;
@@ -33,17 +40,22 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.Writer;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.stubbing.Answer;
 
 class ApiServerTest {
 
@@ -55,14 +67,25 @@ class ApiServerTest {
   private static final String USER_MESSAGE_BODY =
       "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}";
   private static final String PROVIDER_FAILURE_DETAILS = "Secret provider details";
+  private static final String INTERNAL_DETAILS = "secret-internal-tool";
+  private static final DemoLimitsConfig DEMO_LIMITS =
+      TestDemoLimits.enabled()
+          .dailyRequests(10)
+          .hourlyRequestsPerIp(10)
+          .concurrentStreams(10)
+          .maxInputCharacters(100)
+          .maxOutputTokensPerCall(1000)
+          .build();
   private static final String SAFE_LLM_ERROR =
       "Unable to communicate with the OLLAMA AI model. "
           + "Try selecting a different AI provider or try again later.";
 
   @Test
   void shouldExposeHealthEndpoint() throws IOException, InterruptedException {
+    ApiServer closedServer;
     try (ApiServer server = new ApiServer(0);
         HttpClient client = HttpClient.newHttpClient()) {
+      closedServer = server;
       server.start();
 
       HttpRequest request =
@@ -74,10 +97,9 @@ class ApiServerTest {
       assertEquals(200, response.statusCode());
       assertEquals(APPLICATION_JSON, response.headers().firstValue(CONTENT_TYPE).orElseThrow());
       assertEquals("{\"status\":\"UP\"}", response.body());
-
-      server.close();
-      server.awaitShutdown();
     }
+    // Returns only once close() has stopped the server.
+    closedServer.awaitShutdown();
   }
 
   @Test
@@ -150,7 +172,7 @@ class ApiServerTest {
     ChatService chatService = mock(ChatService.class);
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
-    when(chatService.ask(org.mockito.ArgumentMatchers.any()))
+    when(chatService.ask(any(), any()))
         .thenReturn(new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25));
 
     try (ApiServer server =
@@ -251,7 +273,7 @@ class ApiServerTest {
     ChatService chatService = mock(ChatService.class);
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
-    when(chatService.ask(org.mockito.ArgumentMatchers.any()))
+    when(chatService.ask(any(), any()))
         .thenThrow(new LlmCommunicationException(PROVIDER_FAILURE_DETAILS));
     try (ApiServer server =
             new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
@@ -267,6 +289,54 @@ class ApiServerTest {
       assertEquals(
           "{\"code\":\"LLM_COMMUNICATION_ERROR\",\"message\":" + "\"" + SAFE_LLM_ERROR + "\"}",
           response.body());
+    }
+  }
+
+  @Test
+  void shouldReturnSafeAgentErrorWhenAgentDecisionIsInvalid()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(), any()))
+        .thenThrow(new AgentDecisionException("Unknown tool: " + INTERNAL_DETAILS));
+    try (ApiServer server =
+            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(chatRequest(server, USER_MESSAGE_BODY), HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(502, response.statusCode());
+      assertTrue(response.body().contains("\"code\":\"LLM_INVALID_RESPONSE\""));
+      assertFalse(response.body().contains("Agent mode"));
+      assertFalse(response.body().contains(INTERNAL_DETAILS));
+    }
+  }
+
+  @Test
+  void shouldStreamSafeAgentErrorWhenAgentDecisionIsInvalid()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenThrow(new AgentDecisionException("Unknown tool: " + INTERNAL_DETAILS));
+
+    try (ApiServer server =
+            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(streamingChatRequest(server), HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(200, response.statusCode());
+      assertTrue(response.body().contains("event: error"));
+      assertTrue(response.body().contains("\"code\":\"LLM_INVALID_RESPONSE\""));
+      assertFalse(response.body().contains("Agent mode"));
+      assertFalse(response.body().contains(INTERNAL_DETAILS));
     }
   }
 
@@ -386,11 +456,16 @@ class ApiServerTest {
     ChatService chatService = mock(ChatService.class);
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
-    when(chatService.ask(any(Conversation.class)))
+    when(chatService.ask(any(Conversation.class), any()))
         .thenReturn(new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(3, 2), 10));
     DemoLimitsConfig limits =
-        new DemoLimitsConfig(
-            true, false, "", "(default)", "DEMO_IP_HASH_SALT", 1, 1, 1, 100, 10, 5, 1000);
+        TestDemoLimits.enabled()
+            .dailyRequests(1)
+            .hourlyRequestsPerIp(1)
+            .concurrentStreams(1)
+            .maxInputCharacters(100)
+            .maxOutputTokensPerCall(1000)
+            .build();
 
     try (ApiServer server =
             new ApiServer(
@@ -413,6 +488,179 @@ class ApiServerTest {
       assertEquals(429, second.statusCode());
       assertTrue(second.body().contains("DEMO_LIMIT_EXCEEDED"));
     }
+  }
+
+  @Test
+  void shouldChargeTokensOfInvalidAgentDecisionToDemoQuota()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenAnswer(usageThenFailure(new AgentDecisionException("Unknown tool")));
+    InMemoryDemoQuotaStore quotaStore = new InMemoryDemoQuotaStore(DEMO_LIMITS);
+
+    try (ApiServer server =
+            new ApiServer(
+                0,
+                null,
+                resolver,
+                LlmProvider.OLLAMA,
+                new ObjectMapper(),
+                new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"));
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(chatRequest(server, USER_MESSAGE_BODY), HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(502, response.statusCode());
+      assertEquals(500, quotaStore.snapshot(today()).tokens());
+    }
+  }
+
+  @Test
+  void shouldChargeTokensOfInvalidAgentDecisionToDemoQuotaWhenStreaming()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenAnswer(usageThenFailure(new AgentDecisionException("Unknown tool")));
+    InMemoryDemoQuotaStore quotaStore = new InMemoryDemoQuotaStore(DEMO_LIMITS);
+
+    try (ApiServer server =
+            new ApiServer(
+                0,
+                null,
+                resolver,
+                LlmProvider.OLLAMA,
+                new ObjectMapper(),
+                new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"));
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(streamingChatRequest(server), HttpResponse.BodyHandlers.ofString());
+
+      assertTrue(response.body().contains("\"code\":\"LLM_INVALID_RESPONSE\""));
+      assertEquals(500, quotaStore.snapshot(today()).tokens());
+    }
+  }
+
+  @Test
+  void shouldChargeTokensOfEarlierLlmCallsWhenProviderFailsLater()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenAnswer(usageThenFailure(new LlmCommunicationException("model returned no content")));
+    InMemoryDemoQuotaStore quotaStore = new InMemoryDemoQuotaStore(DEMO_LIMITS);
+
+    try (ApiServer server =
+            new ApiServer(
+                0,
+                null,
+                resolver,
+                LlmProvider.OLLAMA,
+                new ObjectMapper(),
+                new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"));
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> response =
+          client.send(streamingChatRequest(server), HttpResponse.BodyHandlers.ofString());
+
+      assertTrue(response.body().contains("\"code\":\"LLM_COMMUNICATION_ERROR\""));
+      assertEquals(500, quotaStore.snapshot(today()).tokens());
+    }
+  }
+
+  @Test
+  void shouldChargeTokensOfFinishedLlmCallsWhenStreamingClientDisconnects() throws Exception {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    CountDownLatch thinkingSent = new CountDownLatch(1);
+    CountDownLatch clientGone = new CountDownLatch(1);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenAnswer(
+            invocation -> {
+              Consumer<AgentEvent> events = invocation.getArgument(1);
+              events.accept(new TokenUsageEvent(new TokenUsage(300, 200)));
+              events.accept(new ThinkingEvent("Checking"));
+              thinkingSent.countDown();
+              // Runs on the server's request thread, where a failed assertion would go unnoticed;
+              // the test thread always counts down (also in its finally block), so this cannot
+              // hang.
+              clientGone.await();
+              // Writes right after the reset may still succeed; the first failing write ends the
+              // request with a disconnect. Finishing normally would charge the response instead.
+              for (int i = 0; i < 300; i++) {
+                events.accept(new ThinkingEvent("still thinking"));
+                // The server only learns about the reset from a failing write, so writes must be
+                // spaced out; there is no event to wait for instead.
+                Thread.sleep(10); // NOSONAR java:S2925
+              }
+              return new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(1, 1), 25);
+            });
+    InMemoryDemoQuotaStore quotaStore = spy(new InMemoryDemoQuotaStore(DEMO_LIMITS));
+
+    try (ApiServer server =
+        new ApiServer(
+            0,
+            null,
+            resolver,
+            LlmProvider.OLLAMA,
+            new ObjectMapper(),
+            new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"))) {
+      server.start();
+
+      disconnectAfterFirstEvent(server, thinkingSent);
+      clientGone.countDown();
+
+      // The charge happens on the server thread after it notices the disconnect.
+      verify(quotaStore, timeout(10_000)).recordUsage(any(), eq(500));
+    } finally {
+      clientGone.countDown();
+    }
+  }
+
+  private void disconnectAfterFirstEvent(ApiServer server, CountDownLatch firstEventSent)
+      throws IOException, InterruptedException {
+    byte[] body = USER_MESSAGE_BODY.getBytes(StandardCharsets.UTF_8);
+    String head =
+        "POST /api/chat/stream HTTP/1.1\r\n"
+            + "Host: localhost\r\n"
+            + "Content-Type: application/json\r\n"
+            + "Accept: text/event-stream\r\n"
+            + "Connection: close\r\n"
+            + "Content-Length: "
+            + body.length
+            + "\r\n\r\n";
+    try (Socket socket = new Socket("localhost", server.port())) {
+      // A zero linger time makes close() send a reset, so the server notices the loss at once.
+      socket.setSoLinger(true, 0);
+      OutputStream request = socket.getOutputStream();
+      request.write(head.getBytes(StandardCharsets.UTF_8));
+      request.write(body);
+      request.flush();
+      assertTrue(firstEventSent.await(5, TimeUnit.SECONDS));
+    }
+  }
+
+  /** Like the real agent: reports the usage of an LLM call (300 + 200 tokens), then fails. */
+  private static Answer<ChatResponse> usageThenFailure(RuntimeException failure) {
+    return invocation -> {
+      Consumer<AgentEvent> events = invocation.getArgument(1);
+      events.accept(new TokenUsageEvent(new TokenUsage(300, 200)));
+      throw failure;
+    };
+  }
+
+  private static String today() {
+    return LocalDate.now(ZoneOffset.UTC).toString();
   }
 
   private HttpRequest chatRequest(ApiServer server, String body) {

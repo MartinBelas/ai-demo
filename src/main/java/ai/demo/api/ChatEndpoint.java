@@ -1,5 +1,6 @@
 package ai.demo.api;
 
+import ai.demo.exception.AgentDecisionException;
 import ai.demo.exception.AgentModeDisabledException;
 import ai.demo.exception.AgentServiceException;
 import ai.demo.exception.ApiRequestException;
@@ -38,6 +39,7 @@ final class ChatEndpoint {
     AppOutcome outcome = AppOutcome.FAILED;
     long started = System.nanoTime();
     ResolvedChatRequest request = null;
+    TokenMeter tokenMeter = new TokenMeter();
     try {
       request = requestParser.parse(context.body());
       requestGate.validate(request.conversation());
@@ -46,8 +48,9 @@ final class ChatEndpoint {
       reservation = requestGate.reserve(context, false);
       ChatResponse response =
           request.rag()
-              ? chatService.askWithRag(request.conversation(), event -> {})
-              : chatService.ask(request.conversation());
+              ? chatService.askWithRag(request.conversation(), tokenMeter.observe(event -> {}))
+              : chatService.ask(request.conversation(), tokenMeter.observe(event -> {}));
+      tokenMeter.markCharged();
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       ApiResponseWriter.write(context, 200, ApiChatResponse.from(response), objectMapper);
       outcome = AppOutcome.COMPLETED;
@@ -59,6 +62,11 @@ final class ChatEndpoint {
           "Retrieval-augmented generation is not enabled in this deployment.");
     } catch (AgentModeDisabledException e) {
       writeError(context, 400, AgentModeErrors.DISABLED_CODE, AgentModeErrors.DISABLED_MESSAGE);
+    } catch (AgentDecisionException e) {
+      // Raised by the local tool-calling agent in normal chat, not by agent mode.
+      log.warn("LLM returned an invalid agent decision", e);
+      writeError(
+          context, 502, LlmErrorMessages.INVALID_RESPONSE_CODE, LlmErrorMessages.invalidResponse());
     } catch (AgentServiceException e) {
       log.warn("Agent mode request failed", e);
       writeError(
@@ -85,6 +93,10 @@ final class ChatEndpoint {
       log.error("Unexpected chat API error", e);
       writeError(context, 500, "INTERNAL_ERROR", "An unexpected error occurred.");
     } finally {
+      // A failed request is still charged for every LLM call that finished before the failure.
+      if (!tokenMeter.charged()) {
+        requestGate.recordUsageAfterFailure(reservation, tokenMeter.totalTokens());
+      }
       requestGate.release(reservation);
       requestGate.recordOutcome(reservation, outcome, started);
     }

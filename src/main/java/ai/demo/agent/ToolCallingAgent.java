@@ -13,17 +13,20 @@ import ai.demo.model.chat.ChatChunkType;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.Conversation;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class ToolCallingAgent implements Agent {
 
   private final AgentLlmGateway llmGateway;
   private final ToolDescriptionFormatter toolDescriptionFormatter;
   private final List<Tool> tools;
+  private final Map<String, Tool> toolsByName;
   private final AgentDecisionParser decisionParser;
 
   public ToolCallingAgent(
@@ -35,7 +38,26 @@ public class ToolCallingAgent implements Agent {
     this.llmGateway = Objects.requireNonNull(llmGateway);
     this.toolDescriptionFormatter = Objects.requireNonNull(toolDescriptionFormatter);
     this.tools = List.copyOf(tools);
+    this.toolsByName = indexByName(this.tools);
     this.decisionParser = new AgentDecisionParser(objectMapper);
+  }
+
+  /**
+   * The prompt lists every tool by name, so a missing or repeated name would make the model's
+   * choice ambiguous; reject it at construction time.
+   */
+  private static Map<String, Tool> indexByName(List<Tool> tools) {
+    Map<String, Tool> byName = new HashMap<>();
+    for (Tool tool : tools) {
+      String name = tool.name();
+      if (name == null || name.isBlank()) {
+        throw new IllegalArgumentException("Tool name must not be blank");
+      }
+      if (byName.putIfAbsent(name, tool) != null) {
+        throw new IllegalArgumentException("Duplicate tool name: " + name);
+      }
+    }
+    return Map.copyOf(byName);
   }
 
   @Override
@@ -56,21 +78,16 @@ public class ToolCallingAgent implements Agent {
 
     AgentStep firstStep = requestDecision(conversation, eventConsumer);
 
-    if (firstStep.decision() instanceof ModelReply(String content)) {
-
-      eventConsumer.accept(new ContentEvent(content));
-
-      return new AgentResult(
-          content, firstStep.response().model(), firstStep.response().tokenUsage());
-    }
-
-    if (firstStep.decision() instanceof ToolCallDecision toolCall) {
-
-      return executeToolCall(toolCall, conversation, firstStep.response(), eventConsumer);
-    }
-
-    throw new IllegalStateException(
-        "Unsupported agent decision: " + firstStep.decision().getClass().getSimpleName());
+    // AgentDecision is sealed, so the compiler checks that every decision type is handled.
+    return switch (firstStep.decision()) {
+      case ModelReply(String content) -> {
+        eventConsumer.accept(new ContentEvent(content));
+        yield new AgentResult(
+            content, firstStep.response().model(), firstStep.response().tokenUsage());
+      }
+      case ToolCallDecision toolCall ->
+          executeToolCall(toolCall, conversation, firstStep.response(), eventConsumer);
+    };
   }
 
   private ResolvedToolCall resolveToolCall(Conversation conversation) {
@@ -103,7 +120,7 @@ public class ToolCallingAgent implements Agent {
 
     eventConsumer.accept(new ToolCallEvent(toolCall.toolName(), toolCall.input()));
 
-    Tool tool = findTool(toolCall.toolName());
+    Tool tool = requireTool(toolCall.toolName());
 
     ToolResult toolResult = tool.execute(toolCall.input());
 
@@ -115,14 +132,17 @@ public class ToolCallingAgent implements Agent {
           toolResult.content(), firstResponse.model(), firstResponse.tokenUsage());
     }
 
-    conversation.add(ChatMessage.assistant(firstResponse.text()));
-    conversation.add(ChatMessage.tool(tool.name(), toolResult.content()));
+    // The tool round is working state of this request: a copy keeps the raw decision JSON and the
+    // tool message out of the caller's conversation (e.g. the persisted console history).
+    Conversation toolConversation =
+        conversation
+            .withMessage(ChatMessage.assistant(firstResponse.text()))
+            .withMessage(ChatMessage.tool(tool.name(), toolResult.content()));
 
-    AgentStep finalStep = requestDecision(conversation, eventConsumer);
+    AgentStep finalStep = requestDecision(toolConversation, eventConsumer);
 
     if (!(finalStep.decision() instanceof ModelReply(String content))) {
-
-      throw new IllegalStateException("Expected model reply after tool execution");
+      throw new AgentDecisionException("Expected a model reply after tool execution");
     }
 
     eventConsumer.accept(new ContentEvent(content));
@@ -138,17 +158,30 @@ public class ToolCallingAgent implements Agent {
     LlmResponse response = requestResponse(conversation, eventConsumer);
 
     try {
-      return new AgentStep(decisionParser.parse(response.text()), response);
+      return new AgentStep(parseDecision(response.text()), response);
     } catch (AgentDecisionException e) {
-      Conversation repairConversation = createRepairConversation(conversation, response.text(), e);
-      LlmResponse repairedResponse = requestResponse(repairConversation, eventConsumer);
-      AgentDecision repairedDecision = decisionParser.parse(repairedResponse.text());
-      TokenUsage totalUsage = addTokenUsage(response.tokenUsage(), repairedResponse.tokenUsage());
-      LlmResponse combinedResponse =
-          new LlmResponse(repairedResponse.text(), repairedResponse.model(), totalUsage);
-
-      return new AgentStep(repairedDecision, combinedResponse);
+      return requestRepairedDecision(conversation, response, e, eventConsumer);
     }
+  }
+
+  private AgentStep requestRepairedDecision(
+      Conversation conversation,
+      LlmResponse invalidResponse,
+      AgentDecisionException error,
+      Consumer<AgentEvent> eventConsumer) {
+
+    Conversation repairConversation =
+        createRepairConversation(conversation, invalidResponse.text(), error);
+    LlmResponse repairedResponse = requestResponse(repairConversation, eventConsumer);
+    TokenUsage totalUsage =
+        addTokenUsage(invalidResponse.tokenUsage(), repairedResponse.tokenUsage());
+
+    AgentDecision repairedDecision = parseDecision(repairedResponse.text());
+
+    LlmResponse combinedResponse =
+        new LlmResponse(repairedResponse.text(), repairedResponse.model(), totalUsage);
+
+    return new AgentStep(repairedDecision, combinedResponse);
   }
 
   private LlmResponse requestResponse(
@@ -188,23 +221,24 @@ public class ToolCallingAgent implements Agent {
         llmGateway.stream(
             conversation, variables, chunk -> handleChunk(chunk, responseContent, eventConsumer));
 
+    // Every LLM call goes through here, so this is the single place where usage is reported, before
+    // the response is validated and possibly rejected.
+    eventConsumer.accept(new TokenUsageEvent(streamingResult.tokenUsage()));
+
     return new RawAgentResponse(
         responseContent.toString(), streamingResult.model(), streamingResult.tokenUsage());
   }
 
   private Conversation createEmptyResponseRetryConversation(Conversation conversation) {
-    Conversation retryConversation = new Conversation(conversation.messages());
-    retryConversation.add(
+    return conversation.withMessage(
         ChatMessage.user(
             "Retry the decision for the preceding user request. Return the required decision JSON"
                 + " immediately. Do not include reasoning or any other text."));
-    return retryConversation;
   }
 
   private Conversation createRepairConversation(
       Conversation conversation, String invalidResponse, AgentDecisionException error) {
-    Conversation repairConversation = new Conversation(conversation.messages());
-    repairConversation.add(
+    return conversation.withMessage(
         ChatMessage.user(
             """
             Your previous response was invalid.
@@ -213,8 +247,6 @@ public class ToolCallingAgent implements Agent {
             Return only corrected JSON matching the required format.
             """
                 .formatted(error.getMessage(), invalidResponse)));
-
-    return repairConversation;
   }
 
   private void handleChunk(
@@ -239,12 +271,33 @@ public class ToolCallingAgent implements Agent {
         first.completionTokens() + second.completionTokens());
   }
 
-  private Tool findTool(String toolName) {
+  /**
+   * Parses the decision and rejects calls to tools that do not exist, so an invented tool name gets
+   * the same single repair attempt as malformed JSON.
+   */
+  private AgentDecision parseDecision(String text) {
+    AgentDecision decision = decisionParser.parse(text);
+    if (decision instanceof ToolCallDecision toolCall) {
+      requireTool(toolCall.toolName());
+    }
+    return decision;
+  }
 
-    return tools.stream()
-        .filter(tool -> tool.name().equals(toolName))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException("Unknown tool: " + toolName));
+  private AgentDecisionException unknownTool(String toolName) {
+    String available = tools.stream().map(Tool::name).collect(Collectors.joining(", "));
+    return new AgentDecisionException(
+        "Unknown tool: "
+            + toolName
+            + ". Available tools: "
+            + (available.isEmpty() ? "none" : available));
+  }
+
+  private Tool requireTool(String toolName) {
+    Tool tool = toolsByName.get(toolName);
+    if (tool == null) {
+      throw unknownTool(toolName);
+    }
+    return tool;
   }
 
   private record RawAgentResponse(String text, String model, TokenUsage tokenUsage) {

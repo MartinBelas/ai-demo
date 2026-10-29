@@ -16,8 +16,12 @@ public record Embedding(List<Double> values) {
     values = values.stream().map(v -> v / norm).toList();
   }
 
+  public int dimensions() {
+    return values.size();
+  }
+
   public double similarity(Embedding other) {
-    if (values.size() != other.values.size()) throw new RagException("Embedding dimensions differ");
+    if (dimensions() != other.dimensions()) throw new RagException("Embedding dimensions differ");
     double score = 0;
     for (int i = 0; i < values.size(); i++) score += values.get(i) * other.values.get(i);
     return Math.clamp(score, -1, 1);

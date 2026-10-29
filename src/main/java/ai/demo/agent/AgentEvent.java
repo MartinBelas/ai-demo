@@ -1,4 +1,4 @@
 package ai.demo.agent;
 
 public sealed interface AgentEvent
-    permits ThinkingEvent, ToolCallEvent, ToolResultEvent, ContentEvent {}
+    permits ThinkingEvent, ToolCallEvent, ToolResultEvent, ContentEvent, TokenUsageEvent {}

@@ -5,6 +5,7 @@ import ai.demo.agent.ContentEvent;
 import ai.demo.agent.ThinkingEvent;
 import ai.demo.agent.ToolCallEvent;
 import ai.demo.agent.ToolResultEvent;
+import ai.demo.exception.AgentDecisionException;
 import ai.demo.exception.AgentModeDisabledException;
 import ai.demo.exception.AgentServiceException;
 import ai.demo.exception.ApiRequestException;
@@ -17,6 +18,7 @@ import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,14 +86,19 @@ final class StreamingChatEndpoint {
 
     long started = System.nanoTime();
     AppOutcome outcome = AppOutcome.FAILED;
+    TokenMeter tokenMeter = new TokenMeter();
     try {
       prepareStream(context);
       SseEventWriter writer =
           new SseEventWriter(context.res(), context.outputStream(), objectMapper);
-      outcome = stream(chatService, request, writer, reservation);
+      outcome = stream(chatService, request, writer, reservation, tokenMeter);
     } catch (SseConnectionException e) {
       outcome = AppOutcome.DISCONNECTED;
     } finally {
+      // A failed or disconnected stream is still charged for every LLM call that finished.
+      if (!tokenMeter.charged()) {
+        requestGate.recordUsageAfterFailure(reservation, tokenMeter.totalTokens());
+      }
       requestGate.release(reservation);
       requestGate.recordOutcome(reservation, outcome, started);
     }
@@ -101,19 +108,28 @@ final class StreamingChatEndpoint {
       ChatService chatService,
       ResolvedChatRequest request,
       SseEventWriter writer,
-      DemoQuotaStore.Reservation reservation) {
+      DemoQuotaStore.Reservation reservation,
+      TokenMeter tokenMeter) {
+    Consumer<AgentEvent> events = tokenMeter.observe(event -> writeAgentEvent(writer, event));
     try {
       ChatResponse response =
           request.rag()
-              ? chatService.askWithRag(
-                  request.conversation(), event -> writeAgentEvent(writer, event))
-              : chatService.ask(request.conversation(), event -> writeAgentEvent(writer, event));
+              ? chatService.askWithRag(request.conversation(), events)
+              : chatService.ask(request.conversation(), events);
+      tokenMeter.markCharged();
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       writer.send("completion", SseCompletionEvent.from(response));
       return AppOutcome.COMPLETED;
     } catch (SseConnectionException e) {
       log.debug("SSE client disconnected", e);
       return AppOutcome.DISCONNECTED;
+    } catch (AgentDecisionException e) {
+      // Raised by the local tool-calling agent in normal chat, not by agent mode.
+      log.warn("Streaming LLM returned an invalid agent decision", e);
+      writer.send(
+          ERROR_EVENT,
+          ApiErrorResponse.of(
+              LlmErrorMessages.INVALID_RESPONSE_CODE, LlmErrorMessages.invalidResponse()));
     } catch (AgentServiceException e) {
       log.warn("Streaming agent mode request failed", e);
       writer.send(

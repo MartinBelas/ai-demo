@@ -9,7 +9,14 @@ final class LlmErrorMessages {
   private static final String RETRY_SUGGESTION =
       " Try selecting a different AI provider or try again later.";
 
+  /** The model answered, but not with a usable agent decision (e.g. invalid JSON, unknown tool). */
+  static final String INVALID_RESPONSE_CODE = "LLM_INVALID_RESPONSE";
+
   private LlmErrorMessages() {}
+
+  static String invalidResponse() {
+    return "The AI model returned an invalid response." + RETRY_SUGGESTION;
+  }
 
   static String communicationFailure(LlmErrorCategory category, LlmProvider provider) {
     return switch (category) {

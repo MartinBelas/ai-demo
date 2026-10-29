@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ai.demo.config.DemoLimitsConfig;
+import ai.demo.config.TestDemoLimits;
 import ai.demo.exception.DemoLimitException;
 import com.google.api.core.ApiFutures;
 import com.google.cloud.firestore.CollectionReference;
@@ -72,8 +73,14 @@ class FirestoreDemoQuotaStoreTest {
   }
 
   private final DemoLimitsConfig limits =
-      new DemoLimitsConfig(
-          true, true, "project", "(default)", "DEMO_IP_HASH_SALT", 2, 1, 1, 100, 10, 5, 50);
+      TestDemoLimits.enabled()
+          .firestore("project", "(default)")
+          .dailyRequests(2)
+          .hourlyRequestsPerIp(1)
+          .concurrentStreams(1)
+          .maxInputCharacters(100)
+          .maxOutputTokensPerCall(50)
+          .build();
   private final Clock clock = Clock.fixed(Instant.parse("2026-08-31T12:00:00Z"), ZoneOffset.UTC);
 
   @Test

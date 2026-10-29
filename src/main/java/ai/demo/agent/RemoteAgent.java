@@ -63,11 +63,14 @@ public final class RemoteAgent implements Agent {
             new AgentLabRequest(
                 latest.content(), history(messages.subList(0, messages.size() - 1))));
 
+    TokenUsage usage =
+        new TokenUsage(response.usage().inputTokens(), response.usage().outputTokens());
+    eventConsumer.accept(new TokenUsageEvent(usage));
     eventConsumer.accept(new ContentEvent(response.reply()));
     return new AgentResult(
         response.reply(),
         MODEL,
-        new TokenUsage(response.usage().inputTokens(), response.usage().outputTokens()),
+        usage,
         response.sources().stream()
             .map(source -> new WebSource(source.title(), source.url()))
             .toList());

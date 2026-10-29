@@ -2,6 +2,7 @@ package ai.demo.model.chat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ConversationTest {
@@ -23,6 +24,19 @@ class ConversationTest {
     conversation.add(ChatMessage.assistant("Hi"));
 
     assertEquals(2, conversation.messages().size());
+  }
+
+  @Test
+  void shouldCreateExtendedCopyWithoutChangingOriginal() {
+
+    var original = new Conversation();
+    original.add(ChatMessage.user("Hello"));
+
+    Conversation extended = original.withMessage(ChatMessage.assistant("Hi"));
+
+    assertEquals(List.of(ChatMessage.user("Hello")), original.messages());
+    assertEquals(
+        List.of(ChatMessage.user("Hello"), ChatMessage.assistant("Hi")), extended.messages());
   }
 
   @Test

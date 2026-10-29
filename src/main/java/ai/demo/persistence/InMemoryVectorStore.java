@@ -1,5 +1,6 @@
 package ai.demo.persistence;
 
+import ai.demo.exception.RagException;
 import ai.demo.model.rag.EmbeddedChunk;
 import ai.demo.model.rag.Embedding;
 import ai.demo.model.rag.RagSource;
@@ -14,8 +15,11 @@ public final class InMemoryVectorStore implements VectorStore {
   public void replaceAll(List<EmbeddedChunk> values) {
     List<EmbeddedChunk> snapshot = List.copyOf(values);
     if (!snapshot.isEmpty()) {
-      Embedding first = snapshot.getFirst().embedding();
-      snapshot.forEach(value -> first.similarity(value.embedding()));
+      int dimensions = snapshot.getFirst().embedding().dimensions();
+      if (snapshot.stream().anyMatch(chunk -> chunk.embedding().dimensions() != dimensions)) {
+        // Reject before publishing: a mixed index would fail on every later search.
+        throw new RagException("Embedding dimensions differ");
+      }
     }
     chunks.set(snapshot);
   }

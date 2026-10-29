@@ -164,7 +164,7 @@ paths:
                 code: DEMO_LIMIT_UNAVAILABLE
                 message: The public demo is temporarily unavailable.
         "502":
-          description: Communication with the selected LLM provider or the agent service failed.
+          description: Communication with the selected LLM provider or the agent service failed, or the model returned an invalid response.
           content:
             application/json:
               schema:
@@ -175,8 +175,13 @@ paths:
                   value:
                     code: LLM_COMMUNICATION_ERROR
                     message: Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later.
+                invalidResponse:
+                  summary: The model answered, but not with a usable agent decision
+                  value:
+                    code: LLM_INVALID_RESPONSE
+                    message: The AI model returned an invalid response. Try selecting a different AI provider or try again later.
                 agentUnavailable:
-                  summary: Agent service failed, timed out, or returned an invalid response
+                  summary: Agent service failed, timed out, or returned an unusable payload
                   value:
                     code: AGENT_UNAVAILABLE
                     message: Agent mode is temporarily unavailable. Try again later or turn agent mode off.
@@ -243,6 +248,11 @@ paths:
 
                     event: error
                     data: {"code":"LLM_COMMUNICATION_ERROR","message":"Unable to communicate with the OPENAI AI model. Try selecting a different AI provider or try again later."}
+                invalidResponse:
+                  summary: The model answered, but not with a usable agent decision
+                  value: |-
+                    event: error
+                    data: {"code":"LLM_INVALID_RESPONSE","message":"The AI model returned an invalid response. Try selecting a different AI provider or try again later."}
                 agentMode:
                   summary: Agent mode answer with web sources (single content event)
                   value: |-

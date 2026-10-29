@@ -144,6 +144,10 @@ GET    /openapi.yaml
 - JSON errors use a stable error code and a safe English message. Request validation errors include
   optional field-level `details` that help callers correct their input. Server and provider failures
   do not expose internal details; their technical causes are logged instead.
+- When the model answers but not with a usable agent decision (for example invalid JSON after the
+  repair attempt, or an unknown tool), the error code is `LLM_INVALID_RESPONSE` (HTTP `502` before
+  streaming starts, or a terminal `error` event with the same code once streaming has started). It is
+  distinct from `LLM_COMMUNICATION_ERROR` (provider unreachable) and `AGENT_UNAVAILABLE` (agent mode).
 - Bruno files cover successful requests, validation failures, limit failures, RAG, and streaming where supported.
 - `src/main/resources/openapi.yaml` is the authoritative REST API contract.
 - The OpenAPI document is served publicly through `GET /openapi.yaml`.
@@ -176,9 +180,10 @@ GET    /openapi.yaml
 - Unambiguous numeric expressions and localized number-word expressions in Czech, English, German, Slovak, and Polish use the calculator without an LLM routing call; additional languages are routed by the LLM without requiring language-specific application code. The exact matching rules (accepted typo tolerance, accepted conjunction forms) are implementation detail defined in `AGENTS.md`.
 - When the LLM recognizes arithmetic in another language or despite a spelling mistake, it normalizes the expression and calls the calculator immediately without discussing the language or performing the calculation itself.
 - JSON wrapped in a Markdown code block is accepted.
-- An invalid decision triggers at most one repair request.
-- Only registered tools can be executed.
-- The assistant tool decision and tool result are preserved in conversation order.
+- An invalid decision, including a call to a tool that is not registered, triggers at most one repair request.
+- If the repaired decision is still invalid, or the model calls a tool again after receiving a tool result, the request fails with an invalid-response error (see REST API errors). The console keeps running and reports it without internal details.
+- Only registered tools can be executed. Tool names must be non-blank and unique; the agent rejects a tool set that violates this when it is created.
+- The assistant tool decision and tool result are preserved in conversation order for the model within the request. They are not added to the caller's conversation, so persisted history contains only user questions and final answers.
 - Tools may declare their result final. Calculator requests return the formatted tool result directly after either deterministic or model-based routing, avoiding an unnecessary second LLM call.
 - Token usage from all LLM calls is aggregated.
 - Invalid tool input returns a tool failure instead of terminating the application.
@@ -267,6 +272,7 @@ demo.limits.max-rag-documents=20
 - The IP hash uses a server-side secret salt.
 - A Firestore transaction checks and reserves quota before a paid LLM request begins.
 - Token usage from every agent step is aggregated and reconciled against the reservation.
+- Every LLM call that returns is charged, also when the request fails or the client disconnects afterwards (for example `LLM_INVALID_RESPONSE`, an empty answer after the retry, or a provider failure in a later step). Only a call that fails itself returns no usage and is not charged.
 - A concurrency slot is released when a stream completes or fails.
 - If Firestore quota enforcement is unavailable in cloud mode, paid LLM requests fail closed with HTTP `503` and:
 

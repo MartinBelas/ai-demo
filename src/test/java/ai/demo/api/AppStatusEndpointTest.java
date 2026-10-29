@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import ai.demo.client.TokenUsage;
 import ai.demo.config.DemoLimitsConfig;
 import ai.demo.config.LlmProvider;
+import ai.demo.config.TestDemoLimits;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.exception.PersistenceException;
 import ai.demo.model.chat.ChatResponse;
@@ -23,16 +24,20 @@ import org.junit.jupiter.api.Test;
 class AppStatusEndpointTest {
   private final ObjectMapper mapper = new ObjectMapper();
   private final DemoLimitsConfig limits =
-      new DemoLimitsConfig(true, false, "", "(default)", "SALT", 200, 20, 5, 20000, 10, 5, 1000);
+      TestDemoLimits.enabled()
+          .ipHashSaltEnvironmentVariable("SALT")
+          .dailyRequests(200)
+          .maxOutputTokensPerCall(1000)
+          .build();
 
   @Test
   void exposesChatOutcomesAndTokensWithoutPromptOrClientIdentifiers() throws Exception {
     var store = new InMemoryDemoQuotaStore(limits);
     var service = mock(ChatService.class);
-    when(service.ask(any()))
-        .thenReturn(new ChatResponse("private answer", "model", new TokenUsage(5, 7), 100))
-        .thenThrow(new LlmCommunicationException("provider private details"));
+    // Calls in test order: chat succeeds, chat fails, stream succeeds.
     when(service.ask(any(), any()))
+        .thenReturn(new ChatResponse("private answer", "model", new TokenUsage(5, 7), 100))
+        .thenThrow(new LlmCommunicationException("provider private details"))
         .thenReturn(new ChatResponse("stream answer", "model", new TokenUsage(2, 3), 100));
     try (var server =
             new ApiServer(

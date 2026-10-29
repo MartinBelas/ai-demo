@@ -20,6 +20,11 @@ class EmbeddingTest {
   }
 
   @Test
+  void shouldExposeNumberOfDimensions() {
+    assertEquals(3, new Embedding(List.of(1.0, 2.0, 3.0)).dimensions());
+  }
+
+  @Test
   void shouldReturnMaximumSimilarityForIdenticalDirection() {
     Embedding query = new Embedding(List.of(1.0, 0.0));
     Embedding same = new Embedding(List.of(2.0, 0.0));

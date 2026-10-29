@@ -23,4 +23,28 @@ class DemoRequestGateMetricsTest {
         () -> gate.recordOutcome(reservation, AppOutcome.COMPLETED, System.nanoTime()));
     verify(store).recordOutcome(eq(reservation), eq(AppOutcome.COMPLETED), anyLong());
   }
+
+  @Test
+  void usageRecordedAfterFailureDoesNotHideTheOriginalError() {
+    var store = mock(DemoQuotaStore.class);
+    var gate = new DemoRequestGate(DemoLimitsConfig.disabled(), store, "");
+    var reservation = new DemoQuotaStore.Reservation("2026-09-03", "private", false);
+    doThrow(new PersistenceException("offline", null)).when(store).recordUsage(reservation, 12);
+
+    assertDoesNotThrow(() -> gate.recordUsageAfterFailure(reservation, 12));
+
+    verify(store).recordUsage(reservation, 12);
+  }
+
+  @Test
+  void usageRecordedAfterFailureIgnoresMissingReservationAndZeroTokens() {
+    var store = mock(DemoQuotaStore.class);
+    var gate = new DemoRequestGate(DemoLimitsConfig.disabled(), store, "");
+    var reservation = new DemoQuotaStore.Reservation("2026-09-03", "private", false);
+
+    gate.recordUsageAfterFailure(null, 12);
+    gate.recordUsageAfterFailure(reservation, 0);
+
+    verifyNoInteractions(store);
+  }
 }

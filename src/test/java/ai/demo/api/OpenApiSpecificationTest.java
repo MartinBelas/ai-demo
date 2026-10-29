@@ -56,6 +56,45 @@ class OpenApiSpecificationTest {
     assertNotNull(schemas.get("SseCompletionEvent").getProperties().get("webSources"));
   }
 
+  @Test
+  void shouldDocumentInvalidModelResponseErrorForChatAndStreaming() throws IOException {
+    SwaggerParseResult result = parseSpecification();
+
+    var chatExamples =
+        result
+            .getOpenAPI()
+            .getPaths()
+            .get("/api/chat")
+            .getPost()
+            .getResponses()
+            .get("502")
+            .getContent()
+            .get("application/json")
+            .getExamples();
+    assertTrue(chatExamples.containsKey("invalidResponse"));
+    assertTrue(
+        chatExamples.get("invalidResponse").getValue().toString().contains("LLM_INVALID_RESPONSE"));
+
+    var streamExamples =
+        result
+            .getOpenAPI()
+            .getPaths()
+            .get("/api/chat/stream")
+            .getPost()
+            .getResponses()
+            .get("200")
+            .getContent()
+            .get("text/event-stream")
+            .getExamples();
+    assertTrue(streamExamples.containsKey("invalidResponse"));
+    assertTrue(
+        streamExamples
+            .get("invalidResponse")
+            .getValue()
+            .toString()
+            .contains("LLM_INVALID_RESPONSE"));
+  }
+
   private SwaggerParseResult parseSpecification() throws IOException {
     String specification;
     try (var inputStream = getClass().getResourceAsStream("/openapi.yaml")) {

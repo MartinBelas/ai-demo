@@ -74,13 +74,16 @@ class RemoteAgentTest {
   }
 
   @Test
-  void shouldEmitTheAnswerAsOneContentEvent() {
+  void shouldReportUsageAndEmitTheAnswerAsOneContentEvent() {
     when(client.chat(any())).thenReturn(REPLY);
     List<AgentEvent> events = new ArrayList<>();
 
     agent.execute(conversation(ChatMessage.user("EUR to CZK?")), events::add);
 
-    assertEquals(List.of(new ContentEvent("1 EUR is 24.30 CZK.")), events);
+    assertEquals(
+        List.of(
+            new TokenUsageEvent(new TokenUsage(900, 120)), new ContentEvent("1 EUR is 24.30 CZK.")),
+        events);
   }
 
   @Test

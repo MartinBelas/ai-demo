@@ -91,6 +91,12 @@ user request
 
 Tool-based requests normally take longer and use more tokens because the LLM is called twice.
 
+If the model asks for a tool that does not exist, or returns an unusable decision, the agent asks it
+once to correct the answer. When that fails too, the request ends with an invalid-response error:
+the console prints a short message and keeps running, and the REST API returns `LLM_INVALID_RESPONSE`
+(HTTP `502`, or a terminal `error` event while streaming). The tool call and tool result are used only
+for that request and are not stored in the conversation history.
+
 ### Calculator Tool
 
 The built-in calculator supports:

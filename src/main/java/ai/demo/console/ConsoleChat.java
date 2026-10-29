@@ -11,7 +11,9 @@ import ai.demo.console.command.CommandResult;
 import ai.demo.console.command.CommandStatus;
 import ai.demo.console.command.ConsoleCommandDispatcher;
 import ai.demo.console.command.ThinkingMode;
+import ai.demo.exception.AgentDecisionException;
 import ai.demo.exception.LlmException;
+import ai.demo.exception.PersistenceException;
 import ai.demo.model.chat.ChatMessage;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
@@ -106,18 +108,23 @@ public class ConsoleChat {
     Conversation conversation = context.conversation();
     ThinkingOutput thinkingOutput = new ThinkingOutput();
 
-    conversation.add(ChatMessage.user(question));
+    // The question joins the history only together with its answer, so a failed request does not
+    // leave an unanswered question behind.
+    ChatMessage userMessage = ChatMessage.user(question);
 
     try {
 
       ChatResponse response =
-          chatService.ask(conversation, event -> printAgentEvent(event, context, thinkingOutput));
+          chatService.ask(
+              conversation.withMessage(userMessage),
+              event -> printAgentEvent(event, context, thinkingOutput));
 
       flushThinking(context, thinkingOutput);
 
+      conversation.add(userMessage);
       conversation.add(ChatMessage.assistant(response.answer()));
 
-      conversationRepository.save(conversation);
+      saveConversation(conversation);
 
       printSummary(response);
 
@@ -128,6 +135,24 @@ public class ConsoleChat {
       System.out.println();
       System.out.println("Unable to communicate with the AI model: " + e.getMessage());
       System.out.println();
+
+    } catch (AgentDecisionException e) {
+      log.warn("Agent decision failed", e);
+
+      System.out.println();
+      System.out.println("The AI model returned an invalid response. Please try again.");
+      System.out.println();
+    }
+  }
+
+  private void saveConversation(Conversation conversation) {
+    try {
+      conversationRepository.save(conversation);
+    } catch (PersistenceException e) {
+      log.error("Unable to save conversation", e);
+
+      System.out.println();
+      System.out.println("Unable to save the conversation. It is kept only until you exit.");
     }
   }
 
