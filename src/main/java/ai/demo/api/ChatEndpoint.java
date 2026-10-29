@@ -5,7 +5,10 @@ import ai.demo.exception.AgentModeDisabledException;
 import ai.demo.exception.AgentServiceException;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
+import ai.demo.exception.DemoLimitException;
 import ai.demo.exception.LlmException;
+import ai.demo.exception.RagDisabledException;
+import ai.demo.exception.RagException;
 import ai.demo.model.app.AppOutcome;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.persistence.DemoQuotaStore;
@@ -54,7 +57,7 @@ final class ChatEndpoint {
       requestGate.recordUsage(reservation, response.tokenUsage().totalTokens());
       ApiResponseWriter.write(context, 200, ApiChatResponse.from(response), objectMapper);
       outcome = AppOutcome.COMPLETED;
-    } catch (ai.demo.exception.RagDisabledException e) {
+    } catch (RagDisabledException e) {
       writeError(
           context,
           400,
@@ -71,7 +74,7 @@ final class ChatEndpoint {
       log.warn("Agent mode request failed", e);
       writeError(
           context, 502, AgentModeErrors.UNAVAILABLE_CODE, AgentModeErrors.UNAVAILABLE_MESSAGE);
-    } catch (ai.demo.exception.RagException e) {
+    } catch (RagException e) {
       log.warn("RAG request failed", e);
       writeError(
           context, 503, "RAG_UNAVAILABLE", "Project document search is temporarily unavailable.");
@@ -87,7 +90,7 @@ final class ChatEndpoint {
               ? LlmErrorMessages.communicationFailure()
               : LlmErrorMessages.communicationFailure(e.category(), request.provider());
       writeError(context, 502, "LLM_COMMUNICATION_ERROR", message);
-    } catch (ai.demo.exception.DemoLimitException e) {
+    } catch (DemoLimitException e) {
       writeDemoLimitError(context, e);
     } catch (RuntimeException e) {
       log.error("Unexpected chat API error", e);
@@ -102,8 +105,7 @@ final class ChatEndpoint {
     }
   }
 
-  private void writeDemoLimitError(
-      Context context, ai.demo.exception.DemoLimitException exception) {
+  private void writeDemoLimitError(Context context, DemoLimitException exception) {
     if (exception.unavailable()) {
       writeError(
           context, 503, "DEMO_LIMIT_UNAVAILABLE", "The public demo is temporarily unavailable.");

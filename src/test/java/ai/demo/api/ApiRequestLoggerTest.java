@@ -74,7 +74,7 @@ class ApiRequestLoggerTest {
     appender.start();
     logger.addAppender(appender);
 
-    try (ApiServer server = new ApiServer(0);
+    try (ApiServer server = TestApiServer.create().build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
       for (String path : paths) {

@@ -81,6 +81,55 @@ class AppConfigLoaderTest {
   }
 
   @Test
+  void shouldIgnoreForwardedHeaderByDefault() throws IOException {
+    DemoLimitsConfig limits = loader.loadFromResource("app-config/valid.properties").demoLimits();
+
+    assertEquals(0, limits.trustedProxyHops());
+  }
+
+  @Test
+  void shouldOverrideTrustedProxyHopsFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "DEMO_LIMITS_TRUSTED_PROXY_HOPS".equals(key) ? "2" : null);
+
+    DemoLimitsConfig limits =
+        environmentLoader.loadFromResource("app-config/valid.properties").demoLimits();
+
+    assertEquals(2, limits.trustedProxyHops());
+  }
+
+  @Test
+  void shouldAcceptZeroTrustedProxyHopsFromEnvironment() throws IOException {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "DEMO_LIMITS_TRUSTED_PROXY_HOPS".equals(key) ? "0" : null);
+
+    DemoLimitsConfig limits =
+        environmentLoader.loadFromResource("app-config/valid.properties").demoLimits();
+
+    assertEquals(0, limits.trustedProxyHops());
+  }
+
+  @Test
+  void shouldRejectNonNumericTrustedProxyHops() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "DEMO_LIMITS_TRUSTED_PROXY_HOPS".equals(key) ? "one" : null);
+
+    assertThrows(
+        ConfigurationException.class,
+        () -> environmentLoader.loadFromResource("app-config/valid.properties"));
+  }
+
+  @Test
+  void shouldRejectNegativeTrustedProxyHops() {
+    AppConfigLoader environmentLoader =
+        new AppConfigLoader(key -> "DEMO_LIMITS_TRUSTED_PROXY_HOPS".equals(key) ? "-1" : null);
+
+    assertThrows(
+        ConfigurationException.class,
+        () -> environmentLoader.loadFromResource("app-config/valid.properties"));
+  }
+
+  @Test
   void shouldLoadDemoLimitProperties() throws IOException {
     DemoLimitsConfig limits =
         loader.loadFromResource("app-config/valid-demo-limits.properties").demoLimits();

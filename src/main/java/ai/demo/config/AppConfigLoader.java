@@ -231,7 +231,9 @@ public final class AppConfigLoader {
             properties,
             "demo.limits.max-output-tokens-per-call",
             "DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL",
-            1500));
+            1500),
+        intValue(
+            properties, "demo.limits.trusted-proxy-hops", "DEMO_LIMITS_TRUSTED_PROXY_HOPS", 0));
   }
 
   private boolean booleanValue(Properties properties, String property, String variable) {

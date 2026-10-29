@@ -13,7 +13,8 @@ public record DemoLimitsConfig(
     int maxInputCharacters,
     int maxHistoryMessages,
     int maxRagChunks,
-    int maxOutputTokensPerCall) {
+    int maxOutputTokensPerCall,
+    int trustedProxyHops) {
 
   public DemoLimitsConfig {
     positive(dailyRequests, "dailyRequests");
@@ -23,6 +24,9 @@ public record DemoLimitsConfig(
     positive(maxHistoryMessages, "maxHistoryMessages");
     positive(maxRagChunks, "maxRagChunks");
     positive(maxOutputTokensPerCall, "maxOutputTokensPerCall");
+    if (trustedProxyHops < 0) {
+      throw new IllegalArgumentException("trustedProxyHops must not be negative");
+    }
     if (firestoreEnabled
         && (ipHashSaltEnvironmentVariable == null || ipHashSaltEnvironmentVariable.isBlank())) {
       throw new IllegalArgumentException("ipHashSaltEnvironmentVariable must not be blank");
@@ -31,7 +35,7 @@ public record DemoLimitsConfig(
 
   public static DemoLimitsConfig disabled() {
     return new DemoLimitsConfig(
-        false, false, "", "(default)", "DEMO_IP_HASH_SALT", 1000, 20, 5, 20000, 10, 5, 1500);
+        false, false, "", "(default)", "DEMO_IP_HASH_SALT", 1000, 20, 5, 20000, 10, 5, 1500, 0);
   }
 
   private static void positive(int value, String name) {

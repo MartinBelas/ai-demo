@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import ai.demo.client.TokenUsage;
 import ai.demo.config.DemoLimitsConfig;
-import ai.demo.config.LlmProvider;
 import ai.demo.config.TestDemoLimits;
 import ai.demo.exception.LlmCommunicationException;
 import ai.demo.exception.PersistenceException;
@@ -43,13 +42,11 @@ class AppStatusEndpointTest {
         .thenThrow(new LlmCommunicationException("provider private details"))
         .thenReturn(new ChatResponse("stream answer", "model", new TokenUsage(2, 3), 100));
     try (var server =
-            new ApiServer(
-                0,
-                null,
-                ignored -> service,
-                LlmProvider.OLLAMA,
-                mapper,
-                new DemoProtection(limits, store, "secret-salt"));
+            TestApiServer.create()
+                .chatServices(ignored -> service)
+                .objectMapper(mapper)
+                .demoProtection(new DemoProtection(limits, store, "secret-salt"))
+                .build();
         var client = HttpClient.newHttpClient()) {
       server.start();
       assertEquals(200, post(client, server, "/api/chat").statusCode());
@@ -74,8 +71,10 @@ class AppStatusEndpointTest {
     var store = mock(DemoQuotaStore.class);
     when(store.snapshot(any())).thenThrow(new PersistenceException("secret database", null));
     try (var server =
-            new ApiServer(
-                0, null, null, null, mapper, new DemoProtection(limits, store, "secret"));
+            TestApiServer.create()
+                .objectMapper(mapper)
+                .demoProtection(new DemoProtection(limits, store, "secret"))
+                .build();
         var client = HttpClient.newHttpClient()) {
       server.start();
       var response = get(client, server);

@@ -18,6 +18,7 @@ public final class TestDemoLimits {
   private int concurrentStreams = 5;
   private int maxInputCharacters = 20000;
   private int maxOutputTokensPerCall = 1500;
+  private int trustedProxyHops = 1;
 
   private TestDemoLimits() {}
 
@@ -62,6 +63,11 @@ public final class TestDemoLimits {
     return this;
   }
 
+  public TestDemoLimits trustedProxyHops(int trustedProxyHops) {
+    this.trustedProxyHops = trustedProxyHops;
+    return this;
+  }
+
   public DemoLimitsConfig build() {
     return new DemoLimitsConfig(
         true,
@@ -75,6 +81,7 @@ public final class TestDemoLimits {
         maxInputCharacters,
         MAX_HISTORY_MESSAGES,
         MAX_RAG_CHUNKS,
-        maxOutputTokensPerCall);
+        maxOutputTokensPerCall,
+        trustedProxyHops);
   }
 }

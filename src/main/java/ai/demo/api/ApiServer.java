@@ -9,7 +9,9 @@ import ai.demo.service.AppStatusService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
+import io.javalin.http.Context;
 import io.javalin.http.staticfiles.Location;
+import java.util.Map;
 
 /** Embedded HTTP server exposing the public API. */
 public final class ApiServer implements AutoCloseable {
@@ -29,71 +31,6 @@ public final class ApiServer implements AutoCloseable {
   private Javalin app;
   private final boolean ragEnabled;
   private final boolean agentModeEnabled;
-
-  public ApiServer(int configuredPort) {
-    this(configuredPort, null, null, null, new ObjectMapper(), DemoProtection.localDevelopment());
-  }
-
-  public ApiServer(
-      int configuredPort, LlmProviderAvailability providerAvailability, ObjectMapper objectMapper) {
-    this(
-        configuredPort,
-        providerAvailability,
-        null,
-        null,
-        objectMapper,
-        DemoProtection.localDevelopment());
-  }
-
-  public ApiServer(
-      int configuredPort,
-      LlmProviderAvailability providerAvailability,
-      ChatServiceResolver chatServiceResolver,
-      LlmProvider defaultProvider,
-      ObjectMapper objectMapper) {
-    this(
-        configuredPort,
-        providerAvailability,
-        chatServiceResolver,
-        defaultProvider,
-        objectMapper,
-        DemoProtection.localDevelopment());
-  }
-
-  public ApiServer(
-      int configuredPort,
-      LlmProviderAvailability providerAvailability,
-      ChatServiceResolver chatServiceResolver,
-      LlmProvider defaultProvider,
-      ObjectMapper objectMapper,
-      DemoProtection demoProtection) {
-    this(
-        configuredPort,
-        providerAvailability,
-        chatServiceResolver,
-        defaultProvider,
-        objectMapper,
-        demoProtection,
-        false);
-  }
-
-  public ApiServer(
-      int configuredPort,
-      LlmProviderAvailability providerAvailability,
-      ChatServiceResolver chatServiceResolver,
-      LlmProvider defaultProvider,
-      ObjectMapper objectMapper,
-      DemoProtection demoProtection,
-      boolean ragEnabled) {
-    this(
-        configuredPort,
-        providerAvailability,
-        chatServiceResolver == null ? null : new ChatServiceSelector(chatServiceResolver, null),
-        defaultProvider,
-        objectMapper,
-        demoProtection,
-        ragEnabled);
-  }
 
   /**
    * @param chatServices chooses between provider chat services and the agent-mode service, or
@@ -161,8 +98,7 @@ public final class ApiServer implements AutoCloseable {
                                 ApiResponseWriter.write(
                                     context,
                                     200,
-                                    java.util.Map.of(
-                                        "enabled", ragEnabled, "uploadsEnabled", false),
+                                    Map.of("enabled", ragEnabled, "uploadsEnabled", false),
                                     objectMapper))
                         .get(
                             "/api/agent/status",
@@ -170,7 +106,7 @@ public final class ApiServer implements AutoCloseable {
                                 ApiResponseWriter.write(
                                     context,
                                     200,
-                                    java.util.Map.of("enabled", agentModeEnabled),
+                                    Map.of("enabled", agentModeEnabled),
                                     objectMapper))
                         .post("/api/chat", this::handleChat)
                         .post("/api/chat/stream", this::handleStreamingChat);
@@ -181,7 +117,7 @@ public final class ApiServer implements AutoCloseable {
     }
   }
 
-  private void handleChat(io.javalin.http.Context context) {
+  private void handleChat(Context context) {
     if (chatEndpoint == null) {
       writeServiceUnavailable(context);
       return;
@@ -189,7 +125,7 @@ public final class ApiServer implements AutoCloseable {
     chatEndpoint.handle(context);
   }
 
-  private void handleAppStatus(io.javalin.http.Context context) {
+  private void handleAppStatus(Context context) {
     context.header("Cache-Control", "no-store");
     try {
       ApiResponseWriter.write(context, 200, appStatusService.status(), objectMapper);
@@ -203,7 +139,7 @@ public final class ApiServer implements AutoCloseable {
     }
   }
 
-  private void handleStreamingChat(io.javalin.http.Context context) {
+  private void handleStreamingChat(Context context) {
     if (streamingChatEndpoint == null) {
       writeServiceUnavailable(context);
       return;
@@ -211,7 +147,7 @@ public final class ApiServer implements AutoCloseable {
     streamingChatEndpoint.handle(context);
   }
 
-  private void writeServiceUnavailable(io.javalin.http.Context context) {
+  private void writeServiceUnavailable(Context context) {
     ApiResponseWriter.writeError(
         context, 503, "SERVICE_UNAVAILABLE", "Chat is not available.", objectMapper);
   }

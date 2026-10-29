@@ -35,7 +35,6 @@ import ai.demo.model.chat.ChatResponse;
 import ai.demo.model.chat.Conversation;
 import ai.demo.persistence.InMemoryDemoQuotaStore;
 import ai.demo.service.ChatService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -83,7 +82,7 @@ class ApiServerTest {
   @Test
   void shouldExposeHealthEndpoint() throws IOException, InterruptedException {
     ApiServer closedServer;
-    try (ApiServer server = new ApiServer(0);
+    try (ApiServer server = TestApiServer.create().build();
         HttpClient client = HttpClient.newHttpClient()) {
       closedServer = server;
       server.start();
@@ -104,7 +103,7 @@ class ApiServerTest {
 
   @Test
   void shouldServeProductionFrontend() throws IOException, InterruptedException {
-    try (ApiServer server = new ApiServer(0);
+    try (ApiServer server = TestApiServer.create().build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -121,7 +120,7 @@ class ApiServerTest {
 
   @Test
   void shouldExposeOpenApiSpecification() throws IOException, InterruptedException {
-    try (ApiServer server = new ApiServer(0);
+    try (ApiServer server = TestApiServer.create().build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -149,7 +148,7 @@ class ApiServerTest {
             .ollama(new OllamaConfig(OLLAMA_MODEL, "http://localhost:11434", 4096, 1.18))
             .build();
     LlmProviderAvailability availability = new LlmProviderAvailability(config, key -> null);
-    try (ApiServer server = new ApiServer(0, availability, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().providerAvailability(availability).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -175,8 +174,7 @@ class ApiServerTest {
     when(chatService.ask(any(), any()))
         .thenReturn(new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25));
 
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -202,8 +200,7 @@ class ApiServerTest {
   @Test
   void shouldRejectChatRequestWithoutMessages() throws IOException, InterruptedException {
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -227,8 +224,7 @@ class ApiServerTest {
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
     when(resolver.resolve(LlmProvider.GROQ))
         .thenThrow(new ConfigurationException("Provider GROQ is not configured"));
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -250,8 +246,7 @@ class ApiServerTest {
   @Test
   void shouldIdentifyInvalidMessageRole() throws IOException, InterruptedException {
     ChatServiceResolver resolver = mock(ChatServiceResolver.class);
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -275,8 +270,7 @@ class ApiServerTest {
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
     when(chatService.ask(any(), any()))
         .thenThrow(new LlmCommunicationException(PROVIDER_FAILURE_DETAILS));
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -300,8 +294,7 @@ class ApiServerTest {
     when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
     when(chatService.ask(any(), any()))
         .thenThrow(new AgentDecisionException("Unknown tool: " + INTERNAL_DETAILS));
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -324,8 +317,7 @@ class ApiServerTest {
     when(chatService.ask(any(Conversation.class), any()))
         .thenThrow(new AgentDecisionException("Unknown tool: " + INTERNAL_DETAILS));
 
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -356,8 +348,7 @@ class ApiServerTest {
               return new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25);
             });
 
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -401,8 +392,7 @@ class ApiServerTest {
               return new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(12, 4), 25);
             });
 
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -434,8 +424,7 @@ class ApiServerTest {
     when(chatService.ask(any(Conversation.class), any()))
         .thenThrow(new LlmCommunicationException(PROVIDER_FAILURE_DETAILS));
 
-    try (ApiServer server =
-            new ApiServer(0, null, resolver, LlmProvider.OLLAMA, new ObjectMapper());
+    try (ApiServer server = TestApiServer.create().chatServices(resolver).build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -468,13 +457,11 @@ class ApiServerTest {
             .build();
 
     try (ApiServer server =
-            new ApiServer(
-                0,
-                null,
-                resolver,
-                LlmProvider.OLLAMA,
-                new ObjectMapper(),
-                new DemoProtection(limits, new InMemoryDemoQuotaStore(limits), "test-salt"));
+            TestApiServer.create()
+                .chatServices(resolver)
+                .demoProtection(
+                    new DemoProtection(limits, new InMemoryDemoQuotaStore(limits), "test-salt"))
+                .build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
       String body = "{\"messages\":[{\"role\":\"USER\",\"content\":\"Hi\"}]}";
@@ -491,6 +478,40 @@ class ApiServerTest {
   }
 
   @Test
+  void shouldNotLetClientBypassHourlyLimitByPrependingForwardedForEntries()
+      throws IOException, InterruptedException {
+    ChatService chatService = mock(ChatService.class);
+    ChatServiceResolver resolver = mock(ChatServiceResolver.class);
+    when(resolver.resolve(LlmProvider.OLLAMA)).thenReturn(chatService);
+    when(chatService.ask(any(Conversation.class), any()))
+        .thenReturn(new ChatResponse("Hello!", OLLAMA_MODEL, new TokenUsage(3, 2), 10));
+    DemoLimitsConfig limits =
+        TestDemoLimits.enabled().hourlyRequestsPerIp(1).trustedProxyHops(1).build();
+
+    try (ApiServer server =
+            TestApiServer.create()
+                .chatServices(resolver)
+                .demoProtection(
+                    new DemoProtection(limits, new InMemoryDemoQuotaStore(limits), "test-salt"))
+                .build();
+        HttpClient client = HttpClient.newHttpClient()) {
+      server.start();
+
+      HttpResponse<String> first =
+          client.send(
+              forwardedChatRequest(server, "198.51.100.1, 203.0.113.7"),
+              HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> second =
+          client.send(
+              forwardedChatRequest(server, "198.51.100.2, 203.0.113.7"),
+              HttpResponse.BodyHandlers.ofString());
+
+      assertEquals(200, first.statusCode());
+      assertEquals(429, second.statusCode());
+    }
+  }
+
+  @Test
   void shouldChargeTokensOfInvalidAgentDecisionToDemoQuota()
       throws IOException, InterruptedException {
     ChatService chatService = mock(ChatService.class);
@@ -501,13 +522,10 @@ class ApiServerTest {
     InMemoryDemoQuotaStore quotaStore = new InMemoryDemoQuotaStore(DEMO_LIMITS);
 
     try (ApiServer server =
-            new ApiServer(
-                0,
-                null,
-                resolver,
-                LlmProvider.OLLAMA,
-                new ObjectMapper(),
-                new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"));
+            TestApiServer.create()
+                .chatServices(resolver)
+                .demoProtection(new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"))
+                .build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -530,13 +548,10 @@ class ApiServerTest {
     InMemoryDemoQuotaStore quotaStore = new InMemoryDemoQuotaStore(DEMO_LIMITS);
 
     try (ApiServer server =
-            new ApiServer(
-                0,
-                null,
-                resolver,
-                LlmProvider.OLLAMA,
-                new ObjectMapper(),
-                new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"));
+            TestApiServer.create()
+                .chatServices(resolver)
+                .demoProtection(new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"))
+                .build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -559,13 +574,10 @@ class ApiServerTest {
     InMemoryDemoQuotaStore quotaStore = new InMemoryDemoQuotaStore(DEMO_LIMITS);
 
     try (ApiServer server =
-            new ApiServer(
-                0,
-                null,
-                resolver,
-                LlmProvider.OLLAMA,
-                new ObjectMapper(),
-                new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"));
+            TestApiServer.create()
+                .chatServices(resolver)
+                .demoProtection(new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"))
+                .build();
         HttpClient client = HttpClient.newHttpClient()) {
       server.start();
 
@@ -608,13 +620,10 @@ class ApiServerTest {
     InMemoryDemoQuotaStore quotaStore = spy(new InMemoryDemoQuotaStore(DEMO_LIMITS));
 
     try (ApiServer server =
-        new ApiServer(
-            0,
-            null,
-            resolver,
-            LlmProvider.OLLAMA,
-            new ObjectMapper(),
-            new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"))) {
+        TestApiServer.create()
+            .chatServices(resolver)
+            .demoProtection(new DemoProtection(DEMO_LIMITS, quotaStore, "test-salt"))
+            .build()) {
       server.start();
 
       disconnectAfterFirstEvent(server, thinkingSent);
@@ -667,6 +676,14 @@ class ApiServerTest {
     return HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/chat"))
         .header(CONTENT_TYPE, APPLICATION_JSON)
         .POST(HttpRequest.BodyPublishers.ofString(body))
+        .build();
+  }
+
+  private HttpRequest forwardedChatRequest(ApiServer server, String forwardedFor) {
+    return HttpRequest.newBuilder(URI.create(LOCAL_SERVER + server.port() + "/api/chat"))
+        .header(CONTENT_TYPE, APPLICATION_JSON)
+        .header("X-Forwarded-For", forwardedFor)
+        .POST(HttpRequest.BodyPublishers.ofString(USER_MESSAGE_BODY))
         .build();
   }
 

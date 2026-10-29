@@ -7,12 +7,26 @@ param(
     [ValidateSet("", "OPENAI", "GEMINI")][string]$EmbeddingProvider = "",
     [string]$EmbeddingApiKeySecret,
     [switch]$DisableRag,
+    # Cloud Run's front end is one proxy; use 2 behind an external Application Load Balancer.
+    [ValidateRange(0, 10)][int]$TrustedProxyHops = 1,
     [string]$EnvironmentFile = "$PSScriptRoot/cloudrun.env.yaml"
 )
 
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path -LiteralPath $EnvironmentFile)) {
     throw "Environment file not found: $EnvironmentFile. Copy cloudrun.env.yaml.example first."
+}
+$configuredEnvironment = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $EnvironmentFile))
+# Without the hop count the server ignores X-Forwarded-For and every client shares one hourly
+# limit, so a copy of the environment file made before the setting existed must still get it.
+$proxyHopsEnvironment = ""
+if ($configuredEnvironment -match '(?m)^\s*DEMO_LIMITS_TRUSTED_PROXY_HOPS\s*:') {
+    if ($PSBoundParameters.ContainsKey("TrustedProxyHops")) {
+        throw "DEMO_LIMITS_TRUSTED_PROXY_HOPS is set both in $EnvironmentFile" `
+            + " and by -TrustedProxyHops; keep only one."
+    }
+} else {
+    $proxyHopsEnvironment = "DEMO_LIMITS_TRUSTED_PROXY_HOPS: `"$TrustedProxyHops`"`n"
 }
 
 # RAG needs a cloud embedding provider on Cloud Run (no local Ollama sidecar). Defaults to the
@@ -75,9 +89,8 @@ if (-not $repository) {
 gcloud builds submit --tag $image .
 $temporaryEnvironment = New-TemporaryFile
 try {
-    $configuredEnvironment = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $EnvironmentFile))
     $runtimeEnvironment = "$configuredEnvironment`nLLM_PROVIDER: $Provider`n" `
-        + "GOOGLE_CLOUD_PROJECT: $ProjectId`n$ragEnvironment"
+        + "GOOGLE_CLOUD_PROJECT: $ProjectId`n$proxyHopsEnvironment$ragEnvironment"
     [System.IO.File]::WriteAllText($temporaryEnvironment.FullName, $runtimeEnvironment)
 
     $allSecrets = ($secretMounts -join ",") + ",DEMO_IP_HASH_SALT=demo-ip-hash-salt:latest"

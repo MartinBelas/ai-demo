@@ -40,7 +40,7 @@ class RequestIdHandlerTest {
     appender.start();
     requestLogger.addAppender(appender);
     handlerLogger.addAppender(appender);
-    server = new ApiServer(0);
+    server = TestApiServer.create().build();
     server.start();
     client = HttpClient.newHttpClient();
   }

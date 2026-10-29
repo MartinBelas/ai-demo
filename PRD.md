@@ -260,11 +260,14 @@ demo.limits.max-input-characters=20000
 demo.limits.max-history-messages=10
 demo.limits.max-rag-chunks=5
 demo.limits.max-output-tokens-per-call=1500
+demo.limits.trusted-proxy-hops=0
 demo.limits.max-rag-upload-bytes=200000
 demo.limits.max-rag-documents=20
 ```
 
 - `demo.limits.daily-requests` resets at `00:00 UTC`. `demo.limits.hourly-requests-per-ip` uses a rolling one-hour window per hashed client identifier.
+- The per-client limit identifies a client by the `X-Forwarded-For` entry appended by the outermost trusted proxy (`demo.limits.trusted-proxy-hops`, counted from the right), never by entries the client can supply itself. The default `0` ignores the header; a deployment behind proxies sets the hop count explicitly.
+- The concurrent-stream limit is counted in the memory of one server instance. It is a global limit only while the deployment is bounded to one instance.
 - `demo.limits.concurrent-streams` bounds only concurrent in-flight `POST /api/chat/stream` requests. Non-streaming `POST /api/chat` requests are not subject to a concurrency limit, only to the daily and hourly request-rate limits.
 - Limit values are configurable through application configuration and environment variables.
 - Firestore stores only aggregate usage counters and hashed client identifiers required for rate limiting.

@@ -19,7 +19,8 @@ final class DemoRequestGate {
   DemoRequestGate(DemoLimitsConfig limits, DemoQuotaStore quotaStore, String ipHashSalt) {
     this.limits = limits;
     this.quotaStore = quotaStore;
-    this.clientHashProvider = limits.enabled() ? new ClientHashProvider(ipHashSalt) : null;
+    this.clientHashProvider =
+        limits.enabled() ? new ClientHashProvider(ipHashSalt, limits.trustedProxyHops()) : null;
   }
 
   void validate(Conversation conversation) {

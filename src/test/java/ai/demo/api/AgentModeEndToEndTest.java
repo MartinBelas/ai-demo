@@ -10,7 +10,6 @@ import ai.demo.agent.RemoteAgent;
 import ai.demo.client.agentlab.AgentLabClient;
 import ai.demo.client.http.JdkHttpTransport;
 import ai.demo.config.AgentLabConfig;
-import ai.demo.config.LlmProvider;
 import ai.demo.service.ChatService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -257,14 +256,10 @@ class AgentModeEndToEndTest {
   }
 
   private ApiServer server(ChatService agentChatService) {
-    return new ApiServer(
-        0,
-        null,
-        new ChatServiceSelector(providerServices, agentChatService),
-        LlmProvider.OLLAMA,
-        mapper,
-        DemoProtection.localDevelopment(),
-        false);
+    return TestApiServer.create()
+        .chatServices(new ChatServiceSelector(providerServices, agentChatService))
+        .objectMapper(mapper)
+        .build();
   }
 
   private HttpResponse<String> post(ApiServer server, String path, String body)

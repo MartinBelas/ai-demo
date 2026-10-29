@@ -313,9 +313,21 @@ DEMO_LIMITS_CONCURRENT_STREAMS=5
 DEMO_LIMITS_MAX_INPUT_CHARACTERS=20000
 DEMO_LIMITS_MAX_HISTORY_MESSAGES=10
 DEMO_LIMITS_MAX_OUTPUT_TOKENS_PER_CALL=1500
+DEMO_LIMITS_TRUSTED_PROXY_HOPS=1   # Cloud Run alone; the default 0 ignores X-Forwarded-For
 GOOGLE_CLOUD_PROJECT=your-project-id
 FIRESTORE_DATABASE_ID=(default)
 ```
+
+The client address is the `X-Forwarded-For` entry appended by the outermost trusted proxy, counted
+from the right: proxies append to the header, so entries further left are whatever the client sent
+and would let it bypass the per-client limit. Set `1` for Cloud Run alone and `2` behind an external
+Application Load Balancer. The default `0` ignores the header, which is correct for direct
+connections but puts every client behind a proxy into one shared limit; the server then logs a
+one-time warning. `deploy/deploy-cloud-run.ps1` takes the value from `cloudrun.env.yaml` or, when
+it is missing there, from `-TrustedProxyHops` (default `1`); a service deployed any other way must
+set `DEMO_LIMITS_TRUSTED_PROXY_HOPS=1` itself. To check
+a deployment, send more than the hourly limit with a changing `X-Forwarded-For` value; the requests
+over the limit must get HTTP `429`.
 
 Client addresses are salted and SHA-256 hashed before being used as Firestore document keys. Set
 `DEMO_IP_HASH_SALT` from Secret Manager. Raw addresses, prompts, responses, and conversation

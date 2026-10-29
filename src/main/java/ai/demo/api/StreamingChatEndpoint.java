@@ -10,7 +10,10 @@ import ai.demo.exception.AgentModeDisabledException;
 import ai.demo.exception.AgentServiceException;
 import ai.demo.exception.ApiRequestException;
 import ai.demo.exception.ConfigurationException;
+import ai.demo.exception.DemoLimitException;
 import ai.demo.exception.LlmException;
+import ai.demo.exception.RagDisabledException;
+import ai.demo.exception.RagException;
 import ai.demo.model.app.AppOutcome;
 import ai.demo.model.chat.ChatResponse;
 import ai.demo.persistence.DemoQuotaStore;
@@ -64,7 +67,7 @@ final class StreamingChatEndpoint {
           AgentModeErrors.DISABLED_MESSAGE,
           objectMapper);
       return;
-    } catch (ai.demo.exception.RagDisabledException e) {
+    } catch (RagDisabledException e) {
       ApiResponseWriter.writeError(
           context,
           400,
@@ -79,7 +82,7 @@ final class StreamingChatEndpoint {
       log.warn("Selected LLM provider is unavailable", e);
       writeProviderUnavailable(context);
       return;
-    } catch (ai.demo.exception.DemoLimitException e) {
+    } catch (DemoLimitException e) {
       writeDemoLimitError(context, e);
       return;
     }
@@ -136,7 +139,7 @@ final class StreamingChatEndpoint {
           ERROR_EVENT,
           ApiErrorResponse.of(
               AgentModeErrors.UNAVAILABLE_CODE, AgentModeErrors.UNAVAILABLE_MESSAGE));
-    } catch (ai.demo.exception.RagException e) {
+    } catch (RagException e) {
       log.warn("Streaming RAG request failed", e);
       writer.send(
           ERROR_EVENT,
@@ -149,7 +152,7 @@ final class StreamingChatEndpoint {
           ApiErrorResponse.of(
               "LLM_COMMUNICATION_ERROR",
               LlmErrorMessages.communicationFailure(e.category(), request.provider())));
-    } catch (ai.demo.exception.DemoLimitException e) {
+    } catch (DemoLimitException e) {
       log.warn("Demo quota reconciliation failed", e);
       writer.send(
           ERROR_EVENT,
@@ -162,8 +165,7 @@ final class StreamingChatEndpoint {
     return AppOutcome.FAILED;
   }
 
-  private void writeDemoLimitError(
-      Context context, ai.demo.exception.DemoLimitException exception) {
+  private void writeDemoLimitError(Context context, DemoLimitException exception) {
     if (exception.unavailable()) {
       ApiResponseWriter.writeError(
           context, 503, DEMO_LIMIT_UNAVAILABLE_CODE, DEMO_LIMIT_UNAVAILABLE_MESSAGE, objectMapper);
