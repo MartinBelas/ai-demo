@@ -4,6 +4,7 @@ import ai.demo.exception.LlmException;
 import ai.demo.model.chat.ChatChunk;
 import ai.demo.model.prompt.Prompt;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,11 +43,8 @@ public class LoggingLlmClient implements LlmClient {
           response.tokenUsage().totalTokens());
 
       return response;
-    } catch (LlmException e) {
-      log.error("LLM request failed after {} ms", elapsedMillis(start), e);
-      throw e;
     } catch (RuntimeException e) {
-      log.error("Unexpected error after {} ms", elapsedMillis(start), e);
+      logFailure("request", start, e);
       throw e;
     }
   }
@@ -56,10 +54,11 @@ public class LoggingLlmClient implements LlmClient {
 
     long start = System.nanoTime();
     log.info("Sending streaming prompt (messages={})", prompt.messages().size());
+    AtomicReference<RuntimeException> consumerFailure = new AtomicReference<>();
 
     try {
-
-      StreamingResult result = delegate.stream(prompt, consumer);
+      StreamingResult result =
+          delegate.stream(prompt, rememberingFailure(consumer, consumerFailure));
 
       log.info(
           "Token usage: promptTokens={}, completionTokens={}, totalTokens={}",
@@ -68,13 +67,58 @@ public class LoggingLlmClient implements LlmClient {
           result.tokenUsage().totalTokens());
 
       return result;
-    } catch (LlmException e) {
-      log.error("LLM streaming failed after {} ms", elapsedMillis(start), e);
-      throw e;
     } catch (RuntimeException e) {
-      log.error("Unexpected error during LLM streaming after {} ms", elapsedMillis(start), e);
+      if (isCausedBy(e, consumerFailure.get())) {
+        // Not an LLM failure: typically the client disconnected while the model was still
+        // streaming, which the caller handles as a normal outcome.
+        log.debug(
+            "LLM streaming stopped by its consumer after {} ms: {}",
+            elapsedMillis(start),
+            e.toString());
+      } else {
+        logFailure("streaming", start, e);
+      }
       throw e;
     }
+  }
+
+  /**
+   * Records the duration and the type and message of a failed call, without the stack trace. The
+   * exception is rethrown: the caller that handles it logs it with its stack trace, so the trace is
+   * not logged twice, while the cause stays visible even if a caller swallows the exception.
+   */
+  private static void logFailure(String operation, long startNanoTime, RuntimeException e) {
+    // toString() on purpose: a Throwable as the last argument would make SLF4J log its stack trace.
+    String cause = e.toString();
+    long elapsedMillis = elapsedMillis(startNanoTime);
+    if (e instanceof LlmException) {
+      log.warn("LLM {} failed after {} ms: {}", operation, elapsedMillis, cause);
+    } else {
+      log.error("Unexpected error during LLM {} after {} ms: {}", operation, elapsedMillis, cause);
+    }
+  }
+
+  /** Remembers the consumer's failure, to tell it from a failure of the provider. */
+  private static Consumer<ChatChunk> rememberingFailure(
+      Consumer<ChatChunk> consumer, AtomicReference<RuntimeException> consumerFailure) {
+    return chunk -> {
+      try {
+        consumer.accept(chunk);
+      } catch (RuntimeException e) {
+        consumerFailure.set(e);
+        throw e;
+      }
+    };
+  }
+
+  /** True if {@code failure} is {@code cause} or was caused by it, e.g. wrapped by a provider. */
+  private static boolean isCausedBy(Throwable failure, Throwable cause) {
+    for (Throwable current = failure; current != null; current = current.getCause()) {
+      if (current == cause) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static long elapsedMillis(long startNanoTime) {
