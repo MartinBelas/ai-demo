@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ProjectId,
     [string]$Region = "europe-west1",
     [string]$Service = "ai-demo",
+    # Runtime identity of the service, created on the first deployment.
+    [string]$ServiceAccountName = "ai-demo",
     [ValidateSet("OPENAI", "GROQ", "GEMINI")][string]$Provider = "OPENAI",
     [Parameter(Mandatory = $true)][string]$ApiKeySecret,
     [ValidateSet("", "OPENAI", "GEMINI")][string]$EmbeddingProvider = "",
@@ -79,7 +81,25 @@ if (-not $DisableRag) {
 }
 
 gcloud config set project $ProjectId
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com secretmanager.googleapis.com
+gcloud services enable iam.googleapis.com run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com secretmanager.googleapis.com
+
+# A dedicated runtime identity instead of the default Compute Engine service account, which is
+# shared with Cloud Build and has no business reading this service's secrets. It gets only
+# Firestore and the mounted secrets. The grants are additive and safe to repeat. If one fails
+# right after the account was created (IAM propagation), run the script again.
+$serviceAccountEmail = "$ServiceAccountName@$ProjectId.iam.gserviceaccount.com"
+$existingAccount = gcloud iam service-accounts list --filter "email=$serviceAccountEmail" --format "value(email)"
+if (-not $existingAccount) {
+    gcloud iam service-accounts create $ServiceAccountName --display-name "$Service Cloud Run service"
+}
+$runtimeSecrets = @($secretMounts | ForEach-Object { ($_ -split "=", 2)[1] -replace ":latest$", "" }) `
+    + "demo-ip-hash-salt"
+foreach ($runtimeSecret in $runtimeSecrets) {
+    gcloud secrets add-iam-policy-binding $runtimeSecret --member "serviceAccount:$serviceAccountEmail" `
+        --role roles/secretmanager.secretAccessor --condition None | Out-Null
+}
+gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$serviceAccountEmail" `
+    --role roles/datastore.user --condition None | Out-Null
 
 $repository = gcloud artifacts repositories describe ai-demo --location $Region --format "value(name)" 2>$null
 if (-not $repository) {
@@ -98,6 +118,7 @@ try {
     gcloud run deploy $Service `
         --image $image `
         --region $Region `
+        --service-account $serviceAccountEmail `
         --allow-unauthenticated `
         --port 8080 `
         --cpu 1 `

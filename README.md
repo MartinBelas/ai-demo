@@ -178,8 +178,8 @@ On Cloud Run the agent service must stay private (`--no-allow-unauthenticated`),
 `AGENT_LAB_AUTHENTICATION=GOOGLE_ID_TOKEN`. Each call then carries a Google-signed identity token
 of this application's service account, fetched from the metadata server for the agent service URL
 as the audience and cached until shortly before it expires. Cloud Run verifies the token; grant
-this application's service account `roles/run.invoker` on the agent service only. The deployment
-script does not enable agent mode yet.
+the service account created by the deployment script (see below) `roles/run.invoker` on the agent
+service only. The deployment script does not enable agent mode yet.
 
 ## Requirements
 
@@ -667,8 +667,10 @@ pull`; otherwise users must authenticate with `docker login ghcr.io` first.
 For Cloud Run:
 
 1. Create a Firestore Native-mode database in the same European region as Cloud Run.
-2. Grant the Cloud Run service account `roles/datastore.user` and Secret Manager access only to
-   the selected provider key(s) and `demo-ip-hash-salt`.
+2. The script runs the service as its own service account
+   (`ai-demo@YOUR_PROJECT_ID.iam.gserviceaccount.com`, `-ServiceAccountName` to change it) instead
+   of the default Compute Engine one. It creates the account and grants it `roles/datastore.user`
+   and Secret Manager access only to the selected provider key(s) and `demo-ip-hash-salt`.
 3. Create a provider-key secret and a long random `demo-ip-hash-salt` secret in Secret Manager.
 4. Copy `deploy/cloudrun.env.yaml.example` to the ignored `deploy/cloudrun.env.yaml` file.
 5. Authenticate `gcloud`, then run:
