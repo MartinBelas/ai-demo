@@ -18,13 +18,19 @@ if ($null -eq $rag.enabled) {
     throw "RAG status endpoint did not return an 'enabled' field."
 }
 
-$page = Invoke-WebRequest -Uri "$base/"
+$page = Invoke-WebRequest -Uri "$base/" -UseBasicParsing
 if ($page.StatusCode -ne 200 -or $page.Content -notmatch '<div id="app"></div>') {
     throw "Production frontend is not being served."
 }
 
-$openApi = Invoke-WebRequest -Uri "$base/openapi.yaml"
-if ($openApi.StatusCode -ne 200 -or $openApi.Content -notmatch 'openapi:') {
+$openApi = Invoke-WebRequest -Uri "$base/openapi.yaml" -UseBasicParsing
+# Windows PowerShell 5.1 returns the body of a non-text type such as application/yaml as bytes.
+$openApiText = if ($openApi.Content -is [byte[]]) {
+    [System.Text.Encoding]::UTF8.GetString($openApi.Content)
+} else {
+    $openApi.Content
+}
+if ($openApi.StatusCode -ne 200 -or $openApiText -notmatch 'openapi:') {
     throw "OpenAPI document is unavailable."
 }
 

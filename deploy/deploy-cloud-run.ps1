@@ -8,6 +8,9 @@ param(
     [Parameter(Mandatory = $true)][string]$ApiKeySecret,
     [ValidateSet("", "OPENAI", "GEMINI")][string]$EmbeddingProvider = "",
     [string]$EmbeddingApiKeySecret,
+    # Further provider keys to mount as ENV_VAR=secret-name, so the service can offer more than one
+    # provider, e.g. GEMINI_API_KEY=gemini-api-key,GROQ_API_KEY=groq-api-key.
+    [string[]]$AdditionalSecrets = @(),
     [switch]$DisableRag,
     # Cloud Run's front end is one proxy; use 2 behind an external Application Load Balancer.
     [ValidateRange(0, 10)][int]$TrustedProxyHops = 1,
@@ -52,7 +55,8 @@ $secretVariable = switch ($Provider) {
 }
 
 $secretMounts = @("$secretVariable=$ApiKeySecret`:latest")
-$ragEnvironment = "RAG_ENABLED: false`n"
+# Quoted: --env-vars-file rejects an unquoted YAML true/false (it is a boolean, not a string).
+$ragEnvironment = "RAG_ENABLED: `"false`"`n"
 if (-not $DisableRag) {
     $embeddingSecretVariable = switch ($EmbeddingProvider) {
         "OPENAI" { "OPENAI_API_KEY" }
@@ -66,7 +70,7 @@ if (-not $DisableRag) {
         "OPENAI" { "text-embedding-3-small" }
         "GEMINI" { "text-embedding-004" }
     }
-    $ragEnvironment = "RAG_ENABLED: true`nRAG_EMBEDDING_PROVIDER: $EmbeddingProvider`n" `
+    $ragEnvironment = "RAG_ENABLED: `"true`"`nRAG_EMBEDDING_PROVIDER: $EmbeddingProvider`n" `
         + "RAG_EMBEDDING_BASE_URL: $embeddingBaseUrl`nRAG_EMBEDDING_MODEL: $embeddingModel`n" `
         + "RAG_EMBEDDING_API_KEY_ENV: $embeddingSecretVariable`n"
 
@@ -78,6 +82,17 @@ if (-not $DisableRag) {
         throw "Embedding provider $EmbeddingProvider needs its own key (chat provider is" `
             + " $Provider). Pass -EmbeddingApiKeySecret with its Secret Manager secret name."
     }
+}
+
+foreach ($additionalSecret in $AdditionalSecrets) {
+    $parts = $additionalSecret -split "=", 2
+    if ($parts.Count -ne 2 -or -not $parts[0] -or -not $parts[1]) {
+        throw "-AdditionalSecrets entries must look like ENV_VAR=secret-name, got '$additionalSecret'."
+    }
+    if ($secretMounts | Where-Object { $_ -like "$($parts[0])=*" }) {
+        throw "$($parts[0]) is already mounted from another secret; remove it from -AdditionalSecrets."
+    }
+    $secretMounts += "$($parts[0])=$($parts[1])`:latest"
 }
 
 gcloud config set project $ProjectId
@@ -101,8 +116,10 @@ foreach ($runtimeSecret in $runtimeSecrets) {
 gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$serviceAccountEmail" `
     --role roles/datastore.user --condition None | Out-Null
 
-$repository = gcloud artifacts repositories describe ai-demo --location $Region --format "value(name)" 2>$null
-if (-not $repository) {
+# Listed instead of described: in Windows PowerShell 5.1, the error that `describe` prints for a
+# missing repository ends the script before it can create it.
+$repositories = gcloud artifacts repositories list --location $Region --format "value(name)"
+if (-not ($repositories -match '(^|/)ai-demo$')) {
     gcloud artifacts repositories create ai-demo --repository-format docker --location $Region
 }
 
@@ -129,6 +146,10 @@ try {
         --timeout 300 `
         --env-vars-file $temporaryEnvironment.FullName `
         --set-secrets $allSecrets
+    # A failed deployment must not fall through to the smoke test of the previous revision.
+    if ($LASTEXITCODE -ne 0) {
+        throw "gcloud run deploy failed with exit code $LASTEXITCODE."
+    }
 } finally {
     Remove-Item -LiteralPath $temporaryEnvironment.FullName -Force -ErrorAction SilentlyContinue
 }

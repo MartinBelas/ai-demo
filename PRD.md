@@ -350,6 +350,7 @@ Content-Type: application/json
 - Ollama models are downloaded separately and stored in a Docker volume.
 - The cloud MVP is deployed to Google Cloud Run in a European region.
 - The initial Cloud Run configuration uses request-based billing, minimum instances `0`, maximum instances `1`, bounded concurrency, and a bounded request timeout.
+- The Cloud Run service runs as a dedicated service account that can use only Firestore and the Secret Manager secrets it mounts, not the default Compute Engine account.
 - Google Cloud budget alerts supplement but do not replace application quota enforcement.
 - Cloud Run and Firestore are colocated where practical to minimize latency and network charges.
 

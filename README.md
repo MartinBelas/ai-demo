@@ -179,7 +179,8 @@ On Cloud Run the agent service must stay private (`--no-allow-unauthenticated`),
 of this application's service account, fetched from the metadata server for the agent service URL
 as the audience and cached until shortly before it expires. Cloud Run verifies the token; grant
 the service account created by the deployment script (see below) `roles/run.invoker` on the agent
-service only. The deployment script does not enable agent mode yet.
+service only (the agent project's Terraform does this). The deployment script passes the three
+`AGENT_LAB_*` settings through `deploy/cloudrun.env.yaml` (see `cloudrun.env.yaml.example`).
 
 ## Requirements
 
@@ -692,6 +693,11 @@ provider instead of the `ollama.*` config used locally. It defaults `-EmbeddingP
 `-EmbeddingApiKeySecret` pointing at a second Secret Manager secret, granted to the service account
 alongside the chat key. Pass `-DisableRag` to deploy without project-document search at all.
 
+The script replaces the service's whole secret list, so every provider key the service should keep
+must be mounted. To offer more providers than `-Provider`, pass the others as
+`-AdditionalSecrets GEMINI_API_KEY=gemini-api-key,GROQ_API_KEY=groq-api-key`; they are mounted and
+granted to the service account like the main key.
+
 Startup fails with a `ConfigurationException` when RAG is enabled with the `OLLAMA` embedding
 provider while Ollama is disabled (`OLLAMA_ENABLED=false`), and when the bundled RAG documents do
 not fit the configured limits. The documents are only loaded and validated at startup; embedding
@@ -955,7 +961,7 @@ verified in this review.
 - [x] REST and SSE tests with embedded server and mocked application services
 - [x] Optional agent mode through the separate ai-agent-lab service (Python agent with web search)
 - [x] Authenticated agent service call on Cloud Run (Google identity token)
-- [ ] Agent mode in the Cloud Run deployment script
+- [x] Agent mode in the Cloud Run deployment script
 - [ ] Streaming of intermediate agent-mode steps
 - [x] Web chat, Q&A, Status, and shared project/author links
 - [x] Multi-stage Docker build
