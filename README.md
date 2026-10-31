@@ -178,9 +178,10 @@ On Cloud Run the agent service must stay private (`--no-allow-unauthenticated`),
 `AGENT_LAB_AUTHENTICATION=GOOGLE_ID_TOKEN`. Each call then carries a Google-signed identity token
 of this application's service account, fetched from the metadata server for the agent service URL
 as the audience and cached until shortly before it expires. Cloud Run verifies the token; grant
-the service account created by the deployment script (see below) `roles/run.invoker` on the agent
-service only (the agent project's Terraform does this). The deployment script passes the three
-`AGENT_LAB_*` settings through `deploy/cloudrun.env.yaml` (see `cloudrun.env.yaml.example`).
+the service account of this deployment (see below) `roles/run.invoker` on the agent
+service only (the agent project's Terraform does this). With `agent_lab_enabled = true` the
+Terraform deployment sets the three `AGENT_LAB_*` variables and looks the agent's URL up from the
+deployed service (see `deploy/README.md`).
 
 ## Requirements
 
@@ -324,9 +325,8 @@ from the right: proxies append to the header, so entries further left are whatev
 and would let it bypass the per-client limit. Set `1` for Cloud Run alone and `2` behind an external
 Application Load Balancer. The default `0` ignores the header, which is correct for direct
 connections but puts every client behind a proxy into one shared limit; the server then logs a
-one-time warning. `deploy/deploy-cloud-run.ps1` takes the value from `cloudrun.env.yaml` or, when
-it is missing there, from `-TrustedProxyHops` (default `1`); a service deployed any other way must
-set `DEMO_LIMITS_TRUSTED_PROXY_HOPS=1` itself. To check
+one-time warning. The Terraform deployment sets it from `trusted_proxy_hops` (default `1`); a
+service deployed any other way must set `DEMO_LIMITS_TRUSTED_PROXY_HOPS=1` itself. To check
 a deployment, send more than the hourly limit with a changing `X-Forwarded-For` value; the requests
 over the limit must get HTTP `429`.
 
@@ -665,38 +665,29 @@ The `Publish container image` GitHub Actions workflow publishes `latest`, Git ta
 tags to GitHub Container Registry. The package must be public for unauthenticated `docker compose
 pull`; otherwise users must authenticate with `docker login ghcr.io` first.
 
-For Cloud Run:
+For Cloud Run the infrastructure and the deployment are described in Terraform (`deploy/terraform`)
+and driven by `deploy/deploy.ps1`; see [`deploy/README.md`](deploy/README.md) for the one-off
+prerequisites, how it works together with the `ai-agent-lab` stack, and all settings. In short:
 
-1. Create a Firestore Native-mode database in the same European region as Cloud Run.
-2. The script runs the service as its own service account
-   (`ai-demo@YOUR_PROJECT_ID.iam.gserviceaccount.com`, `-ServiceAccountName` to change it) instead
-   of the default Compute Engine one. It creates the account and grants it `roles/datastore.user`
-   and Secret Manager access only to the selected provider key(s) and `demo-ip-hash-salt`.
-3. Create a provider-key secret and a long random `demo-ip-hash-salt` secret in Secret Manager.
-4. Copy `deploy/cloudrun.env.yaml.example` to the ignored `deploy/cloudrun.env.yaml` file.
-5. Authenticate `gcloud`, then run:
+1. Create a Firestore Native-mode database in the same European region as Cloud Run, the provider-key
+   secrets and a long random `demo-ip-hash-salt` secret in Secret Manager.
+2. Copy `deploy/terraform/terraform.tfvars.example` to the ignored `terraform.tfvars` if you want
+   other settings than the defaults (provider, RAG, agent mode, limits).
+3. Authenticate `gcloud` (`gcloud auth login` and `gcloud auth application-default login`), then run:
 
 ```powershell
-.\deploy\deploy-cloud-run.ps1 `
-  -ProjectId YOUR_PROJECT_ID `
-  -Region europe-west1 `
-  -Provider OPENAI `
-  -ApiKeySecret openai-api-key
+.\deploy\deploy.ps1
 ```
 
-RAG has no local Ollama sidecar on Cloud Run, so the script enables it with a cloud embedding
-provider instead of the `ollama.*` config used locally. It defaults `-EmbeddingProvider` to
-`-Provider` when that provider can also do embeddings (OpenAI or Gemini), reusing the same
-`-ApiKeySecret` for both chat and retrieval—no extra secret needed for the command above. Choosing
-`-Provider GROQ` requires an explicit `-EmbeddingProvider OPENAI` or `-EmbeddingProvider GEMINI`
-(GroqCloud has no embeddings API), and if that differs from `-Provider` it also needs its own
-`-EmbeddingApiKeySecret` pointing at a second Secret Manager secret, granted to the service account
-alongside the chat key. Pass `-DisableRag` to deploy without project-document search at all.
+The service runs as its own service account (`ai-demo@YOUR_PROJECT_ID.iam.gserviceaccount.com`)
+instead of the default Compute Engine one. Terraform grants it `roles/datastore.user` and access to
+the mounted secrets only. Every provider key listed in `provider_secret_ids` is mounted, so the
+service can offer more than one provider.
 
-The script replaces the service's whole secret list, so every provider key the service should keep
-must be mounted. To offer more providers than `-Provider`, pass the others as
-`-AdditionalSecrets GEMINI_API_KEY=gemini-api-key,GROQ_API_KEY=groq-api-key`; they are mounted and
-granted to the service account like the main key.
+RAG has no local Ollama sidecar on Cloud Run, so the deployment enables it with a cloud embedding
+provider instead of the `ollama.*` config used locally. `rag_embedding_provider` defaults to
+`OPENAI` (the same key as the chat provider, no extra secret); `GEMINI` works too, GroqCloud has no
+embeddings API, and an empty value deploys without project-document search.
 
 Startup fails with a `ConfigurationException` when RAG is enabled with the `OLLAMA` embedding
 provider while Ollama is disabled (`OLLAMA_ENABLED=false`), and when the bundled RAG documents do
@@ -709,7 +700,7 @@ If the embedding provider is down when the index is first built, RAG requests fa
 provider outage heals without a restart but is not hit on every request.
 
 The deployment uses request-based billing, zero minimum instances, one maximum instance, bounded
-concurrency, and Secret Manager environment mounts. The script runs read-only smoke checks against
+concurrency, and Secret Manager environment mounts. `deploy.ps1` runs read-only smoke checks against
 the deployed health endpoint, provider list, RAG status, frontend, and OpenAPI document. It
 deliberately does not send a paid chat request. Run the smoke checks independently with:
 
@@ -755,7 +746,7 @@ verified in this review.
 - [x] Add production Dockerfile
 - [x] Add Docker Compose with optional Ollama
 - [x] Add deployment smoke tests
-- [x] Add Cloud Run deployment script and environment example
+- [x] Add Cloud Run deployment (Terraform infrastructure and deploy script)
 - [ ] Verify deployment of the current Docker image to Google Cloud Run
 - [ ] Complete MVP documentation and release verification
 
@@ -922,7 +913,7 @@ verified in this review.
 - [x] Invalid provider response handling
 - [x] Application startup error tests
 - [x] Communication error tests
-- [ ] Configurable application/provider request deadlines (Cloud Run script sets a 300-second timeout)
+- [ ] Configurable application/provider request deadlines (Cloud Run deployment sets a 300-second timeout)
 - [ ] Retry policy
 - [ ] Exponential backoff
 - [ ] Circuit breaker
@@ -945,7 +936,7 @@ verified in this review.
 - [x] HTTP liveness endpoint at `/api/health`
 - [ ] Readiness checks
 - [x] Public aggregate metrics endpoint at `/api/app/status`
-- [x] Environment/.env credential loading and Secret Manager references in the deployment script
+- [x] Environment/.env credential loading and Secret Manager references in the Terraform deployment
 - [ ] Verify deployed secret access policies and rotation
 - [ ] Log redaction
 - [x] External properties file and environment overrides for local/cloud execution
@@ -961,7 +952,7 @@ verified in this review.
 - [x] REST and SSE tests with embedded server and mocked application services
 - [x] Optional agent mode through the separate ai-agent-lab service (Python agent with web search)
 - [x] Authenticated agent service call on Cloud Run (Google identity token)
-- [x] Agent mode in the Cloud Run deployment script
+- [x] Agent mode in the Cloud Run deployment
 - [ ] Streaming of intermediate agent-mode steps
 - [x] Web chat, Q&A, Status, and shared project/author links
 - [x] Multi-stage Docker build

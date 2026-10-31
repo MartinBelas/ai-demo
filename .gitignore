@@ -45,5 +45,10 @@ conversation.json
 .env
 frontend/node_modules/
 frontend/dist/
-deploy/cloudrun.env.yaml
 
+
+### Terraform (the lock file IS committed) ###
+.terraform/
+*.tfstate
+*.tfstate.*
+deploy/terraform/terraform.tfvars

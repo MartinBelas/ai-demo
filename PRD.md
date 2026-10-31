@@ -351,6 +351,7 @@ Content-Type: application/json
 - The cloud MVP is deployed to Google Cloud Run in a European region.
 - The initial Cloud Run configuration uses request-based billing, minimum instances `0`, maximum instances `1`, bounded concurrency, and a bounded request timeout.
 - The Cloud Run service runs as a dedicated service account that can use only Firestore and the Secret Manager secrets it mounts, not the default Compute Engine account.
+- The Cloud Run infrastructure is described in Terraform and deployed with one script (`deploy/deploy.ps1`); images are tagged with the commit SHA and tags are immutable. The stack shares the Google Cloud project with the separate `ai-agent-lab` service but has its own state; apart from idempotent API enablements, no resource or IAM grant is owned by both stacks.
 - Google Cloud budget alerts supplement but do not replace application quota enforcement.
 - Cloud Run and Firestore are colocated where practical to minimize latency and network charges.
 

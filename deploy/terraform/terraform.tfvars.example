@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars (ignored by git). Everything here is optional; the defaults
+# reproduce the current production configuration, including agent mode.
+
+# Agent mode (default true) forwards chat requests to the private ai-agent-lab service. Its
+# URL is read from the deployed service, so turn it off until ai-agent-lab exists.
+# agent_lab_enabled = false
+
+# Providers (defaults shown).
+# llm_provider           = "OPENAI"
+# rag_embedding_provider = "OPENAI"   # "" turns RAG off
+
+# DEMO_LIMITS_TRUSTED_PROXY_HOPS: 1 for Cloud Run alone, 2 behind an external load balancer.
+# trusted_proxy_hops = 1
+
+# Overrides of the defaults in cloud_run.tf.
+# extra_env = {
+#   DEMO_LIMITS_DAILY_REQUESTS         = "500"
+#   DEMO_LIMITS_HOURLY_REQUESTS_PER_IP = "10"
+# }
