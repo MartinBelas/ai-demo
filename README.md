@@ -179,9 +179,9 @@ On Cloud Run the agent service must stay private (`--no-allow-unauthenticated`),
 of this application's service account, fetched from the metadata server for the agent service URL
 as the audience and cached until shortly before it expires. Cloud Run verifies the token; grant
 the service account of this deployment (see below) `roles/run.invoker` on the agent
-service only (the agent project's Terraform does this). With `agent_lab_enabled = true` the
-Terraform deployment sets the three `AGENT_LAB_*` variables and looks the agent's URL up from the
-deployed service (see `deploy/README.md`).
+service only (the agent project's Terraform does this). The Terraform deployment enables agent
+mode by default (`agent_lab_enabled`, `true`): it sets the three `AGENT_LAB_*` variables and looks
+the agent's URL up from the deployed service, so `ai-agent-lab` must exist (see `deploy/README.md`).
 
 ## Requirements
 
@@ -720,8 +720,9 @@ including the remaining scope explicitly named on partially implemented features
 include ideas beyond the current MVP, not additional MVP commitments.
 
 Evidence: `src/main/java`, `src/test/java`, `frontend/src`, `Dockerfile`, `compose.yaml`,
-`.github/workflows/publish-container.yaml`, and `deploy/`. Cloud deployment status has not been
-verified in this review.
+`.github/workflows/publish-container.yaml`, and `deploy/`. The Cloud Run deployment was verified
+separately on 2026-10-31: Terraform plan clean, running revision tagged with the commit SHA,
+`deploy/smoke-test.ps1` passed against the public URL.
 
 ### MVP – Public demo target
 
@@ -747,7 +748,7 @@ verified in this review.
 - [x] Add Docker Compose with optional Ollama
 - [x] Add deployment smoke tests
 - [x] Add Cloud Run deployment (Terraform infrastructure and deploy script)
-- [ ] Verify deployment of the current Docker image to Google Cloud Run
+- [x] Verify deployment of the current Docker image to Google Cloud Run (2026-10-31, smoke tests)
 - [ ] Complete MVP documentation and release verification
 
 ### Phase 1 – Core LLM application
@@ -937,7 +938,7 @@ verified in this review.
 - [ ] Readiness checks
 - [x] Public aggregate metrics endpoint at `/api/app/status`
 - [x] Environment/.env credential loading and Secret Manager references in the Terraform deployment
-- [ ] Verify deployed secret access policies and rotation
+- [ ] Verify secret rotation (access policies verified 2026-10-31: only the service accounts that need a secret can read it)
 - [ ] Log redaction
 - [x] External properties file and environment overrides for local/cloud execution
 - [ ] Named configuration profiles
@@ -972,7 +973,7 @@ verified in this review.
 - [x] JAR/runtime dependency and container packaging
 - [ ] Versioned releases (tag-triggered image publishing is configured)
 - [x] Local Docker and Cloud Run deployment instructions
-- [ ] Verify current production deployment
+- [x] Verify current production deployment (2026-10-31)
 
 ## License
 

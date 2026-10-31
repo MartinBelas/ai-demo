@@ -77,12 +77,13 @@ revision picks up the new version.
 
 ### Migrating a service that was created by the old script
 
-The service, service account, repository and IAM grants already exist, so Terraform must adopt
-them instead of creating them. `deploy/terraform/imports.tf` does that with `import` blocks: the
-first `deploy.ps1` shows them in the plan as "will be imported". After the first successful apply,
-delete `imports.tf`: on a project where the resources do not exist the imports would fail.
+Done on 2026-10-31. The service, service account, repository and IAM grants already existed, so
+Terraform adopted them with one-off `import` blocks (an `imports.tf`, since deleted) instead of
+creating them. On a project that still has resources from the old `deploy-cloud-run.ps1`, the same
+approach applies: one `import` block per existing resource, removed after the first successful apply
+(on a project where the resources do not exist, imports fail).
 
-Also after the migration, remove the leftovers of the manual deployment from the default Compute
+Also after the migration (done for this project on 2026-10-31), remove the leftovers of the manual deployment from the default Compute
 Engine account (`<project number>-compute@developer.gserviceaccount.com`). It runs Cloud Build for
 both services and has no business reading the provider keys or the salt; no Cloud Run service runs
 as it any more. No stack manages these grants. Do **not** touch its `logging.logWriter` and
